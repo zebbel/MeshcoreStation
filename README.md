@@ -169,7 +169,7 @@ sender -> repeater 1 -> repeater 2 -> ... -> bot
 
 ![Example: Direct vs. Route distance](docs/images/direct-route-example.png)
 
-Unknown, ambiguous, or unlocated repeater hops are not guessed. They are shown as unresolved and break the drawn route line.
+Resolved route sections are blue. Unknown, ambiguous, or unlocated hops are bridged by red dashed lines between the nearest known positions; these lines do not indicate the missing repeaters’ actual locations. Direction arrows point from sender through repeaters toward the bot. The compact route sequence remains above the map, without a duplicate numbered list.
 
 
 The two distance values intentionally describe different things.

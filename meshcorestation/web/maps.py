@@ -101,12 +101,21 @@ def route_map(log_id):
                 notes.append("Direct packet: no repeater hops recorded.")
         except (KeyError, TypeError, ValueError, OverflowError):
             path_valid = False
-            notes.append("Received path metadata is missing or invalid; no route connections can be drawn.")
+            notes.append("Received path metadata is missing or invalid; red dashed connections indicate an unknown route.")
             chain.append(point({}, "gap", "Missing path"))
         chain.append(bot)
-        segments = [[a["position"], b["position"]] for a, b in zip(chain, chain[1:]) if a["position"] and b["position"]]
+        segments = []
+        previous = None
+        for index, node in enumerate(chain):
+            if not node["position"]:
+                continue
+            if previous is not None:
+                previous_index, previous_node = previous
+                segments.append({"positions": [previous_node["position"], node["position"]],
+                                 "unresolved": index - previous_index > 1})
+            previous = index, node
         if any(h["status"] != "Resolved" for h in hops):
-            notes.append("Unknown, ambiguous or unlocated hops break the route line; no repeater is guessed.")
+            notes.append("Red dashed lines bridge unknown, ambiguous or unlocated hops between known positions; they do not locate the missing repeaters.")
         direct = distance_km(sender["position"], bot["position"]) if sender["position"] and bot["position"] else None
         route = None
         incomplete = any(not node["position"] for node in chain)
@@ -114,7 +123,7 @@ def route_map(log_id):
             located = [node["position"] for node in chain if node["position"]]
             route = sum(distance_km(a, b) for a, b in zip(located, located[1:]))
             if incomplete:
-                notes.append("Route distance is a lower bound through confirmed waypoints; unresolved hops are not guessed or connected on the map.")
+                notes.append("Route distance is a lower bound through confirmed waypoints; red dashed connections bridge unresolved hops without guessing their positions.")
         return {"nodes": [n for n in chain if n["position"]], "segments": segments, "hops": hops, "notes": notes,
                 "direct_distance_km": direct, "route_distance_km": route,
                 "route_distance_lower_bound": route is not None and incomplete,

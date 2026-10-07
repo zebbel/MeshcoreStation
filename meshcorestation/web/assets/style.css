@@ -83,3 +83,6 @@ dd { white-space: pre-wrap; font-size: 13px; }
 .route-summary p { margin: 5px 0; }
 .route-distances { font-weight: 600; }
 .route-sequence { line-height: 1.6; }
+
+.route-arrow-icon { background: transparent; border: 0; pointer-events: none; }
+.route-direction-arrow { display: block; position: absolute; left: 3px; top: 3px; width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 14px solid; transform-origin: 7px 7px; filter: drop-shadow(0 0 2px #fff); }

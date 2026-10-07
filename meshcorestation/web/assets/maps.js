@@ -19,13 +19,13 @@
         }
         return box;
     }
-    async function load(id, url, notesId, hopsId) {
+    async function load(id, url, notesId) {
         requests.get(id)?.abort();
         const controller = new AbortController(); requests.set(id, controller);
-        const canvas = document.getElementById(id), notes = document.getElementById(notesId), hops = hopsId && document.getElementById(hopsId);
+        const canvas = document.getElementById(id), notes = document.getElementById(notesId);
         const summary = id === 'route-map' && document.getElementById('route-summary');
         if (summary) summary.replaceChildren(text('p', 'Loading distances and packet route…'));
-        dispose(id); canvas.replaceChildren(); notes.replaceChildren(text('p', 'Loading map…')); if (hops) hops.replaceChildren();
+        dispose(id); canvas.replaceChildren(); notes.replaceChildren(text('p', 'Loading map…'));
         try {
             const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
             const data = await response.json();
@@ -41,13 +41,27 @@
                     text('p', sequence.join(' → '), 'route-sequence'));
                 if (data.path_valid && !data.hops.length) summary.append(text('p', 'Direct packet · no repeaters', 'muted'));
             }
-            if (hops) for (const hop of data.hops) hops.append(text('li', `${hop.number}. ${hop.name} · ${hop.hash} · ${hop.status}`));
             if (!window.L) throw new Error('Map library could not be loaded. Refresh the page and try again.');
             const map = L.map(canvas, { scrollWheelZoom: true }).setView([51, 10], 5); maps.set(id, map);
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
                 if (!notes.querySelector('.tile-warning')) notes.append(text('p', 'Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap.', 'tile-warning'));
             }).addTo(map);
-            for (const line of data.segments) L.polyline(line, { color: '#4d8eff', weight: 4, opacity: 0.85 }).addTo(map);
+            for (const segment of data.segments) {
+                const line = segment.positions, color = segment.unresolved ? '#ef5350' : '#4d8eff';
+                L.polyline(line, { color, weight: 4, opacity: 0.9, dashArray: segment.unresolved ? '9 8' : null }).addTo(map);
+                // Mercator midpoint and screen angle keep the arrow on the rendered line at every zoom.
+                const start = map.project(line[0], 0), end = map.project(line[1], 0);
+                if (Math.hypot(end.x - start.x, end.y - start.y) > 1e-9) {
+                    const midpoint = map.unproject([(start.x + end.x) / 2, (start.y + end.y) / 2], 0);
+                    const arrow = text('span', '', 'route-direction-arrow');
+                    arrow.style.borderLeftColor = color;
+                    arrow.style.transform = `rotate(${Math.atan2(end.y - start.y, end.x - start.x)}rad)`;
+                    arrow.setAttribute('aria-hidden', 'true');
+                    const icon = L.divIcon({html: arrow, className: 'route-arrow-icon', iconSize: [20, 20], iconAnchor: [10, 10]});
+                    L.marker(midpoint, {icon, interactive: false, keyboard: false, zIndexOffset: -100}).addTo(map);
+                }
+            }
+            if (summary) notes.prepend(text('p', 'Blue = resolved route · red dashed = unresolved section between known positions. Arrows point from sender toward bot.', 'map-legend'));
             for (const node of data.nodes) {
                 const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
                 const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
@@ -64,7 +78,7 @@
         if (button?.dataset.details) {
             const record = JSON.parse(button.dataset.details), section = document.getElementById('route-section');
             section.hidden = false;
-            load('route-map', `/api/maps/route/${encodeURIComponent(record.id)}`, 'route-notes', 'route-hops');
+            load('route-map', `/api/maps/route/${encodeURIComponent(record.id)}`, 'route-notes');
         }
         const dialog = document.getElementById('repeaters-dialog');
         if (button?.id === 'open-repeaters') { dialog.showModal(); load('repeater-map', '/api/maps/repeaters', 'repeater-notes'); document.getElementById('close-repeaters').focus(); }

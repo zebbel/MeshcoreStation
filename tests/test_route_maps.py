@@ -41,7 +41,8 @@ def test_unknown_or_ambiguous_hop_is_not_guessed(database,ambiguous):
         database.execute("INSERT INTO repeaters VALUES ('aa22','Other',51,8)")
     add(database,'status',path='aa' if ambiguous else 'ff')
     result=maps.route_map(1)
-    assert not result['segments']
+    assert len(result['segments']) == 1
+    assert result['segments'][0]['unresolved']
     assert result['route_distance_lower_bound']
     assert result['route_distance_km']==result['direct_distance_km']
     assert result['hops'][0]['name'] in ('aa','ff')
@@ -72,3 +73,18 @@ def test_named_repeater_without_coordinates(database):
     assert result['hops'][0]['name']=='Hill repeater'
     assert result['hops'][0]['status']=='Coordinates missing'
     assert result['route_distance_lower_bound']
+
+
+def test_gap_then_known_repeater_keeps_segment_order(database):
+    add(database, 'status', path='ffaa', count=2)
+    result = maps.route_map(1)
+    assert result['segments'] == [
+        {'positions': [[50, 8], [50.1, 8.5]], 'unresolved': True},
+        {'positions': [[50.1, 8.5], [50, 9]], 'unresolved': False}]
+
+
+def test_missing_metadata_bridges_endpoints_in_red(database):
+    add(database, 'status', path=None, count=None)
+    result = maps.route_map(1)
+    assert result['segments'] == [{'positions': [[50, 8], [50, 9]], 'unresolved': True}]
+    assert result['route_distance_km'] is None
