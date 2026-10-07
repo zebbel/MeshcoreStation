@@ -159,7 +159,9 @@ Configuration changes are validated by MeshcoreStation and, where possible, read
 
 ## Direct distance and route distance
 
-For a recorded `ping`, MeshcoreStation can also show the packet route as:
+For every recorded command, the details popup shows a route map with direct distance, route distance, and the ordered sender → repeaters → bot sequence above it. Repeater names are shown when uniquely known; unknown or ambiguous hops keep their key prefixes. Distances use the saved sender snapshot and latest saved repeater/bot positions. Missing endpoint positions show “Not available”; incomplete routes show a lower bound (≥).
+
+The packet route is shown as:
 
 ```text
 sender -> repeater 1 -> repeater 2 -> ... -> bot

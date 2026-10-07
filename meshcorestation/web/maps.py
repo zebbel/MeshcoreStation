@@ -55,12 +55,10 @@ def route_map(log_id):
         if record is None:
             return None
         record = dict(record)
-        if (record.get("message") or "").strip().casefold() != "ping":
-            return {"nodes": [], "segments": [], "hops": [], "notes": ["Route maps are available for ping commands."]}
         rows = [dict(r) for r in db.execute("SELECT * FROM repeaters")]
         sender = point(record, "sender", record.get("sender") or "Sender", "sender_", 0)
         bot = bot_point(db)
-        notes = ["Sender → numbered repeaters → bot. Lines show recorded hop order, not the physical radio signal path.", "Sender uses the snapshot saved with this command. Repeaters and bot use latest saved positions, which may differ for older pings."]
+        notes = ["Sender → numbered repeaters → bot. Lines show recorded hop order, not the physical radio signal path.", "Sender uses the snapshot saved with this command. Repeaters and bot use latest saved positions, which may differ for older commands."]
         if not sender["position"]:
             notes.append("No sender position snapshot in this entry; today's sender position is not substituted.")
         elif sender["updated_at"] is not None:
@@ -73,6 +71,7 @@ def route_map(log_id):
         if not bot["position"]:
             notes.append("Bot position is not available. Restart the updated bot to save it.")
         chain, hops = [sender], []
+        path_valid = True
         try:
             raw = record.get("rx_path")
             count = int(record["path_len"])
@@ -101,10 +100,28 @@ def route_map(log_id):
             if not identifiers:
                 notes.append("Direct packet: no repeater hops recorded.")
         except (KeyError, TypeError, ValueError, OverflowError):
+            path_valid = False
             notes.append("Received path metadata is missing or invalid; no route connections can be drawn.")
             chain.append(point({}, "gap", "Missing path"))
         chain.append(bot)
         segments = [[a["position"], b["position"]] for a, b in zip(chain, chain[1:]) if a["position"] and b["position"]]
         if any(h["status"] != "Resolved" for h in hops):
             notes.append("Unknown, ambiguous or unlocated hops break the route line; no repeater is guessed.")
-        return {"nodes": [n for n in chain if n["position"]], "segments": segments, "hops": hops, "notes": notes}
+        direct = distance_km(sender["position"], bot["position"]) if sender["position"] and bot["position"] else None
+        route = None
+        incomplete = any(not node["position"] for node in chain)
+        if direct is not None and path_valid:
+            located = [node["position"] for node in chain if node["position"]]
+            route = sum(distance_km(a, b) for a, b in zip(located, located[1:]))
+            if incomplete:
+                notes.append("Route distance is a lower bound through confirmed waypoints; unresolved hops are not guessed or connected on the map.")
+        return {"nodes": [n for n in chain if n["position"]], "segments": segments, "hops": hops, "notes": notes,
+                "direct_distance_km": direct, "route_distance_km": route,
+                "route_distance_lower_bound": route is not None and incomplete,
+                "path_valid": path_valid, "sender_name": sender["label"], "bot_name": bot["label"]}
+
+
+def distance_km(start, end):
+    lat1, lon1, lat2, lon2 = map(math.radians, (*start, *end))
+    value = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+    return 6371.0088 * 2 * math.asin(math.sqrt(max(0.0, min(1.0, value))))

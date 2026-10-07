@@ -78,3 +78,8 @@ dd { white-space: pre-wrap; font-size: 13px; }
 @media (max-width: 700px) { .map-canvas { height: 300px; } dialog { padding: 18px; } .card-heading { flex-wrap: wrap; } }
 #details-dialog, #repeaters-dialog { width: min(1400px, calc(100vw - 24px)); height: 90vh; max-height: 95vh; overflow-y: auto; }
 #repeater-map, #route-map { height: 65vh; }
+
+.route-summary { margin: 12px 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow-wrap: anywhere; }
+.route-summary p { margin: 5px 0; }
+.route-distances { font-weight: 600; }
+.route-sequence { line-height: 1.6; }

@@ -23,6 +23,8 @@
         requests.get(id)?.abort();
         const controller = new AbortController(); requests.set(id, controller);
         const canvas = document.getElementById(id), notes = document.getElementById(notesId), hops = hopsId && document.getElementById(hopsId);
+        const summary = id === 'route-map' && document.getElementById('route-summary');
+        if (summary) summary.replaceChildren(text('p', 'Loading distances and packet route…'));
         dispose(id); canvas.replaceChildren(); notes.replaceChildren(text('p', 'Loading map…')); if (hops) hops.replaceChildren();
         try {
             const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
@@ -30,6 +32,15 @@
             if (!response.ok) throw new Error(data.error || 'Map data could not be loaded.');
             if (controller.signal.aborted) return;
             notes.replaceChildren(...data.notes.map(note => text('p', note)));
+            if (summary) {
+                const distance = value => typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} km` : 'Not available';
+                const sequence = [data.sender_name || 'Sender', ...data.hops.map(hop => hop.status === 'Resolved' || hop.status === 'Coordinates missing' ? hop.name : `${hop.hash} (${hop.status})`), data.bot_name || 'Bot'];
+                if (!data.path_valid) sequence.splice(1, 0, 'Route not recorded / invalid');
+                summary.replaceChildren(
+                    text('p', `Direct distance: ${distance(data.direct_distance_km)} · Route distance: ${data.route_distance_lower_bound ? '≥ ' : ''}${distance(data.route_distance_km)}`, 'route-distances'),
+                    text('p', sequence.join(' → '), 'route-sequence'));
+                if (data.path_valid && !data.hops.length) summary.append(text('p', 'Direct packet · no repeaters', 'muted'));
+            }
             if (hops) for (const hop of data.hops) hops.append(text('li', `${hop.number}. ${hop.name} · ${hop.hash} · ${hop.status}`));
             if (!window.L) throw new Error('Map library could not be loaded. Refresh the page and try again.');
             const map = L.map(canvas, { scrollWheelZoom: true }).setView([51, 10], 5); maps.set(id, map);
@@ -45,16 +56,15 @@
             notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
             if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));
             requestAnimationFrame(() => { if (maps.get(id) !== map) return; map.invalidateSize(); if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), { padding: [35, 35], maxZoom: 14 }); });
-        } catch (error) { if (error.name !== 'AbortError') notes.replaceChildren(text('p', error.message)); }
+        } catch (error) { if (error.name !== 'AbortError' && !controller.signal.aborted) { notes.replaceChildren(text('p', error.message)); if (summary && summary.textContent === 'Loading distances and packet route…') summary.replaceChildren(text('p', 'Distances and packet route could not be loaded.')); } }
     }
     function cleanup(id) { requests.get(id)?.abort(); dispose(id); }
     document.addEventListener('click', event => {
         const button = event.target.closest('button');
         if (button?.dataset.details) {
             const record = JSON.parse(button.dataset.details), section = document.getElementById('route-section');
-            section.hidden = String(record.message || '').trim().toLowerCase() !== 'ping';
-            if (!section.hidden) load('route-map', `/api/maps/route/${encodeURIComponent(record.id)}`, 'route-notes', 'route-hops');
-            else cleanup('route-map');
+            section.hidden = false;
+            load('route-map', `/api/maps/route/${encodeURIComponent(record.id)}`, 'route-notes', 'route-hops');
         }
         const dialog = document.getElementById('repeaters-dialog');
         if (button?.id === 'open-repeaters') { dialog.showModal(); load('repeater-map', '/api/maps/repeaters', 'repeater-notes'); document.getElementById('close-repeaters').focus(); }
