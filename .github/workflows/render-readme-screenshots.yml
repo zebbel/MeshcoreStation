@@ -1,0 +1,42 @@
+name: Render README screenshots
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/render-readme-screenshots.yml"
+      - "scripts/render_readme_screenshots.py"
+      - "meshcorestation/web/assets/**"
+      - "meshcorestation/web/layout.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+
+      - name: Render screenshots
+        run: python3 scripts/render_readme_screenshots.py
+
+      - name: Commit rendered screenshots
+        run: |
+          if git diff --quiet -- docs/images/dashboard.png docs/images/commands.png &&              git ls-files --error-unmatch docs/images/dashboard.png docs/images/commands.png >/dev/null 2>&1; then
+            echo "Screenshots are already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/images/dashboard.png docs/images/commands.png
+          git commit -m "Update README dashboard screenshots"
+          git push
