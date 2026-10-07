@@ -1,0 +1,5 @@
+#bot-runtime { margin-top: 16px; }
+.bot-runtime-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+#bot-serial-port { flex: 1 1 170px; min-width: 0; max-width: 100%; padding: 9px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 7px; font: inherit; }
+#bot-runtime-message { font-size: 12px; overflow-wrap: anywhere; }
+#channels-list li { flex-wrap: wrap; }

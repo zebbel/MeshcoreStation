@@ -1,0 +1,22 @@
+#voltage-dialog { width: min(1100px, calc(100vw - 32px)); max-height: 90vh; overflow-y: auto; }
+#voltage-close { font-size: 26px; }
+#voltage-message { padding: 12px; background: var(--soft); border-radius: 8px; }
+.voltage-error { color: var(--red); }
+.voltage-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.voltage-wide { grid-column: 1 / -1; }
+.voltage-fields input:not([type=checkbox]), .voltage-fields select, #voltage-search { display: block; width: 100%; margin-top: 6px; padding: 9px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+.voltage-fields input[type=checkbox] { width: auto; }
+.voltage-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+#voltage-dialog details { margin: 14px 0; }
+#voltage-repeaters { padding: 0; list-style: none; max-height: 260px; overflow-y: auto; }
+#voltage-repeaters li:not([hidden]) { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px; border-bottom: 1px solid var(--border); }
+#voltage-repeaters li span { overflow-wrap: anywhere; }
+#voltage-chart { margin-top: 14px; overflow-x: auto; }
+#voltage-chart svg { display: block; width: 100%; min-width: 560px; }
+#voltage-chart text { font: 12px system-ui; fill: var(--muted); }
+.voltage-grid { stroke: var(--border); stroke-width: 1; }
+.voltage-line { stroke: var(--accent); stroke-width: 2.5; }
+.voltage-dot { fill: var(--accent); }
+#voltage-dialog td, #voltage-dialog th { padding: 8px; text-align: left; overflow-wrap: anywhere; }
+#voltage-report-log { overflow-wrap: anywhere; }
+@media(max-width:650px) { .voltage-fields {grid-template-columns:1fr;} #voltage-dialog{padding:16px;} }

@@ -1,0 +1,46 @@
+/* Align the action stack with the Bot status heading. */
+.card:has(> #bot-status) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto auto;
+    gap: 6px 16px;
+    align-content: start;
+}
+.card:has(> #bot-status) > .card-heading {
+    display: contents;
+}
+.card:has(> #bot-status) > .card-heading > .eyebrow {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    margin: 0;
+}
+.card:has(> #bot-status) #open-companion { grid-column: 2; grid-row: 1; }
+.card:has(> #bot-status) #open-contacts { grid-column: 2; grid-row: 2; }
+.card:has(> #bot-status) #open-channels { grid-column: 2; grid-row: 3; }
+#bot-status {
+    grid-column: 1;
+    grid-row: 2 / 4;
+    align-self: center;
+}
+#bot-detail {
+    grid-column: 1;
+    grid-row: 4;
+    align-self: center;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+#bot-runtime {
+    grid-column: 1 / -1;
+    grid-row: 5;
+}
+/* Stack on narrow phones so neither the status nor the buttons is squeezed. */
+@media (max-width: 480px) {
+    .card:has(> #bot-status) { grid-template-columns: minmax(0, 1fr); }
+    .card:has(> #bot-status) #bot-status { grid-column: 1; grid-row: 2; }
+    .card:has(> #bot-status) #bot-detail { grid-column: 1; grid-row: 3; margin-bottom: 8px; }
+    .card:has(> #bot-status) #open-companion { grid-column: 1; grid-row: 4; }
+    .card:has(> #bot-status) #open-contacts { grid-column: 1; grid-row: 5; }
+    .card:has(> #bot-status) #open-channels { grid-column: 1; grid-row: 6; }
+    .card:has(> #bot-status) #bot-runtime { grid-row: 7; }
+}

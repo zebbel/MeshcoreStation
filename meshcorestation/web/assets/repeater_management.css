@@ -1,0 +1,39 @@
+/* Match MeshcoreStation cards; only the body scrolls below the fixed title and tabs. */
+#repeater-manage-dialog, #repeater-login-dialog { width: min(840px, calc(100vw - 24px)); max-height: 92vh; padding: 0; overflow: hidden; }
+#repeater-login-dialog { width: min(480px, calc(100vw - 24px)); }
+.repeater-fixed { flex: 0 0 auto; padding: 4px 26px 0; background: var(--panel); }
+#repeater-name { display: block; font-size: 18px; overflow-wrap: anywhere; }
+.repeater-tabs { display: flex; margin-top: 18px; border-bottom: 1px solid var(--border); }
+.repeater-tabs button { flex: 1; background: none; border: 0; border-radius: 0; color: var(--muted); padding: 13px; border-bottom: 3px solid transparent; }
+.repeater-tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+#repeater-manage-dialog [hidden], #repeater-login-dialog [hidden] { display: none !important; }
+.repeater-section { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 12px 0; }
+.repeater-section h3, .repeater-section h4 { margin: 0 0 12px; }
+.repeater-section summary { cursor: pointer; }
+.repeater-section summary small { display: block; margin: 5px 0 0 18px; }
+.repeater-section[open] > summary { margin-bottom: 18px; }
+.repeater-section dl { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 1fr); gap: 10px 18px; margin: 0; }
+.repeater-section dd { margin: 0; overflow-wrap: anywhere; }
+.repeater-section dt { color: var(--muted); }
+.repeater-section table { width: 100%; font-size: 13px; }
+.repeater-section td, .repeater-section th { padding: 9px; overflow-wrap: anywhere; }
+.repeater-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 14px 0; }
+.repeater-fields { display: grid; gap: 16px; }
+.repeater-field { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 1.5fr); align-items: center; gap: 8px 14px; }
+.repeater-field small { grid-column: 2; white-space: pre-wrap; }
+#repeater-manage-dialog input, #repeater-manage-dialog textarea, #repeater-manage-dialog select, #repeater-login-dialog input { width: 100%; min-width: 0; font: inherit; padding: 10px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 7px; }
+.repeater-radio-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-width: 0; border: 1px solid var(--border); border-radius: 7px; }
+.repeater-radio-fields input { margin-top: 5px; }
+.repeater-password { display: flex; gap: 8px; margin: 12px 0; }
+#repeater-message { white-space: pre-wrap; margin-bottom: 14px; }
+.repeater-error, #repeater-login-message { color: var(--red); }
+.repeater-action-buttons, .contact-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.repeater-danger { color: var(--red); border: 1px solid var(--red); }
+.repeater-data { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
+.repeater-subsection { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 18px; }
+.repeater-subsection form { display: grid; gap: 10px; margin-top: 12px; }
+#repeater-login-form > button { width: 100%; margin-top: 14px; }
+@media(max-width:600px) { .repeater-field { grid-template-columns: 1fr; } .repeater-field small { grid-column: 1; } .repeater-fixed { padding-inline: 18px; } .repeater-toolbar { flex-wrap: wrap; } .contact-actions { flex-direction: column; } }
+#repeater-location-dialog { width: min(1400px, calc(100vw - 24px)); max-height: 95vh; padding: 0; overflow: hidden; }
+#repeater-location-map { height: 60vh; min-height: 280px; }
+#repeater-choose-map { margin-bottom: 16px; }

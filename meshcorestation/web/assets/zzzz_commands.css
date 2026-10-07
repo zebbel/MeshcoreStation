@@ -1,0 +1,27 @@
+/* Commands use the same fixed header / scrolling body layout as other popups. */
+#commands-dialog { width: min(1050px, calc(100vw - 24px)); }
+#command-editor-dialog { width: min(680px, calc(100vw - 24px)); }
+#commands-dialog, #command-editor-dialog { padding: 0; overflow: hidden; max-height: 92vh; }
+.commands-toolbar, .command-actions { display: flex; align-items: center; gap: 10px; }
+.commands-toolbar { justify-content: space-between; margin: 18px 0; }
+#commands-list { list-style: none; padding: 0; margin: 16px 0; }
+.command-row { display: grid; grid-template-columns: minmax(70px, 0.4fr) minmax(0, 2fr) auto; align-items: center; gap: 16px; border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 12px 0; }
+.command-name { font-family: monospace; font-size: 22px; overflow-wrap: anywhere; }
+.command-description code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 6px; padding: 8px; margin: 8px 0; }
+.command-badge { color: var(--accent); background: var(--soft); border-radius: 12px; padding: 3px 9px; }
+.command-delete, .commands-error { color: var(--red); }
+.commands-preview { padding: 16px; margin: 18px 0; border: 1px solid var(--border); border-radius: 12px; }
+.commands-preview h3 { margin: 0 0 12px; }
+.commands-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); padding: 10px; border-radius: 7px; }
+.commands-footer { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 26px; border-top: 1px solid var(--border); }
+.commands-footer > div { margin-right: auto; }
+#command-editor-form label { display: block; margin-top: 16px; margin-bottom: 8px; }
+#command-editor-form input, #command-editor-form textarea, #command-editor-form select { width: 100%; min-width: 0; padding: 10px; font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; }
+#command-editor-form textarea { font-family: monospace; resize: vertical; }
+#command-placeholders { max-height: 240px; overflow-y: auto; }
+#command-placeholders h4 { margin: 12px 0 6px; }
+#command-placeholders button { font-family: monospace; margin: 3px; padding: 6px 8px; }
+#commands-dialog [hidden], #command-editor-dialog [hidden] { display: none !important; }
+.card:has(> #bot-status) #open-commands { grid-column: 2; grid-row: 5; }
+@media(max-width:600px) { .command-row { grid-template-columns: 1fr; } .commands-footer { flex-wrap: wrap; padding: 14px 18px; } }
+@media(max-width:480px) { .card:has(> #bot-status) #open-commands { grid-column: 1; grid-row: 8; } }

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Control the single MeshcoreStation systemd service and invoke its manual Git updater.
+set -euo pipefail
+service=meshcorestation.service
+case "${1:-status}" in
+    start|stop|restart) exec sudo /usr/bin/systemctl "$1" "$service" ;;
+    status) exec /usr/bin/systemctl status "$service" --no-pager ;;
+    logs) exec journalctl -u "$service" -f ;;
+    recent) exec journalctl -u "$service" -n 80 --no-pager ;;
+    update)
+        project_dir="$(/usr/bin/systemctl show "$service" -p WorkingDirectory --value 2>/dev/null || true)"
+        [[ -n "$project_dir" && -f "$project_dir/install.sh" ]] || { echo 'MeshcoreStation installation directory not found.' >&2; exit 1; }
+        exec bash "$project_dir/install.sh" --update
+        ;;
+    *) echo 'Usage: meshcorestation {start|stop|restart|status|logs|recent|update}'; exit 2 ;;
+esac

@@ -1,0 +1,8 @@
+.venv/
+data/
+meshcorestation.env
+meshcorestation.env.backup-*
+requirements-installed.txt
+__pycache__/
+.pytest_cache/
+*.pyc
