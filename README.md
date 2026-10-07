@@ -1,36 +1,245 @@
 # MeshcoreStation
 
-MeshcoreStation is a single-process MeshCore station application for a Raspberry Pi. It combines the MeshCore companion connection, configurable chat commands, repeater/contact tools, battery monitoring, maps, and the web dashboard in one Python process and one systemd service.
+MeshcoreStation started as a **personal ping bot for MeshCore** and has grown into a small Raspberry Pi station for interacting with a MeshCore network.
+
+The bot listens on a **private MeshCore channel**. A MeshCore **Companion** device must be connected to the Raspberry Pi over **USB serial**. MeshcoreStation uses that Companion connection to receive channel messages, detect configured commands, build replies, and send those replies back over the mesh.
+
+Commands are not hard-coded. Their trigger, help text, action, and reply template are stored in SQLite and can be changed from the web interface.
+
+![How MeshcoreStation works](docs/images/how-it-works.svg)
 
 Current application version: **2.0.0**.
 
+## What it does
+
+MeshcoreStation combines a private-channel command bot with a small web dashboard.
+
+A typical flow is:
+
+1. A MeshCore user sends a command such as `ping` in the private bot channel.
+2. The Companion connected to the Raspberry Pi receives the packet.
+3. MeshcoreStation matches the command against the configured command list.
+4. It collects the values required by the configured reply, such as hop count, SNR, RSSI, distances, repeater count, or scope.
+5. The reply is sent back to the same MeshCore channel.
+6. The command and packet information are stored for later inspection in the dashboard.
+
+The same process also keeps track of repeaters seen by the Companion, packet routes, saved Companion positions, battery information, scopes, and command history.
+
+## Hardware and channel setup
+
+MeshcoreStation is intended to run on a Raspberry Pi with a MeshCore Companion connected by USB.
+
+The important parts are:
+
+- a Raspberry Pi running Raspberry Pi OS / Debian;
+- a MeshCore Companion device running compatible firmware;
+- a USB connection between the Companion and the Pi;
+- a private MeshCore channel used by the bot;
+- the same channel configured on the Companion and selected in MeshcoreStation.
+
+After installation, open the MeshcoreStation web interface, select the Companion serial port in **Settings**, and select the private bot channel in **Channels**.
+
+The Companion is the actual radio interface. MeshcoreStation does not talk to the LoRa radio directly.
+
+## Configurable commands and replies
+
+Commands are stored in the SQLite database and can be added, removed, or edited from the web interface.
+
+Each command has:
+
+- a **trigger**, such as `ping`;
+- a short **help text**;
+- an **action**;
+- a configurable **reply template**.
+
+Available actions currently include:
+
+- **Reply** — build and send a reply only;
+- **Get sender position** — request/store the sender position and then reply;
+- **Add scope** — create a reply scope and then reply.
+
+Reply templates can contain placeholders such as:
+
+```text
+{sender_name}
+{hop_count}
+{snr}
+{rssi}
+{direct_distance}
+{route_distance}
+{repeater_count}
+{scope_name}
+```
+
+If a value cannot be determined, the template renderer uses `unknown` rather than inventing a value.
+
+## Default commands
+
+A fresh database starts with three commands.
+
+### `?` — help
+
+Shows the currently configured command list.
+
+Default reply:
+
+```text
+{command_list}
+```
+
+Because the help text is generated from the database, it automatically reflects commands that you add, remove, or rename.
+
+### `status` — repeater count
+
+Returns the sender name and the number of repeaters currently known to MeshcoreStation.
+
+Default reply:
+
+```text
+@{sender_name} | {repeater_count} repeaters.
+```
+
+Example:
+
+```text
+@Alice | 42 repeaters.
+```
+
+The repeater count comes from MeshcoreStation's SQLite database.
+
+### `ping` — connection and route test
+
+The default ping command reports the received route information and signal values for that packet.
+
+Default reply:
+
+```text
+@{sender_name} | {hop_count} hops | SNR {snr} | RSSI {rssi} dBm | direct {direct_distance}km | route {route_distance}km | scope {scope_name}.
+```
+
+Example:
+
+```text
+@Alice | 2 hops | SNR 7.5 | RSSI -92 dBm | direct 12.34km | route 18.76km | scope home.
+```
+
+The individual values mean:
+
+- **hop count** — number of repeater hops recorded for the received packet;
+- **SNR** — signal-to-noise ratio reported for the matching receive packet;
+- **RSSI** — received signal strength in dBm;
+- **direct distance** — straight-line geographic distance between the saved sender position and the bot Companion;
+- **route distance** — geographic distance following the resolved repeater route;
+- **scope** — reply scope matched to the received packet.
+
+## Repeaters and the map
+
+MeshcoreStation stores every repeater advertisement it sees in SQLite.
+
+For each repeater it keeps information such as:
+
+- public key;
+- name;
+- latitude and longitude;
+- first and last time seen;
+- advertisement count;
+- advertised path information.
+
+Repeaters are updated when they are seen again rather than being duplicated.
+
+The dashboard shows the total number of known repeaters and provides a **Map** view. Repeaters with usable coordinates are displayed on an OpenStreetMap background together with the saved bot position.
+
+For a recorded `ping`, MeshcoreStation can also show the packet route as:
+
+```text
+sender -> repeater 1 -> repeater 2 -> ... -> bot
+```
+
+Unknown, ambiguous, or unlocated repeater hops are not guessed. They are shown as unresolved and break the drawn route line.
+
+![Direct and route distance example](docs/images/distance-map.svg)
+
+## Direct distance and route distance
+
+The two distance values intentionally describe different things.
+
+### Direct distance
+
+`direct_distance` is the straight-line great-circle distance between:
+
+- the saved position of the sender Companion; and
+- the advertised position of the MeshcoreStation Companion.
+
+It does **not** follow roads, terrain, or repeater hops.
+
+If the sender position or bot position is not available, the value cannot be calculated.
+
+### Route distance
+
+`route_distance` uses the repeater path recorded for the received packet.
+
+When the repeater identities and coordinates can all be resolved, MeshcoreStation calculates:
+
+```text
+sender -> repeater 1 -> repeater 2 -> ... -> bot
+```
+
+and adds the geographic distance of each segment.
+
+For a direct packet with zero repeater hops, route distance and direct distance are the same.
+
+The route value can include a qualifier:
+
+- `18.76` — the complete route was resolved;
+- `~18.76` — one or more short path hashes were ambiguous, but MeshcoreStation could select a geographically plausible route;
+- `>=18.76` — one or more hops could not be resolved, so the shown value is only a lower bound;
+- `unknown` — the route could not be calculated reliably.
+
+The route is a geographic approximation between recorded node coordinates. It is **not** the actual RF propagation path and does not account for terrain, antenna patterns, reflections, or other radio effects.
+
+## Web dashboard
+
+The dashboard provides a browser-based view of the station, including:
+
+- bot/Companion connection status;
+- known repeater count;
+- last received command;
+- command history and packet details;
+- repeater map;
+- route maps for ping commands;
+- Companion, channel, command, and scope configuration;
+- repeater management;
+- battery monitoring and history.
+
 ## Raspberry Pi installation
 
-MeshcoreStation targets Raspberry Pi OS / Debian with systemd and Python 3.12 or newer. Run the installer as your normal user; it requests `sudo` only for system changes.
+MeshcoreStation targets Raspberry Pi OS / Debian with systemd and Python 3.12 or newer.
 
-For a GitHub installation, clone the public repository rather than downloading a ZIP. Replace `OWNER` with the GitHub account or organization that hosts the repository:
+Clone the public repository and run the installer as your normal user:
 
 ```bash
-git clone https://github.com/OWNER/MeshcoreStation.git
+git clone https://github.com/zebbel/MeshcoreStation.git
 cd MeshcoreStation
 bash install.sh
 ```
 
-Choose **Install / repair** and select the web port. Port 80 is the default. The installer:
+Choose **Install / repair** and select the web port. Port 80 is the default.
+
+The installer:
 
 - installs required Debian build/runtime packages and Git;
 - creates `.venv/` and installs `requirements.txt`;
 - creates `meshcorestation.env`;
 - installs and enables `meshcorestation.service`;
 - installs the `meshcorestation` control command in `/usr/local/bin`;
-- adds the service user to `dialout` for serial access;
+- adds the service user to `dialout` for USB serial access;
 - starts the application.
 
-After installation, open the Pi's address in a browser, then use **Settings** to select the companion serial port and **Channels** to select the bot channel.
+After installation, open the Pi's address in a browser, then use **Settings** to select the Companion serial port and **Channels** to select the bot channel.
 
 ## Manual GitHub updates
 
-Updates are deliberately manual. MeshcoreStation does not poll GitHub and does not install updates automatically.
+Updates are deliberately manual. MeshcoreStation does not poll GitHub or automatically install new versions.
 
 Run:
 
@@ -38,18 +247,22 @@ Run:
 meshcorestation update
 ```
 
-or choose **Update from GitHub** in `bash install.sh`.
+or choose **Update from GitHub** in:
 
-The updater uses the current checkout's configured upstream Git remote; no GitHub username or repository URL is hard-coded into the application. It requires:
+```bash
+bash install.sh
+```
+
+The updater uses the configured upstream Git remote. It requires:
 
 - an installation made from a Git clone;
 - a checked-out branch with an upstream tracking branch;
 - a clean Git working tree;
 - a fast-forward update.
 
-The update fetches the upstream branch, stops the service if it was running, fast-forwards the source, installs any changed Python requirements, runs the offline installation smoke check, refreshes the systemd unit and control command, and restarts the service if it was running before the update.
+The update process fetches the upstream branch, stops the service if it was running, fast-forwards the source, installs changed Python requirements, runs the installation smoke check, refreshes the systemd unit and control command, and starts the service again if it was running before the update.
 
-Local changes intentionally block `meshcorestation update`. Commit, stash, or remove them first rather than letting an update overwrite them.
+Local source changes intentionally block `meshcorestation update`.
 
 ## Service commands
 
@@ -63,8 +276,6 @@ meshcorestation logs
 meshcorestation update
 ```
 
-The interactive setup menu also provides install/repair, update, web-port changes, service controls, logs, and uninstall.
-
 ## Configuration and data
 
 The installer creates `meshcorestation.env` with these settings:
@@ -76,17 +287,23 @@ The installer creates `meshcorestation.env` with these settings:
 | `MESHCORESTATION_PORT` | Web port | `80` |
 | `MESHCORESTATION_TIMEZONE` | Dashboard timezone | `Europe/Berlin` |
 
-Persistent application data is stored under `data/`. The main SQLite database is:
+Persistent application data is stored under `data/`.
+
+The main SQLite database is:
 
 ```text
 data/meshcorestation.db
 ```
 
-It contains bot settings, repeaters, positions, scopes, configurable commands, command/message history, battery samples, and report state. Rotating application logs are under `data/logs/`.
+It contains bot settings, repeaters, positions, scopes, configurable commands, command/message history, battery samples, and report state.
 
-The web port and process-level path/timezone settings are in `meshcorestation.env`, not SQLite. No legacy-installation migration or compatibility layer is built into MeshcoreStation.
+Rotating application logs are stored under:
 
-The following are ignored by Git and therefore are not overwritten by normal source updates:
+```text
+data/logs/
+```
+
+The following paths are ignored by Git and are not overwritten by normal source updates:
 
 ```text
 .venv/
@@ -95,21 +312,6 @@ meshcorestation.env
 meshcorestation.env.backup-*
 requirements-installed.txt
 ```
-
-## Main features
-
-- One MeshCore companion serial connection shared by the bot and dashboard.
-- Configurable bot commands stored in SQLite.
-- Reply, sender-position, and add-scope command actions.
-- Reply placeholders for sender, route, signal, distance, companion, battery, statistics, network, and time data.
-- Saved reply scopes and channel-aware replies.
-- Contact synchronization and detailed contact information.
-- Repeater status/configuration management through supported MeshCore CLI commands.
-- Repeater and packet maps with saved coordinates.
-- Battery sampling, history, charts, guest telemetry, and scheduled reports.
-- Runtime serial/channel configuration through the web dashboard.
-
-Fresh databases include the mandatory `?` help command plus `status` and `ping` defaults.
 
 ## Source layout
 
@@ -122,8 +324,9 @@ Fresh databases include the mandatory `?` help command plus `status` and `ping` 
 | `meshcorestation/radio/` | Companion, bot, contacts, channels, repeater control, telemetry |
 | `meshcorestation/commands/` | Command templates, placeholders, and actions |
 | `meshcorestation/storage/` | SQLite schema and persistence |
-| `meshcorestation/web/` | Dash application and HTTP APIs |
+| `meshcorestation/web/` | Dashboard and HTTP APIs |
 | `meshcorestation/web/assets/` | Browser JavaScript, CSS, maps, and local assets |
+| `docs/images/` | README diagrams |
 | `install.sh` | Install/repair/update/uninstall menu |
 | `scripts/meshcorestation` | Installed service/update command |
 | `scripts/check_install.py` | Offline installation smoke check |
@@ -142,8 +345,6 @@ PYTHONPATH=. .venv/bin/python3 -m pytest -q
 
 JavaScript DOM tests require Node.js and `jsdom`.
 
-`VALIDATION.md` records the validation performed for the current source tree and any hardware/browser limitations.
-
 ## Uninstall
 
 Run:
@@ -152,4 +353,4 @@ Run:
 bash install.sh --uninstall
 ```
 
-The uninstall action removes the systemd service, `/usr/local/bin/meshcorestation`, and `.venv/`. By default it leaves the source, SQLite database, logs, and environment configuration in place. A separate `DELETE` confirmation removes the stored data/configuration as well.
+The uninstall action removes the systemd service, `/usr/local/bin/meshcorestation`, and `.venv/`. By default it leaves the source, SQLite database, logs, and environment configuration in place.
