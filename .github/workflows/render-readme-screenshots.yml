@@ -21,10 +21,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Chromium
+      - name: Check browser
         run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+          command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
 
       - name: Render screenshots
         run: python3 scripts/render_readme_screenshots.py
