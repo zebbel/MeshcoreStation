@@ -149,14 +149,6 @@ Repeaters are updated when they are seen again rather than being duplicated.
 
 The dashboard shows the total number of known repeaters and provides a **Map** view. Repeaters with usable coordinates are displayed on an OpenStreetMap background together with the saved bot position.
 
-For a recorded `ping`, MeshcoreStation can also show the packet route as:
-
-```text
-sender -> repeater 1 -> repeater 2 -> ... -> bot
-```
-
-Unknown, ambiguous, or unlocated repeater hops are not guessed. They are shown as unresolved and break the drawn route line.
-
 ### Repeater configuration
 
 MeshcoreStation can also be used to manage a reachable MeshCore repeater from the web interface. After selecting a repeater and connecting with the appropriate repeater password, you can inspect status, telemetry, neighbours, and access permissions.
@@ -165,9 +157,18 @@ With administrator access, supported repeater settings can be read and changed r
 
 Configuration changes are validated by MeshcoreStation and, where possible, read back from the repeater after saving so the applied value can be reviewed.
 
+## Direct distance and route distance
+
+For a recorded `ping`, MeshcoreStation can also show the packet route as:
+
+```text
+sender -> repeater 1 -> repeater 2 -> ... -> bot
+```
+
 ![Example: Direct vs. Route distance](docs/images/direct-route-example.png)
 
-## Direct distance and route distance
+Unknown, ambiguous, or unlocated repeater hops are not guessed. They are shown as unresolved and break the drawn route line.
+
 
 The two distance values intentionally describe different things.
 
