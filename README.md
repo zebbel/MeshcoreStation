@@ -157,7 +157,7 @@ sender -> repeater 1 -> repeater 2 -> ... -> bot
 
 Unknown, ambiguous, or unlocated repeater hops are not guessed. They are shown as unresolved and break the drawn route line.
 
-![Direct and route distance example](docs/images/distance-map.svg)
+![Example: Direct vs. Route distance](docs/images/direct-route-example.svg)
 
 ## Direct distance and route distance
 
@@ -210,6 +210,16 @@ The dashboard provides a browser-based view of the station, including:
 - Companion, channel, command, and scope configuration;
 - repeater management;
 - battery monitoring and history.
+
+The screenshots below are rendered from MeshcoreStation's actual web UI and CSS with representative sample values, so they can be generated without a live radio session.
+
+### Dashboard overview
+
+![MeshcoreStation dashboard](docs/images/dashboard.png)
+
+### Configurable commands
+
+![MeshcoreStation commands dialog](docs/images/commands.png)
 
 ## Raspberry Pi installation
 
@@ -331,19 +341,6 @@ requirements-installed.txt
 | `scripts/meshcorestation` | Installed service/update command |
 | `scripts/check_install.py` | Offline installation smoke check |
 | `tests/` | Python and browser-DOM regression tests |
-
-## Development and tests
-
-Create a virtual environment and install the runtime plus test dependencies:
-
-```bash
-python3 -m venv .venv
-.venv/bin/python3 -m pip install -r requirements.txt
-.venv/bin/python3 -m pip install pytest
-PYTHONPATH=. .venv/bin/python3 -m pytest -q
-```
-
-JavaScript DOM tests require Node.js and `jsdom`.
 
 ## Uninstall
 
