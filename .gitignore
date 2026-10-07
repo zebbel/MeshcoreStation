@@ -6,3 +6,5 @@ requirements-installed.txt
 __pycache__/
 .pytest_cache/
 *.pyc
+
+.updates/

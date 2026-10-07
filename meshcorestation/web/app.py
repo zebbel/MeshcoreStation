@@ -14,4 +14,6 @@ def create_app():
     register_callbacks(app)
     register_companion_routes(app.server)
     register_map_routes(app.server)
+    from meshcorestation.web.update_api import register_update_routes
+    register_update_routes(app.server)
     return app

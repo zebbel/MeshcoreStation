@@ -256,9 +256,21 @@ The installer:
 
 After installation, open the Pi's address in a browser, then use **Settings** to select the Companion serial port and **Channels** to select the bot channel.
 
+## Updates from the web app
+
+In **Settings → Updates**, select **Check for updates**. The panel shows the installed version and commit, the latest checked version and commit on GitHub `main`, and a **View changes on GitHub** link. Select **Install update** and confirm to install that exact checked commit. Checks and installations only happen when requested.
+
+**One-time setup for existing installations:** run `meshcorestation update` in the Pi terminal to obtain this version and install the background update service. Then hard-refresh the dashboard. New installations enable web updates automatically.
+
+Web installation requires a clean Git checkout of `main` from `https://github.com/zebbel/MeshcoreStation.git` and a fast-forward update. It refuses local source edits and checks free disk space first. A separate systemd service stops the app, backs up the source, data directory (including the stopped SQLite database), environment settings and Python environment, installs dependencies, runs the installation check, and restarts the app. If installation or the dashboard health check fails, it restores the previous installation. Radio connectivity is not part of the health check: an unplugged companion does not make an otherwise successful update fail.
+
+The panel waits for the dashboard to reconnect and offers **Reload dashboard** when finished. Updates may take several minutes on a Pi Zero. Backups are retained in `.updates/backup-<timestamp>/` and are never automatically deleted. Review and remove old backups when no longer needed to reclaim space. They contain private settings and history; keep them private. An interrupted transaction is recovered by the update service after reboot; failures that need manual attention show the backup location in the panel. Worker logs are available with `journalctl -u meshcorestation-update.service`.
+
+The update worker runs as the installation owner. Setup grants that account passwordless permission only for starting and stopping `meshcorestation.service`. Web updates use the dashboard's existing local-network and same-origin controls; keep dashboard access limited to trusted users. Unit-file or operating-system changes in a future release may still require terminal setup.
+
 ## Manual GitHub updates
 
-Updates are deliberately manual. MeshcoreStation does not poll GitHub or automatically install new versions.
+The terminal updater remains available alongside the web controls. MeshcoreStation does not poll GitHub or automatically install new versions.
 
 Run:
 

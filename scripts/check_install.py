@@ -28,7 +28,7 @@ def main():
         finally:
             db.close()
     app = create_app()
-    required = {'/api/bot/commands', '/api/repeater', '/api/bot/runtime', '/api/bot/voltage', '/api/companion', '/api/companion/contacts', '/api/companion/channels'}
+    required = {'/api/update', '/api/update/health', '/api/bot/commands', '/api/repeater', '/api/bot/runtime', '/api/bot/voltage', '/api/companion', '/api/companion/contacts', '/api/companion/channels'}
     assert required <= {route.rule for route in app.server.url_map.iter_rules()}
     assert app.server.test_client().get('/').status_code == 200
     print('MeshcoreStation imports, native dependencies, fresh database and dashboard routes OK.')

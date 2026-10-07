@@ -128,7 +128,56 @@ install_service_files() {
     systemd-analyze verify "$work_dir/$service"
     sudo install -o root -g root -m 0644 "$work_dir/$service" "/etc/systemd/system/$service"
     sudo install -o root -g root -m 0755 scripts/meshcorestation /usr/local/bin/meshcorestation
+    install_web_updater "$work_dir" "$service_user" "$service_group"
     sudo systemctl daemon-reload
+    sudo systemctl enable meshcorestation-update.service
+    sudo systemctl enable --now meshcorestation-update.path
+}
+
+install_web_updater() {
+    local work_dir="$1" service_user="$2" service_group="$3"
+    mkdir -p "$project_dir/.updates"
+    chmod 0700 "$project_dir/.updates"
+    cat > "$work_dir/meshcorestation-update.service" <<UNIT
+[Unit]
+Description=MeshcoreStation web update worker
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=$service_user
+Group=$service_group
+WorkingDirectory=$project_dir
+EnvironmentFile=$project_dir/meshcorestation.env
+Environment=PYTHONPATH=$project_dir
+ExecStart=/usr/bin/python3 -m meshcorestation.updater
+TimeoutStartSec=infinity
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    cat > "$work_dir/meshcorestation-update.path" <<UNIT
+[Unit]
+Description=Watch for MeshcoreStation update requests
+
+[Path]
+PathExists=$project_dir/.updates/request.json
+Unit=meshcorestation-update.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    # Only the two fixed service operations are permitted without a password.
+    printf '%s ALL=(root) NOPASSWD: /usr/bin/systemctl stop meshcorestation.service, /usr/bin/systemctl start meshcorestation.service\n' "$service_user" > "$work_dir/meshcorestation-update-sudoers"
+    sudo visudo -cf "$work_dir/meshcorestation-update-sudoers"
+    sudo install -o root -g root -m 0440 "$work_dir/meshcorestation-update-sudoers" /etc/sudoers.d/meshcorestation-update
+    for unit in meshcorestation-update.service meshcorestation-update.path; do
+        systemd-analyze verify "$work_dir/$unit"
+        sudo install -o root -g root -m 0644 "$work_dir/$unit" "/etc/systemd/system/$unit"
+    done
 }
 
 install_project() (
@@ -215,6 +264,9 @@ update_project() (
         exit 0
     fi
     git merge-base --is-ancestor "$local_commit" "$remote_commit" || fail 'The local and remote branches have diverged. Update aborted; only fast-forward updates are allowed.'
+    mkdir -p "$project_dir/.updates"
+    exec 9>"$project_dir/.updates/lock"
+    flock -n 9 || fail 'A web update is already running.'
     if systemctl is-active --quiet "$service"; then was_active=1; fi
     ((was_active)) && sudo systemctl stop "$service"
     trap 'result=$?; if ((result && was_active)); then sudo systemctl start "$service" || true; fi' EXIT
@@ -253,6 +305,9 @@ uninstall_project() (
     ask 'Uninstall MeshcoreStation? [y/N]: ' answer
     [[ "$answer" == y || "$answer" == Y ]] || return 0
     if systemctl cat "$service" >/dev/null 2>&1; then sudo systemctl disable --now "$service"; fi
+    sudo systemctl disable --now meshcorestation-update.path || true
+    sudo systemctl disable --now meshcorestation-update.service || true
+    sudo rm -f -- /etc/systemd/system/meshcorestation-update.path /etc/systemd/system/meshcorestation-update.service /etc/sudoers.d/meshcorestation-update
     sudo rm -f -- "/etc/systemd/system/$service" /usr/local/bin/meshcorestation
     sudo systemctl daemon-reload
     sudo systemctl reset-failed "$service" 2>/dev/null || true
