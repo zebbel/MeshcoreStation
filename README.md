@@ -157,7 +157,15 @@ sender -> repeater 1 -> repeater 2 -> ... -> bot
 
 Unknown, ambiguous, or unlocated repeater hops are not guessed. They are shown as unresolved and break the drawn route line.
 
-![Example: Direct vs. Route distance](docs/images/direct-route-example.svg)
+### Repeater configuration
+
+MeshcoreStation can also be used to manage a reachable MeshCore repeater from the web interface. After selecting a repeater and connecting with the appropriate repeater password, you can inspect status, telemetry, neighbours, and access permissions.
+
+With administrator access, supported repeater settings can be read and changed remotely, including the repeater name, radio parameters, TX power, location, advertisement intervals, packet forwarding, flood settings, owner information, and advanced radio/routing options. MeshcoreStation can also manage regions and permissions and perform actions such as sending an advertisement, synchronizing the repeater clock, or rebooting the repeater.
+
+Configuration changes are validated by MeshcoreStation and, where possible, read back from the repeater after saving so the applied value can be reviewed.
+
+![Example: Direct vs. Route distance](docs/images/direct-route-example.png)
 
 ## Direct distance and route distance
 
