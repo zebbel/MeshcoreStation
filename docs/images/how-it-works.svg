@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+<title id="title">How MeshcoreStation works</title>
+<desc id="desc">A MeshCore user sends a command over a private channel. The MeshCore Companion connected by USB to a Raspberry Pi runs MeshcoreStation, which sends the configured reply back over the same mesh.</desc>
+<rect width="1200" height="430" rx="28" fill="#0f172a"/>
+<style>
+  .box{fill:#172033;stroke:#64748b;stroke-width:2}.accent{fill:#13253f;stroke:#60a5fa;stroke-width:3}
+  .t{fill:#f8fafc;font:700 27px system-ui,sans-serif}.s{fill:#cbd5e1;font:18px system-ui,sans-serif}
+  .label{fill:#93c5fd;font:700 17px system-ui,sans-serif}.arrow{stroke:#60a5fa;stroke-width:5;fill:none;marker-end:url(#a)}
+  .return{stroke:#34d399;stroke-width:4;fill:none;stroke-dasharray:9 8;marker-end:url(#b)}
+</style>
+<defs>
+ <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#60a5fa"/></marker>
+ <marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#34d399"/></marker>
+</defs>
+<text x="55" y="52" class="t">MeshcoreStation: private-channel ping bot</text>
+<g transform="translate(45 115)">
+ <rect class="box" width="230" height="185" rx="18"/>
+ <text x="115" y="55" text-anchor="middle" class="t">MeshCore user</text>
+ <text x="115" y="92" text-anchor="middle" class="s">sends: ping</text>
+ <text x="115" y="126" text-anchor="middle" class="label">Private channel</text>
+ <text x="115" y="154" text-anchor="middle" class="s">over the mesh</text>
+</g>
+<g transform="translate(385 115)">
+ <rect class="accent" width="250" height="185" rx="18"/>
+ <text x="125" y="55" text-anchor="middle" class="t">Companion</text>
+ <text x="125" y="92" text-anchor="middle" class="s">MeshCore firmware</text>
+ <text x="125" y="126" text-anchor="middle" class="label">USB serial</text>
+ <text x="125" y="154" text-anchor="middle" class="s">connected to the Pi</text>
+</g>
+<g transform="translate(755 90)">
+ <rect class="box" width="400" height="235" rx="18"/>
+ <text x="200" y="54" text-anchor="middle" class="t">Raspberry Pi</text>
+ <text x="200" y="92" text-anchor="middle" class="label">MeshcoreStation</text>
+ <text x="35" y="130" class="s">• matches the configured command</text>
+ <text x="35" y="162" class="s">• expands reply placeholders</text>
+ <text x="35" y="194" class="s">• stores repeaters &amp; history in SQLite</text>
+</g>
+<path class="arrow" d="M275 180 C320 180 340 180 385 180"/>
+<text x="330" y="160" text-anchor="middle" class="label">radio</text>
+<path class="arrow" d="M635 205 C685 205 705 205 755 205"/>
+<text x="695" y="185" text-anchor="middle" class="label">USB</text>
+<path class="return" d="M755 290 C610 390 300 390 160 305"/>
+<text x="475" y="386" text-anchor="middle" class="label" fill="#6ee7b7">configured reply returns over the same MeshCore channel</text>
+</svg>
