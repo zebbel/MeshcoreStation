@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+<title id="title">Direct and route distance example</title>
+<desc id="desc">An example map with a sender, two repeater hops, and the MeshcoreStation companion. Direct distance is a straight great-circle distance from sender to bot. Route distance is the sum of geographic distances through resolved repeater hops.</desc>
+<rect width="1200" height="520" rx="28" fill="#f8fafc"/>
+<style>
+ .title{fill:#0f172a;font:700 28px system-ui,sans-serif}.txt{fill:#334155;font:18px system-ui,sans-serif}.small{fill:#475569;font:16px system-ui,sans-serif}
+ .route{stroke:#2563eb;stroke-width:6;fill:none}.direct{stroke:#64748b;stroke-width:4;stroke-dasharray:12 10;fill:none}
+ .node{stroke:#0f172a;stroke-width:3}.sender{fill:#f59e0b}.rep{fill:#60a5fa}.bot{fill:#34d399}
+ .badge{fill:#e2e8f0;stroke:#94a3b8;stroke-width:1}
+</style>
+<text x="50" y="55" class="title">Distance values used by the default ping reply</text>
+<text x="50" y="86" class="small">Illustrative example — map lines show recorded hop order, not the physical RF path.</text>
+<path class="direct" d="M145 365 L1045 145"/>
+<path class="route" d="M145 365 L430 250 L735 335 L1045 145"/>
+<circle class="node sender" cx="145" cy="365" r="26"/><text x="145" y="371" text-anchor="middle" class="title" font-size="20">S</text>
+<circle class="node rep" cx="430" cy="250" r="26"/><text x="430" y="257" text-anchor="middle" class="title" font-size="20">1</text>
+<circle class="node rep" cx="735" cy="335" r="26"/><text x="735" y="342" text-anchor="middle" class="title" font-size="20">2</text>
+<circle class="node bot" cx="1045" cy="145" r="26"/><text x="1045" y="152" text-anchor="middle" class="title" font-size="20">B</text>
+<text x="90" y="415" class="txt">Sender</text><text x="385" y="215" class="txt">Repeater 1</text><text x="690" y="385" class="txt">Repeater 2</text><text x="1015" y="105" class="txt">Bot</text>
+<rect class="badge" x="355" y="115" width="350" height="46" rx="12"/><text x="530" y="145" text-anchor="middle" class="txt">direct = sender → bot</text>
+<rect class="badge" x="430" y="440" width="420" height="46" rx="12"/><text x="640" y="470" text-anchor="middle" class="txt">route = sender → R1 → R2 → bot</text>
+<text x="840" y="430" class="small">~ = estimated repeater ID</text>
+<text x="840" y="458" class="small">&gt;= = lower bound; unresolved hops exist</text>
+</svg>
