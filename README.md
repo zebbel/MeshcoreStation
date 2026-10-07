@@ -374,3 +374,7 @@ bash install.sh --uninstall
 ```
 
 The uninstall action removes the systemd service, `/usr/local/bin/meshcorestation`, and `.venv/`. By default it leaves the source, SQLite database, logs, and environment configuration in place.
+
+### Sender position requests
+
+Commands assigned **Get sender position** first send “Position request received. Requesting telemetry…” to the command’s channel and scope. The telemetry request then floods in that same scope (explicitly unscoped for unscoped commands), waits up to 60 seconds, and restores the configured default scope afterward. The configured success or failure reply follows. An unknown request scope prevents telemetry transmission. The acknowledgment confirms radio submission, not delivery to the sender.

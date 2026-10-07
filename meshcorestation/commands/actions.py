@@ -11,11 +11,11 @@ class Outcome:
     values: dict = field(default_factory=dict)
 
 
-async def execute(bot, action, message):
+async def execute(bot, action, message, matched_rx=None):
     if action == 'reply':
         return Outcome(True)
     if action == 'position':
-        return await sender_position(bot, message['name'])
+        return await sender_position(bot, message['name'], matched_rx)
     if action == 'scope':
         args = message['message'].strip().split(maxsplit=1)
         name = args[1].strip() if len(args) > 1 else ''
@@ -36,13 +36,22 @@ async def execute(bot, action, message):
     return Outcome(False, 'Unknown command action.')
 
 
-async def sender_position(bot, name):
+async def sender_position(bot, name, matched_rx=None):
     if bot.position_update_running:
         return Outcome(False, 'Position update already running; try again shortly.')
     bot.position_update_running = True
     try:
-        # get_telemetry requires exactly one matching contact and waits for its reply.
-        response = await bot.companion.get_telemetry(name)
+        scope_name, _ = bot.companion._get_reply_scope(matched_rx)
+        if scope_name is None:
+            return Outcome(False, 'Request scope is unknown; telemetry was not requested.')
+        from meshcorestation.commands.templates import split_reply
+        acknowledgment = f"@{name} | Position request received. Requesting telemetry…"
+        for part in split_reply(acknowledgment):
+            sent = await bot.companion.send_channel_message(bot.companion.channel_idx, part, matched_rx)
+            if sent is False or sent != scope_name:
+                return Outcome(False, 'Could not send the position acknowledgment; telemetry was not requested.')
+        # Await radio acceptance of the acknowledgment before requesting telemetry.
+        response = await bot.companion.get_telemetry(name, matched_rx)
         if response is None:
             return Outcome(False, 'Could not retrieve telemetry; contact unknown, ambiguous, unavailable or telemetry denied. Saved position unchanged.')
         gps = next((item.get('value') for item in response['telemetry'] if item.get('type') == 'gps' and item.get('channel') == 1), None)

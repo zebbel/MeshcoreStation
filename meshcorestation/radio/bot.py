@@ -28,7 +28,7 @@ class Bot:
         if command is None:
             return None
         from meshcorestation.commands.actions import execute
-        outcome = await execute(self, command['action'], message_data)
+        outcome = await execute(self, command['action'], message_data, matched_rx)
         template = command['reply'] if outcome.ok else command.get('failure_reply', '@{sender_name} | {result}')
         try:
             needed = fields(template)

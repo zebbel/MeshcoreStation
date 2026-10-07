@@ -337,7 +337,7 @@ class Companion:
 # TELEMETRY FUNCTIONS
 ################################################
 
-    async def get_telemetry(self, contact_name):
+    async def get_telemetry(self, contact_name, matched_rx=None):
         result = await self.mc.commands.get_contacts()
 
         if result.type != EventType.CONTACTS:
@@ -351,21 +351,36 @@ class Companion:
             self.logger.warning(f"Expected one contact named {contact_name!r}, found {len(matches)}")
             return None
 
+        scope_name, scope_key = self._get_reply_scope(matched_rx)
+        if scope_name is None:
+            self.logger.warning("Telemetry skipped: received command scope is unknown")
+            return None
         contact = matches[0]
-        result = await self.mc.commands.reset_path(contact["public_key"])
-
-        if result is None or result.type != EventType.OK:
-            self.logger.warning("Could not reset route for %r: %s", contact_name, getattr(result, "payload", None))
-            return None
-
-        self.logger.info(f"Requesting telemetry from {contact_name!r} using flooding...")
-        telemetry = await self.mc.commands.req_telemetry_sync(contact, timeout=60)
-
-        if telemetry is None:
-            self.logger.warning(f"No telemetry response from {contact_name!r}")
-            return None
-
-        return {"contact": contact, "telemetry": telemetry}
+        # Share the reply lock so no other transmission changes our temporary scope.
+        async with self.reply_lock:
+            try:
+                result = await self.mc.commands.set_flood_scope("*" if scope_key is None else scope_key)
+                if result is None or result.type != EventType.OK:
+                    self.logger.warning("Telemetry skipped: could not select scope %s", scope_name)
+                    return None
+                result = await self.mc.commands.reset_path(contact["public_key"])
+                if result is None or result.type != EventType.OK:
+                    self.logger.warning("Could not reset route for %r: %s", contact_name, getattr(result, "payload", None))
+                    return None
+                self.logger.info("Requesting telemetry from %r using flooding | scope: %s", contact_name, scope_name)
+                telemetry = await self.mc.commands.req_telemetry_sync(contact, timeout=60)
+                if telemetry is None:
+                    self.logger.warning("No telemetry response from %r | scope: %s", contact_name, scope_name)
+                    return None
+                return {"contact": contact, "telemetry": telemetry}
+            finally:
+                # Clear the temporary override, restoring the configured default.
+                try:
+                    result = await self.mc.commands.set_flood_scope(None)
+                    if result is None or result.type != EventType.OK:
+                        self.logger.warning("WARNING: could not reset temporary telemetry scope")
+                except Exception as exc:
+                    self.logger.warning("WARNING: telemetry scope reset failed: %s %s", type(exc).__name__, exc)
 
 ################################################
 # HELPER FUNCTIONS
