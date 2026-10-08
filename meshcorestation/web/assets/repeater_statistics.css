@@ -1,0 +1,14 @@
+#repeater-statistics-dialog { width: min(1100px, calc(100vw - 32px)); }
+.stats-controls { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.stats-controls label { display: grid; gap: 6px; max-width: 100%; }
+.stats-controls select { max-width: 100%; padding: 9px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+.stats-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; margin: 18px 0; }
+.stats-metric { border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.stats-metric p { margin: 0 0 8px; }
+.stats-metric strong { font-size: 27px; }
+.stats-section { margin: 24px 0; }
+.stats-section svg { display: block; width: 100%; min-height: 170px; }
+.stats-section svg text { fill: var(--text); font: 12px system-ui; }
+.stats-table-scroll { overflow-x: auto; }
+.stats-section td { overflow-wrap: anywhere; white-space: normal; }
+.stats-section table { width: 100%; }

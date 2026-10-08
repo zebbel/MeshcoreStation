@@ -378,3 +378,15 @@ The uninstall action removes the systemd service, `/usr/local/bin/meshcorestatio
 ### Sender position requests
 
 Commands assigned **Get sender position** first send “Position request received. Requesting telemetry…” to the command’s channel and scope. The telemetry request then floods in that same scope (explicitly unscoped for unscoped commands), waits up to 60 seconds, and restores the configured default scope afterward. The configured success or failure reply follows. An unknown request scope prevents telemetry transmission. The acknowledgment confirms radio submission, not delivery to the sender.
+
+## My repeater statistics (passive)
+
+Open **My repeater statistics → Open statistics**, select your repeater from Known repeaters, and choose **Save selection**. Collection starts at that point; no historical traffic is reconstructed. Select the empty option to pause collection. The selection persists across restarts. Changing it collects only the new repeater; previously retained observations remain associated with their original key.
+
+The 24-hour, 7-day and 30-day views show RF copies, unique payload fingerprints, repeated copies and their ratio, traffic over time, packet types, first/middle/final path appearances, common routes, and repeaters immediately before or after yours. These are observations heard by the station, not total repeater traffic or verified bidirectional links. Roles overlap for one-hop paths and loops. Counts of unique payloads in chart buckets are not additive across the full period.
+
+The collector runs before the bot-channel filter, so it includes relevant encrypted and other-channel packet metadata without storing message text or raw payloads. It adds **no radio requests, polling, login, or telemetry calls**. Existing battery monitoring and manually requested repeater management are separate features and are unchanged.
+
+Only flood paths provide a usable forwarding history. Direct-route and specially encoded trace paths are excluded. Target prefixes that collide with known repeaters are counted separately; they are excluded from other totals. Unknown collisions remain possible, especially with one-byte prefixes. Neighbor names and ambiguity are snapshots of the known repeater list at collection time (refreshed every ten seconds).
+
+Metadata is stored in `data/repeater-statistics.db` (or the configured data directory), retained for 30 days and capped at 200,000 observations. Retention runs every minute; row counts may temporarily exceed the cap between cleanup passes. The panel displays collection start, earliest retained observation, collector heartbeat, dropped observations and storage-cap truncation. Downtime, missing RX logs and queue/storage failures reduce coverage; zero observations do not prove repeater inactivity. The web updater backs up this database along with other application data.

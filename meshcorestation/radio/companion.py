@@ -260,6 +260,8 @@ class Companion:
 
     def _handle_rx_log(self, event):
         rx = event.payload or {}
+        from meshcorestation.storage.passive_stats import collector
+        collector.submit(rx)
         
         payload_type = rx.get("payload_type")
         payload_typename = str(rx.get("payload_typename", "")).upper()

@@ -20,6 +20,7 @@ def build_layout():
         html.Div([card("Bot status", "bot-status", "bot-detail"), card("Known repeaters", "repeater-count", "repeater-detail"), card("Last command received", "last-command", "last-detail")], className="cards"),
     html.Div(id="error", role="status"),
         html.Section([html.Div([html.Div([html.H2("Repeater battery"), html.P("Voltage history and scheduled channel reports", className="muted")]), html.Button("Battery history / settings", id="open-voltage", className="info-button")], className="toolbar"), html.Div(id="battery-overview")], className="history"),
+        html.Section([html.Div([html.Div([html.H2("My repeater statistics"), html.P("Passive observations only · no repeater polling", className="muted")]), html.Button("Open statistics", id="open-repeater-statistics", className="info-button")], className="toolbar")], className="history"),
         html.Section([
             html.Div([html.Div([html.H2("Command history"), html.P("Oldest to newest · Europe/Berlin", className="muted", id="history-zone")]), html.Div([html.Label("Command", htmlFor="command-filter"), dcc.Dropdown(id="command-filter", options=[], placeholder="All commands", clearable=True, className="command-filter")], className="filter")], className="toolbar"),
             html.Div([html.Button("Load older", id="load-older", n_clicks=0, className="secondary"), html.Span(id="row-count", className="muted"), html.Button("↓ Latest", id="jump-latest", className="secondary")], className="list-tools"),
