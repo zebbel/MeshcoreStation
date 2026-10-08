@@ -1,6 +1,7 @@
 (() => {
     let box, body, initial = true, follow = true, anchor = null, anchorOffset = 0, previousFilter, frame;
     function remember() {
+        if (document.getElementById('command-history-disclosure')?.open === false) return;
         follow = box.scrollHeight - box.clientHeight - box.scrollTop < 40;
         const top = box.getBoundingClientRect().top + 42;
         const row = [...body.querySelectorAll('[data-row-id]')].find(r => r.getBoundingClientRect().bottom > top);
@@ -8,6 +9,7 @@
         anchorOffset = row ? row.getBoundingClientRect().top - box.getBoundingClientRect().top : 0;
     }
     function restore() {
+        if (document.getElementById('command-history-disclosure')?.open === false) return;
         const filter = body.dataset.filter;
         if (initial || filter !== previousFilter || follow) { box.scrollTop = box.scrollHeight; }
         else if (anchor) {
@@ -52,5 +54,8 @@
             if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
         }
     });
+    document.addEventListener('toggle', event => {
+        if (event.target.id === 'command-history-disclosure' && event.target.open && box && body) requestAnimationFrame(restore);
+    }, true);
     attach();
 })();

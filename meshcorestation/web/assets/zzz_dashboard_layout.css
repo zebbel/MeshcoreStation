@@ -29,10 +29,17 @@
 .meshcore-mark:has(#brand-fallback:not([hidden])) { background: var(--accent); }
 
 /* Match the battery heading padding and keep neighboring panels separated. */
-.history:has(#battery-overview) { margin-bottom: 18px; }
+.shell > .history { margin-bottom: 18px; }
 #battery-overview-latest { margin-top: 0; }
 #battery-overview-error:empty { display: none; }
 #battery-chart-disclosure > summary { cursor: pointer; color: var(--accent); padding: 8px 0; }
 #battery-chart-disclosure > label { display: block; margin: 10px 0 14px; }
 #battery-overview-note { margin-bottom: 0; }
 @media(max-width:700px) { #battery-overview { padding: 0 16px 18px; } }
+
+.panel-disclosure > summary { cursor: pointer; color: var(--accent); padding: 22px 26px; }
+.panel-disclosure > summary h2 { display: inline; color: var(--text); font-size: 20px; }
+.panel-disclosure > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 12px; }
+.panel-disclosure[open] > summary { border-bottom: 1px solid var(--border); }
+.stats-selected-marker { background: #b45414; outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 700px) { .panel-disclosure > summary { padding: 20px 16px; } }

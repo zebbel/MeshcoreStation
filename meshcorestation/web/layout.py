@@ -20,13 +20,17 @@ def build_layout():
         html.Div([card("Bot status", "bot-status", "bot-detail"), card("Known repeaters", "repeater-count", "repeater-detail"), card("Last command received", "last-command", "last-detail")], className="cards"),
     html.Div(id="error", role="status"),
         html.Section([html.Div([html.Div([html.H2("Repeater battery"), html.P("Voltage history and scheduled channel reports", className="muted")]), html.Button("Battery history / settings", id="open-voltage", className="info-button")], className="toolbar"), html.Div(id="battery-overview")], className="history"),
-        html.Section([html.Div([html.Div([html.H2("My repeater statistics"), html.P("Passive observations only · no repeater polling", className="muted")]), html.Button("Open statistics", id="open-repeater-statistics", className="info-button")], className="toolbar")], className="history"),
-        html.Section([
-            html.Div([html.Div([html.H2("Command history"), html.P("Oldest to newest · Europe/Berlin", className="muted", id="history-zone")]), html.Div([html.Label("Command", htmlFor="command-filter"), dcc.Dropdown(id="command-filter", options=[], placeholder="All commands", clearable=True, className="command-filter")], className="filter")], className="toolbar"),
+        html.Section([html.Details([
+            html.Summary(html.H2("My repeater statistics")),
+            html.Div([html.P("Passive observations only · no repeater polling", className="muted"), html.Button("Open statistics", id="open-repeater-statistics", className="info-button")], className="toolbar")
+        ], id="repeater-statistics-disclosure", className="panel-disclosure")], className="history"),
+        html.Section([html.Details([
+            html.Summary(html.H2("Command history")),
+            html.Div([html.Div([html.P("Oldest to newest · Europe/Berlin", className="muted", id="history-zone")]), html.Div([html.Label("Command", htmlFor="command-filter"), dcc.Dropdown(id="command-filter", options=[], placeholder="All commands", clearable=True, className="command-filter")], className="filter")], className="toolbar"),
             html.Div([html.Button("Load older", id="load-older", n_clicks=0, className="secondary"), html.Span(id="row-count", className="muted"), html.Button("↓ Latest", id="jump-latest", className="secondary")], className="list-tools"),
             html.Div(html.Table([html.Thead(html.Tr([html.Th("Date & time"), html.Th("Command"), html.Th("Received from"), html.Th("Details")])), html.Tbody(id="command-rows")]), id="command-scroll", tabIndex=0, **{"aria-label": "Command history, oldest first"}),
             html.Div(id="updated", className="updated muted")
-        ], className="history"),
+        ], id="command-history-disclosure", className="panel-disclosure")], className="history"),
         popup([html.Div([html.Div([html.P("COMMAND DETAILS", className="eyebrow"), html.H2("Received command", id="detail-title")]), html.Button("×", id="close-details", **{"aria-label": "Close details"})], className="dialog-header"), html.P("Reply text is recorded by the bot; it is not proof of delivery.", className="muted"), html.Section([html.H3("Packet route"), html.Div(id="route-summary", className="route-summary", **{"aria-live": "polite"}), html.Div(id="route-map", className="map-canvas", role="region", **{"aria-label": "Packet route map"}), html.Div(id="route-notes", className="map-notes")], id="route-section", hidden=True), html.Dl(id="detail-fields")], id="details-dialog", **{"aria-labelledby": "detail-title"}),
         popup([html.Div([html.H2("Known repeaters", id="repeaters-title"), html.Button("×", id="close-repeaters", **{"aria-label": "Close repeater map"})], className="dialog-header"), html.Div(id="repeater-map", className="map-canvas", role="region", **{"aria-label": "Known repeaters map"}), html.Div(id="repeater-notes", className="map-notes")], id="repeaters-dialog", **{"aria-labelledby": "repeaters-title"}),
         dcc.Interval(id="refresh", interval=5000), dcc.Store(id="window-size", data=PAGE_SIZE), dcc.Store(id="last-render", data=None)

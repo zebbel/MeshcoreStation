@@ -50,7 +50,10 @@
             for(const node of data.nodes){
                 const repeater=repeaters.find(r=>r.public_key===node.public_key);
                 if(node.role!=='repeater'||!repeater)continue;
-                const marker=L.marker(node.position,{title:repeater.name}).addTo(map).bindPopup(details(repeater));
+                const chosen=repeater.public_key===selected;
+                const badge=el('span','R','map-marker repeater'+(chosen?' stats-selected-marker':''));
+                const icon=L.divIcon({html:badge,className:'map-icon',iconSize:[28,28],iconAnchor:[14,14]});
+                const marker=L.marker(node.position,{icon,title:repeater.name+(chosen?' (selected)':''),zIndexOffset:chosen?100:0}).addTo(map).bindPopup(details(repeater));
                 markers.set(repeater.public_key,marker);positions.push(node.position);
             }
             filter();message.textContent=`${markers.size} of ${repeaters.length} repeaters shown. Use the list for missing positions.`;
