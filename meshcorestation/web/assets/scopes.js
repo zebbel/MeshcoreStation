@@ -54,24 +54,28 @@
         catch (error) { message(error.message, true); }
         finally { busy = false; controls(); }
     }
-    function close() { if (!busy && discard()) dialog.close(); }
-    function create() {
-        dialog = document.createElement('dialog'); dialog.id = 'scopes-dialog'; dialog.setAttribute('aria-labelledby', 'scopes-title');
-        dialog.innerHTML = `<div class="dialog-header"><h2 id="scopes-title">Scopes</h2><button type="button" id="scopes-close" aria-label="Close scopes">×</button></div>
+    function create(parent) {
+        dialog = document.createElement('section'); dialog.id = 'scope-settings'; dialog.className = 'companion-section'; dialog.setAttribute('aria-labelledby', 'scopes-title');
+        dialog.innerHTML = `<h3 id="scopes-title">Scopes</h3>
         <p class="muted">Saved region scopes let MeshcoreStation recognize scoped messages and reply in the same scope. Keys are generated from the name. Renaming changes the key. The companion’s default transmit scope is configured separately in Network settings.</p>
         <p id="scopes-message" role="status" aria-live="polite"></p><button type="button" id="scopes-reload">Reload</button>
         <form id="scope-form"><label for="scope-name">Scope name</label><input id="scope-name" maxlength="31" pattern="#?[A-Za-z0-9_-]{1,30}" required autocomplete="off" placeholder="Region name"><div class="scope-actions"><button type="submit" id="scope-save">Add scope</button><button type="button" id="scope-cancel">Clear / cancel edit</button></div></form>
         <p id="scopes-count" class="muted"></p><ul id="scopes-list"></ul>`;
-        window.meshcorestationPrepareDialog(dialog);
-        document.body.append(dialog);
-        el('scopes-close').addEventListener('click', close); dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+        const network=parent.querySelector('#network-settings');
+        if(network) network.after(dialog); else parent.querySelector('.companion-grid').append(dialog);
+        parent.addEventListener('settings-before-close', event => { if (busy || !discard()) event.preventDefault(); });
+        parent.addEventListener('close', reset);
+        new MutationObserver(() => { if(parent.open) load(); }).observe(parent, {attributes:true, attributeFilter:['open']});
         el('scopes-reload').addEventListener('click', load); el('scope-form').addEventListener('submit', save);
         el('scope-name').addEventListener('input', () => dirty = true);
         el('scope-cancel').addEventListener('click', () => { if (discard()) reset(); });
     }
-    document.addEventListener('click', event => {
-        if (!event.target.closest('#open-scopes')) return;
-        if (!dialog) create(); if (dialog.open) return;
-        reset(); snapshot = null; dialog.showModal(); load();
-    });
+    function attach() {
+        const parent=el('companion-dialog');
+        if(!parent || dialog)return;
+        create(parent);
+        if(parent.open)load();
+    }
+    new MutationObserver(attach).observe(document.documentElement,{childList:true,subtree:true});
+    attach();
 })();

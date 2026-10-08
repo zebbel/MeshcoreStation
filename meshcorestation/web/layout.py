@@ -11,7 +11,7 @@ def card(label, value_id, detail_id):
     heading = html.P(label, className="eyebrow")
     if value_id in {"bot-status", "repeater-count"}:
         button = html.Button("Settings", id="open-companion", className="info-button") if value_id == "bot-status" else html.Button("Map ↗", id="open-repeaters", className="info-button")
-        heading = html.Div([heading, button] + ([html.Button("Scopes", id="open-scopes", className="info-button")] if value_id == "bot-status" else []), className="card-heading")
+        heading = html.Div([heading, button], className="card-heading")
     return html.Section([heading, html.Div("—", id=value_id, className="metric"), html.P("Waiting for data", id=detail_id, className="muted")], className="card")
 
 def build_layout():

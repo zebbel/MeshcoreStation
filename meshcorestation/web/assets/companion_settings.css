@@ -16,7 +16,7 @@
 #companion-position-map { height: 60vh; min-height: 280px; }
 .companion-section[data-group="position"] > button { margin-top: 14px; }
 .position-map-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-#network-settings, #update-panel { grid-column: 1 / -1; }
+#network-settings, #update-panel, #scope-settings { grid-column: 1 / -1; }
 #network-settings select { display: block; width: 100%; padding: 10px; font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; }
 #network-settings button { margin-top: 12px; }
 #network-message.settings-error { color: var(--red); }

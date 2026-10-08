@@ -12,7 +12,7 @@
     function controls() {
         dialog.setAttribute('aria-busy', String(busy));
         // Serial controls remain independently available when the companion is offline.
-        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
+        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel, #scope-settings')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
         if (positionMarker) positionMarker.dragging[busy || !settings ? 'disable' : 'enable']();
         networkControls();
     }
@@ -77,7 +77,9 @@
     }
 
     function close() {
-        if (!busy && ((!Object.keys(drafts()).length && !networkDirty()) || window.confirm('Close and discard unsaved edits?'))) dialog.close();
+        if (!busy && ((!Object.keys(drafts()).length && !networkDirty()) || window.confirm('Close and discard unsaved edits?'))) {
+            if (dialog.dispatchEvent(new Event('settings-before-close', {cancelable: true}))) dialog.close();
+        }
     }
 
         function validPosition(lat, lon) {
@@ -244,7 +246,7 @@
         document.body.append(dialog);
         createPositionPicker();
         createNetworkSettings();
-        dialog.addEventListener('submit', event => { event.preventDefault(); save(event.target.dataset.group, event.target); });
+        dialog.addEventListener('submit', event => { if (!event.target.dataset.group) return; event.preventDefault(); save(event.target.dataset.group, event.target); });
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
         document.getElementById('close-companion').addEventListener('click', close);
         document.getElementById('reload-companion').addEventListener('click', load);
@@ -255,7 +257,7 @@
         if (!dialog) create();
         if (dialog.open) return;
         settings = null; network = null;
-        dialog.querySelectorAll('input').forEach(element => { element.value = ''; element.defaultValue = ''; });
+        dialog.querySelectorAll('input').forEach(element => { if(element.closest('#scope-settings'))return; element.value = ''; element.defaultValue = ''; });
         dialog.showModal(); load();
     });
 })();
