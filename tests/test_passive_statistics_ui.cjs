@@ -1,5 +1,5 @@
 const {JSDOM}=require('jsdom');const fs=require('node:fs');const assert=require('node:assert/strict');
-const dom=new JSDOM('<html><body><button id="open-repeater-statistics">Stats</button></body></html>',{runScripts:'outside-only',url:'http://localhost/'});
+const dom=new JSDOM('<html><body><details id="repeater-statistics-disclosure"><summary>Statistics</summary><div id="repeater-statistics-inline"></div></details></body></html>',{runScripts:'outside-only',url:'http://localhost/'});
 const w=dom.window;w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'))};w.AbortSignal.timeout=()=>undefined;
 w.setInterval=()=>1;w.clearInterval=()=>{};
 const key='76'.repeat(32),calls=[];let selected=false;
@@ -8,12 +8,13 @@ const settle=()=>new Promise(r=>setImmediate(r));
 (async()=>{
     w.eval(fs.readFileSync('meshcorestation/web/assets/aa_dialog.js','utf8'));
     w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_statistics.js','utf8'));
-    w.document.getElementById('open-repeater-statistics').click();await settle();
-    const d=w.document.getElementById('repeater-statistics-dialog');assert(d.open);assert(d.querySelector('.dialog-body'));assert(d.textContent.includes('Choose your repeater'));
+    const disclosure=w.document.getElementById('repeater-statistics-disclosure');
+    assert.equal(calls.length,0);disclosure.open=true;disclosure.dispatchEvent(new w.Event('toggle'));await settle();
+    const d=w.document.getElementById('repeater-statistics-inline');assert(!w.document.querySelector('dialog'));assert(disclosure.open);assert(d.textContent.includes('Choose your repeater'));
     d.querySelector('.stats-repeater').value=key;d.querySelector('.stats-save').click();await settle();
-    assert.equal(JSON.parse(calls[1].opts.body).public_key,key);assert(d.textContent.includes('33.3%'));assert(d.textContent.includes('Before'));assert(d.querySelector('svg'));assert(!d.querySelector('script'));
+    assert.equal(JSON.parse(calls.find(c=>c.opts.method==='POST').opts.body).public_key,key);assert(d.textContent.includes('33.3%'));assert(d.textContent.includes('Before'));assert(d.querySelector('svg'));assert(!d.querySelector('script'));
     d.querySelector('.stats-period').value='7';d.querySelector('.stats-period').dispatchEvent(new w.Event('change'));await settle();
     assert(calls.at(-1).url.endsWith('days=7'));assert(calls.every(c=>c.url.startsWith('/api/repeater-statistics')));
-    d.querySelector('.stats-close').click();assert(!d.open);
+    disclosure.open=false;disclosure.dispatchEvent(new w.Event('toggle'));assert(!disclosure.open);
     dom.window.close();console.log('Passive statistics selection, periods, chart and safe rendering checks passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -33,6 +33,7 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
     document.addEventListener('click', event => {
         const button = event.target.closest('button');
+        if (button?.id === 'open-commands') { event.preventDefault(); }
         const dialog = document.getElementById('details-dialog');
         if (button && button.dataset.details) {
             const record = JSON.parse(button.dataset.details), fields = document.getElementById('detail-fields');

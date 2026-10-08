@@ -11,21 +11,25 @@ def card(label, value_id, detail_id):
     heading = html.P(label, className="eyebrow")
     if value_id in {"bot-status", "repeater-count"}:
         button = html.Button("Settings", id="open-companion", className="info-button") if value_id == "bot-status" else html.Button("Map ↗", id="open-repeaters", className="info-button")
-        heading = html.Div([heading, button] + ([html.Button("Scopes", id="open-scopes", className="info-button"), html.Button("Commands", id="open-commands", className="info-button")] if value_id == "bot-status" else []), className="card-heading")
+        heading = html.Div([heading, button] + ([html.Button("Scopes", id="open-scopes", className="info-button")] if value_id == "bot-status" else []), className="card-heading")
     return html.Section([heading, html.Div("—", id=value_id, className="metric"), html.P("Waiting for data", id=detail_id, className="muted")], className="card")
 
 def build_layout():
     return html.Main([
         html.Header([html.Div([html.Div([html.Img(src="/assets/meshcore-logo.png?v=1.2", id="meshcore-brand-image", alt="MeshCore"), html.Span("M", id="brand-fallback", hidden=True)], className="mark meshcore-mark"), html.Div([html.H1("MeshcoreStation"), html.P("Your mesh, at a glance.", className="muted")])], className="brand"), html.Div([html.Span(className="live-dot"), " Refreshes every 5 seconds"], className="refresh-label")]),
-        html.Div([card("Bot status", "bot-status", "bot-detail"), card("Known repeaters", "repeater-count", "repeater-detail"), card("Last command received", "last-command", "last-detail")], className="cards"),
+        html.Div([card("Bot status", "bot-status", "bot-detail"), card("Known repeaters", "repeater-count", "repeater-detail")], className="cards"),
     html.Div(id="error", role="status"),
         html.Section([html.Div([html.Div([html.H2("Repeater battery"), html.P("Voltage history and scheduled channel reports", className="muted")]), html.Button("Battery history / settings", id="open-voltage", className="info-button")], className="toolbar"), html.Div(id="battery-overview")], className="history"),
         html.Section([html.Details([
             html.Summary(html.H2("My repeater statistics")),
-            html.Div([html.P("Passive observations only · no repeater polling", className="muted"), html.Button("Open statistics", id="open-repeater-statistics", className="info-button")], className="toolbar")
+            html.Div(id="repeater-statistics-inline")
         ], id="repeater-statistics-disclosure", className="panel-disclosure")], className="history"),
         html.Section([html.Details([
-            html.Summary(html.H2("Command history")),
+            html.Summary([
+                html.H2("Command history"),
+                html.Div([html.P("Last command received", className="eyebrow"), html.Div("—", id="last-command", className="history-latest-command"), html.P("Waiting for data", id="last-detail", className="muted")], className="history-latest"),
+                html.Button("Commands", id="open-commands", className="info-button", type="button")
+            ], className="command-history-summary"),
             html.Div([html.Div([html.P("Oldest to newest · Europe/Berlin", className="muted", id="history-zone")]), html.Div([html.Label("Command", htmlFor="command-filter"), dcc.Dropdown(id="command-filter", options=[], placeholder="All commands", clearable=True, className="command-filter")], className="filter")], className="toolbar"),
             html.Div([html.Button("Load older", id="load-older", n_clicks=0, className="secondary"), html.Span(id="row-count", className="muted"), html.Button("↓ Latest", id="jump-latest", className="secondary")], className="list-tools"),
             html.Div(html.Table([html.Thead(html.Tr([html.Th("Date & time"), html.Th("Command"), html.Th("Received from"), html.Th("Details")])), html.Tbody(id="command-rows")]), id="command-scroll", tabIndex=0, **{"aria-label": "Command history, oldest first"}),

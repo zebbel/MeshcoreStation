@@ -1,5 +1,7 @@
 (() => {
     let panel, busy = false, checking = null, polling = null;
+    const pageRevision = document.querySelector('meta[name="meshcorestation-revision"]')?.content;
+    let reloading = false;
     const active = new Set(['queued', 'preparing', 'backing_up', 'installing', 'verifying', 'rolling_back']);
     async function api(body) {
         const response = await fetch('/api/update', {method: body ? 'POST' : 'GET', cache: 'no-store',
@@ -27,6 +29,11 @@
         message(state.message || (result.ready ? 'Check GitHub for a newer version.' : 'One-time setup needed: run meshcorestation update in the Pi terminal.'));
         panel.querySelector('.update-reload').hidden = state.phase !== 'complete';
         buttons();
+        if (!reloading && state.phase === 'complete' && state.target === result.revision && pageRevision && pageRevision !== 'unknown' && pageRevision !== result.revision) {
+            reloading = true;
+            message('Update complete. Reloading the dashboard…');
+            location.reload();
+        }
         if (busy) startPolling();
         else if (polling) { clearInterval(polling); polling = null; }
     }
