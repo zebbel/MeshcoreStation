@@ -1,0 +1,21 @@
+const {JSDOM}=require('jsdom');const fs=require('node:fs');const assert=require('node:assert/strict');
+const dom=new JSDOM('<html><body></body></html>',{runScripts:'outside-only',url:'http://localhost/'}),w=dom.window;
+w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'))};w.requestAnimationFrame=fn=>fn();
+const key='76'.repeat(32),other='ab'.repeat(32),selected=[],popups=[];let fail=false,removed=0;
+w.fetch=async()=>{if(fail)throw Error('Offline');return {ok:true,json:async()=>({nodes:[{role:'repeater',public_key:key,position:[50,8]},{role:'bot',public_key:other,position:[51,8]}]})}};
+w.L={map:()=>({setView(){return this},invalidateSize(){},fitBounds(){},remove(){removed++}}),tileLayer:()=>({on(){return this},addTo(){}}),marker:position=>({addTo(){return this},bindPopup(node){popups.push(node);return this},getLatLng(){return position},openPopup(){}})};
+w.document.addEventListener('stats-picker-selected',e=>selected.push(e.detail));
+const settle=()=>new Promise(r=>setImmediate(r));
+const open=()=>w.document.dispatchEvent(new w.CustomEvent('stats-picker-open',{detail:{repeaters:[{public_key:key,name:'My <b>repeater</b>'},{public_key:other,name:'No coordinates'}],selected:key}}));
+(async()=>{
+    w.eval(fs.readFileSync('meshcorestation/web/assets/aa_dialog.js','utf8'));
+    w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_statistics_picker.js','utf8'));
+    open();await settle();const d=w.document.getElementById('stats-repeater-picker');
+    assert(d.open);assert.equal(popups.length,1);assert(popups[0].textContent.includes(key));assert(!popups[0].querySelector('b'));
+    d.querySelector('.stats-picker-close').click();assert.deepEqual(selected,[]);assert.equal(removed,1);
+    open();await settle();popups.at(-1).querySelector('button').click();assert.deepEqual(selected,[key]);assert(!d.open);
+    fail=true;open();await settle();assert(d.querySelector('.stats-map-fallback').open);
+    const search=d.querySelector('.stats-map-search');search.value='No coordinates';search.dispatchEvent(new w.Event('input'));
+    const rows=d.querySelectorAll('.stats-picker-row');assert.equal(rows.length,1);rows[0].querySelector('button').click();assert.deepEqual(selected,[key,other]);
+    dom.window.close();console.log('Map selection, cancel, safe names and offline searchable fallback passed.');
+})().catch(e=>{console.error(e);process.exit(1)});

@@ -12,3 +12,9 @@
 .stats-table-scroll { overflow-x: auto; }
 .stats-section td { overflow-wrap: anywhere; white-space: normal; }
 .stats-section table { width: 100%; }
+#stats-repeater-picker { width: min(1100px, calc(100vw - 32px)); }
+.stats-picker-map { height: 50vh; min-height: 280px; }
+.stats-map-search { display: block; width: 100%; padding: 10px; margin-top: 6px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+.stats-map-fallback { margin-top: 16px; }
+.stats-picker-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.stats-picker-row .map-key { max-width: 100%; flex-basis: 100%; }

@@ -1,5 +1,5 @@
 (() => {
-    let dialog, busy=false, timer=null, requestId=0;
+    let dialog, busy=false, timer=null, requestId=0, knownRepeaters=[];
     const el=(tag,value,cls)=>{const node=document.createElement(tag);if(value!=null)node.textContent=value;if(cls)node.className=cls;return node;};
     const date=value=>value ? new Date(value*1000).toLocaleString(undefined,{timeZone:'Europe/Berlin'}) : 'No observations yet';
     function message(value){dialog.querySelector('.stats-message').textContent=value;}
@@ -28,14 +28,16 @@
     }
     const nodeLabel=n=>`${n.name}${n.status==='matched'?'':` (${n.status})`}`;
     function render(data){
+        knownRepeaters=data.repeaters;
         const select=dialog.querySelector('.stats-repeater');
         select.replaceChildren();const empty=el('option','Not selected / pause collection');empty.value='';select.append(empty);
         for(const repeater of data.repeaters){const option=el('option',`${repeater.name} · ${repeater.public_key.slice(0,12)}`);option.value=repeater.public_key;select.append(option);}
         const selected=data.selection?.public_key || '';
         if(selected && !data.repeaters.some(r=>r.public_key===selected)){const option=el('option',selected+' (no longer in Known repeaters)');option.value=selected;select.append(option);}
         select.value=selected;
+        dialog.querySelector('.stats-selected').textContent=selected ? `Selected: ${data.repeaters.find(r=>r.public_key===selected)?.name || selected}` : 'No repeater selected';
         const content=dialog.querySelector('.stats-content');content.replaceChildren();
-        if(!selected){content.append(el('p','Select your repeater and choose Save selection to start passive collection. Earlier traffic cannot be reconstructed.'));return;}
+        if(!selected){content.append(el('p','Choose your repeater on the map to start passive collection. Earlier traffic cannot be reconstructed.'));return;}
         const cards=el('div',null,'stats-metrics');
         for(const [label,value] of [['Observed RF copies',data.copies],['Unique payloads',data.unique],['Repeated copies',data.repeated],['Repeated-copy ratio',data.ratio===null?'—':`${(data.ratio*100).toFixed(1)}%`],['Ambiguous matches',data.ambiguous]]){const card=el('div',null,'stats-metric');card.append(el('p',label,'muted'),el('strong',value));cards.append(card);}content.append(cards);
         content.append(el('p',`Selection active since ${date(data.selection.since)} · Earliest retained observation: ${date(data.earliest)}. Unique/repeated counts use payload fingerprints; ${data.unidentified} copies lack a usable fingerprint and are excluded from those counts.`,'muted'));
@@ -52,28 +54,34 @@
     }
     async function load(save=false){
         if(busy)return;busy=true;const id=++requestId;
-        dialog.querySelectorAll('select,.stats-save,.stats-refresh').forEach(n=>n.disabled=true);message(save?'Saving selection…':'Loading observations…');
+        dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=true);message(save?'Saving selection…':'Loading observations…');
         try{
             const url=`/api/repeater-statistics?days=${dialog.querySelector('.stats-period').value}`;
             const response=await fetch(url,{method:save?'POST':'GET',cache:'no-store',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},...(save?{body:JSON.stringify({public_key:dialog.querySelector('.stats-repeater').value})}:{}),signal:AbortSignal.timeout(15000)});
             const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Statistics request failed.');
             if(id===requestId){render(result);message('Observed by MeshcoreStation · saved metadata only · no radio requests');}
-        }catch(error){message(error.message);}finally{busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh').forEach(n=>n.disabled=false);}
+        }catch(error){message(error.message);}finally{busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=false);}
     }
     function open(){
         if(!dialog){
             dialog=el('dialog');dialog.id='repeater-statistics-dialog';dialog.setAttribute('aria-labelledby','repeater-statistics-title');
-            dialog.innerHTML='<div class="dialog-header"><h2 id="repeater-statistics-title">My repeater statistics</h2><button type="button" class="stats-close" aria-label="Close repeater statistics">×</button></div><p class="muted">Passive observations, not the repeater’s total traffic. Only packets heard by this station are available.</p><div class="stats-controls"><label>My repeater<select class="stats-repeater"></select></label><button type="button" class="stats-save">Save selection</button><label>Period<select class="stats-period"><option value="1">24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label><button type="button" class="stats-refresh">Refresh</button></div><p class="stats-message" role="status" aria-live="polite"></p><div class="stats-content"></div>';
+            dialog.innerHTML='<div class="dialog-header"><h2 id="repeater-statistics-title">My repeater statistics</h2><button type="button" class="stats-close" aria-label="Close repeater statistics">×</button></div><p class="muted">Passive observations, not the repeater’s total traffic. Only packets heard by this station are available.</p><div class="stats-controls"><span class="stats-selected">No repeater selected</span><button type="button" class="stats-map">Choose on map</button><button type="button" class="stats-pause">Pause collection</button><select class="stats-repeater" hidden aria-label="Selected repeater"></select><button type="button" class="stats-save" hidden>Save selection</button><label>Period<select class="stats-period"><option value="1">24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label><button type="button" class="stats-refresh">Refresh</button></div><p class="stats-message" role="status" aria-live="polite"></p><div class="stats-content"></div>';
             window.meshcorestationPrepareDialog(dialog);document.body.append(dialog);
             dialog.querySelector('.stats-close').onclick=()=>dialog.close();
             dialog.querySelector('.stats-save').onclick=()=>load(true);
+            dialog.querySelector('.stats-map').onclick=()=>document.dispatchEvent(new CustomEvent('stats-picker-open',{detail:{repeaters:knownRepeaters,selected:dialog.querySelector('.stats-repeater').value}}));
+            dialog.querySelector('.stats-pause').onclick=()=>{dialog.querySelector('.stats-repeater').value='';load(true);};
+            document.addEventListener('stats-picker-selected',event=>{
+                if(busy || !knownRepeaters.some(r=>r.public_key===event.detail))return;
+                dialog.querySelector('.stats-repeater').value=event.detail;load(true);
+            });
             dialog.querySelector('.stats-refresh').onclick=()=>load();
             dialog.querySelector('.stats-period').onchange=()=>load();
             // Do not refresh while the user is selecting a different repeater.
             dialog.querySelector('.stats-repeater').onchange=()=>{clearInterval(timer);timer=null;message('Choose Save selection to apply this change.');};
             dialog.addEventListener('close',()=>{clearInterval(timer);timer=null;});
         }
-        dialog.showModal();load();clearInterval(timer);timer=setInterval(()=>{if(dialog.open)load();},30000);
+        dialog.showModal();load();clearInterval(timer);timer=setInterval(()=>{if(dialog.open && !document.getElementById('stats-repeater-picker')?.open)load();},30000);
         dialog.querySelector('.stats-close').focus();
     }
     document.addEventListener('click',event=>{if(event.target.closest('#open-repeater-statistics'))open();});

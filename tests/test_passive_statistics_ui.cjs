@@ -9,7 +9,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
     w.eval(fs.readFileSync('meshcorestation/web/assets/aa_dialog.js','utf8'));
     w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_statistics.js','utf8'));
     w.document.getElementById('open-repeater-statistics').click();await settle();
-    const d=w.document.getElementById('repeater-statistics-dialog');assert(d.open);assert(d.querySelector('.dialog-body'));assert(d.textContent.includes('Select your repeater'));
+    const d=w.document.getElementById('repeater-statistics-dialog');assert(d.open);assert(d.querySelector('.dialog-body'));assert(d.textContent.includes('Choose your repeater'));
     d.querySelector('.stats-repeater').value=key;d.querySelector('.stats-save').click();await settle();
     assert.equal(JSON.parse(calls[1].opts.body).public_key,key);assert(d.textContent.includes('33.3%'));assert(d.textContent.includes('Before'));assert(d.querySelector('svg'));assert(!d.querySelector('script'));
     d.querySelector('.stats-period').value='7';d.querySelector('.stats-period').dispatchEvent(new w.Event('change'));await settle();

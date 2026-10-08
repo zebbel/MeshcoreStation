@@ -381,7 +381,7 @@ Commands assigned **Get sender position** first send “Position request receive
 
 ## My repeater statistics (passive)
 
-Open **My repeater statistics → Open statistics**, select your repeater from Known repeaters, and choose **Save selection**. Collection starts at that point; no historical traffic is reconstructed. Select the empty option to pause collection. The selection persists across restarts. Changing it collects only the new repeater; previously retained observations remain associated with their original key.
+Open **My repeater statistics → Open statistics**, choose **Choose on map**, click your repeater’s marker, and select **Use this repeater**. The picker shows its name and full public key before saving. A searchable list also supports repeaters without coordinates or unavailable map tiles. Collection starts at that point; no historical traffic is reconstructed. Choose **Pause collection** to pause collection. The selection persists across restarts. Changing it collects only the new repeater; previously retained observations remain associated with their original key.
 
 The 24-hour, 7-day and 30-day views show RF copies, unique payload fingerprints, repeated copies and their ratio, traffic over time, packet types, first/middle/final path appearances, common routes, and repeaters immediately before or after yours. These are observations heard by the station, not total repeater traffic or verified bidirectional links. Roles overlap for one-hop paths and loops. Counts of unique payloads in chart buckets are not additive across the full period.
 
