@@ -339,7 +339,7 @@ class Companion:
 # TELEMETRY FUNCTIONS
 ################################################
 
-    async def get_telemetry(self, contact_name, matched_rx=None):
+    async def get_sender_contact(self, contact_name):
         result = await self.mc.commands.get_contacts()
 
         if result.type != EventType.CONTACTS:
@@ -353,11 +353,16 @@ class Companion:
             self.logger.warning(f"Expected one contact named {contact_name!r}, found {len(matches)}")
             return None
 
+        return matches[0]
+
+    async def get_telemetry(self, contact_name, matched_rx=None):
+        contact = await self.get_sender_contact(contact_name)
+        if contact is None:
+            return None
         scope_name, scope_key = self._get_reply_scope(matched_rx)
         if scope_name is None:
             self.logger.warning("Telemetry skipped: received command scope is unknown")
             return None
-        contact = matches[0]
         # Share the reply lock so no other transmission changes our temporary scope.
         async with self.reply_lock:
             try:

@@ -30,6 +30,8 @@ class Bot:
         from meshcorestation.commands.actions import execute
         outcome = await execute(self, command['action'], message_data, matched_rx)
         template = command['reply'] if outcome.ok else command.get('failure_reply', '@{sender_name} | {result}')
+        if command['action'] == 'position':
+            template = template.replace('@{sender_name}', '@[{sender_name}]')
         try:
             needed = fields(template)
             values = await collect(self, needed, message_data, matched_rx, read_commands(self.database.db), outcome.message)

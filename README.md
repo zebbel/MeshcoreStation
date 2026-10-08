@@ -55,7 +55,7 @@ Each command has:
 Available actions currently include:
 
 - **Reply** — build and send a reply only;
-- **Get sender position** — request/store the sender position and then reply;
+- **Update sender position** — request/store the sender position and then reply;
 - **Add scope** — create a reply scope and then reply.
 
 Reply templates can contain placeholders such as:
@@ -377,7 +377,7 @@ The uninstall action removes the systemd service, `/usr/local/bin/meshcorestatio
 
 ### Sender position requests
 
-Commands assigned **Get sender position** first send “Position request received. Requesting telemetry…” to the command’s channel and scope. The telemetry request then floods in that same scope (explicitly unscoped for unscoped commands), waits up to 60 seconds, and restores the configured default scope afterward. The configured success or failure reply follows. An unknown request scope prevents telemetry transmission. The acknowledgment confirms radio submission, not delivery to the sender.
+When sent without coordinates, commands assigned **Update sender position** first send “Position request received. Requesting telemetry…” to the command’s channel and scope. The telemetry request then floods in that same scope (explicitly unscoped for unscoped commands), waits up to 60 seconds, and restores the configured default scope afterward. The configured success or failure reply follows. An unknown request scope prevents telemetry transmission. The acknowledgment confirms radio submission, not delivery to the sender.
 
 ## My repeater statistics (passive)
 
@@ -394,3 +394,9 @@ Metadata is stored in `data/repeater-statistics.db` (or the configured data dire
 Command history and My repeater statistics start collapsed. Expand their headings to reveal their controls; automatic data refreshes leave them open or closed as selected. The repeater picker uses bundled CSS markers (R), with the current selection highlighted.
 
 The top row contains Bot status and Known repeaters. Last command received and the Commands button appear in the Command history header and remain visible when it is collapsed. The map picker remains a separate popup for selecting the statistics repeater.
+
+### Position supplied in a command
+
+The **Update sender position** action accepts `position 49.123456, 8.654321` (latitude then longitude, decimal degrees). A space between the two numbers also works. The command name can be renamed in the editor. Supplied coordinates are validated and saved against the uniquely matching sender contact, without a telemetry request or telemetry acknowledgment. Invalid input or missing/ambiguous contacts leave the saved position unchanged; there is no telemetry fallback for invalid arguments. Latitude must be between -90 and 90 and longitude between -180 and 180; this application treats 0,0 as unavailable. Supplied positions have no altitude rather than retaining an old altitude.
+
+A command with no coordinates retains the acknowledgment and scoped telemetry flow. Position acknowledgments and sender mention placeholders use `@[{sender_name}]`, for example `@[zebbel]`. Existing position action assignments and custom replies are preserved; unbracketed sender mention placeholders in position templates are converted on upgrade and save.

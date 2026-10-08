@@ -25,6 +25,8 @@ def initialize(db, legacy=False):
         for index, item in enumerate(DEFAULTS + (LEGACY if legacy else [])):
             db.execute('INSERT INTO bot_commands (id,trigger,help,reply,action,sort_order) VALUES (?,?,?,?,?,?)', (item['id'], item['trigger'], item['help'], item['reply'], item['action'], index))
 
+    db.execute("UPDATE bot_commands SET reply=replace(reply,'@{sender_name}','@[{sender_name}]'), failure_reply=replace(failure_reply,'@{sender_name}','@[{sender_name}]') WHERE action='position'")
+
 
 def read(db):
     rows = db.execute('SELECT id,trigger,help,reply,action,failure_reply FROM bot_commands ORDER BY sort_order').fetchall()
@@ -64,10 +66,14 @@ def validate(items, before):
         placeholders = fields(reply)
         action = raw.get('action', existing.get(identity, {}).get('action', 'reply'))
         if action not in ('reply', 'position', 'scope'):
-            raise ValueError('Choose Reply, Get sender position or Add scope.')
+            raise ValueError('Choose Reply, Update sender position or Add scope.')
         if trigger == '?' and action != 'reply':
             raise ValueError('? must use the Reply action.')
         failure_reply = raw.get('failure_reply', '@{sender_name} | {result}')
+        if action == 'position':
+            reply = reply.replace('@{sender_name}', '@[{sender_name}]')
+            if isinstance(failure_reply, str):
+                failure_reply = failure_reply.replace('@{sender_name}', '@[{sender_name}]')
         if action != 'reply':
             placeholders |= fields(failure_reply)
         if placeholders & {'result', 'latitude', 'longitude', 'altitude', 'added_scope'} and action == 'reply':

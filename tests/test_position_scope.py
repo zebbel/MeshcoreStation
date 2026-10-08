@@ -46,7 +46,7 @@ def test_acknowledgment_before_telemetry(ack_ok):
     async def scenario():
         calls=[]; rx={'route_type':1}
         async def send(channel,text,matched):
-            calls.append('ack'); assert matched is rx; assert 'Requesting telemetry' in text
+            calls.append('ack'); assert matched is rx; assert 'Requesting telemetry' in text; assert text.startswith('@[Alice]')
             return 'unscoped' if ack_ok else False
         async def telemetry(name,matched):
             calls.append('telemetry'); assert matched is rx

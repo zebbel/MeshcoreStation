@@ -1,5 +1,6 @@
 """Explicit command actions; templates never execute code or radio commands."""
 import math
+import re
 import sqlite3
 from dataclasses import dataclass, field
 
@@ -15,7 +16,8 @@ async def execute(bot, action, message, matched_rx=None):
     if action == 'reply':
         return Outcome(True)
     if action == 'position':
-        return await sender_position(bot, message['name'], matched_rx)
+        parts = message['message'].strip().split(maxsplit=1)
+        return await sender_position(bot, message['name'], matched_rx, parts[1] if len(parts) > 1 else '')
     if action == 'scope':
         args = message['message'].strip().split(maxsplit=1)
         name = args[1].strip() if len(args) > 1 else ''
@@ -36,16 +38,37 @@ async def execute(bot, action, message, matched_rx=None):
     return Outcome(False, 'Unknown command action.')
 
 
-async def sender_position(bot, name, matched_rx=None):
+def parse_coordinates(arguments):
+    number = r'[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)'
+    match = re.fullmatch(r'\s*('+number+r')(?:\s*,\s*|\s+)('+number+r')\s*', arguments)
+    if not match:
+        raise ValueError('Use latitude, longitude in decimal degrees, for example 49.123456, 8.654321.')
+    lat, lon = map(float, match.groups())
+    if not math.isfinite(lat) or not math.isfinite(lon) or not -90<=lat<=90 or not -180<=lon<=180 or (lat,lon)==(0,0):
+        raise ValueError('Invalid coordinates: latitude must be -90 to 90 and longitude -180 to 180; 0,0 is treated as unavailable.')
+    return lat, lon
+
+
+async def sender_position(bot, name, matched_rx=None, arguments=''):
     if bot.position_update_running:
         return Outcome(False, 'Position update already running; try again shortly.')
     bot.position_update_running = True
     try:
+        if arguments.strip():
+            try:
+                lat, lon = parse_coordinates(arguments)
+            except ValueError as exc:
+                return Outcome(False, f'{exc} Saved position unchanged.')
+            contact = await bot.companion.get_sender_contact(name)
+            if contact is None:
+                return Outcome(False, 'Sender contact is unknown or ambiguous; saved position unchanged.')
+            bot.database.save_companion_position(contact['public_key'], contact['adv_name'], lat, lon, None)
+            return Outcome(True, f'Position saved: {lat:.6f}, {lon:.6f}.', {'latitude':lat,'longitude':lon,'altitude':None,'sender_public_key':contact['public_key']})
         scope_name, _ = bot.companion._get_reply_scope(matched_rx)
         if scope_name is None:
             return Outcome(False, 'Request scope is unknown; telemetry was not requested.')
         from meshcorestation.commands.templates import split_reply
-        acknowledgment = f"@{name} | Position request received. Requesting telemetry…"
+        acknowledgment = f"@[{name}] | Position request received. Requesting telemetry…"
         for part in split_reply(acknowledgment):
             sent = await bot.companion.send_channel_message(bot.companion.channel_idx, part, matched_rx)
             if sent is False or sent != scope_name:
