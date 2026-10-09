@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.4.7**.
+Current application version: **2.5.0**.
 
 ## What it does
 
@@ -409,3 +409,10 @@ Saved reply scopes can be added, edited and removed in **Settings → Scopes**, 
 `zebbel/MeshCore`, with progress logs, small partition/boot-selection checks and
 automatic radio reconnection. Firmware releases must include the application
 binary and its manifest. See [firmware release packaging and recovery](docs/companion-firmware-updates.md).
+
+## Companion OLED
+
+Custom Heltec V4 USB firmware with MCOD display support can show the selected
+repeater's battery voltage, estimated percentage and a 24-hour voltage graph.
+The display uses saved battery readings, without extra telemetry traffic.
+See [OLED screen and firmware requirements](docs/companion-oled.md).

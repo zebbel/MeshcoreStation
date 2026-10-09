@@ -43,7 +43,7 @@ class Companion:
             self.logger.error("Could not connect to MeshCore companion.")
             return False
 
-        command_lock = asyncio.Lock()
+        command_lock = self.serial_command_lock = asyncio.Lock()
         original_send = self.mc.commands.send
 
         async def serialized_send(*args, **kwargs):

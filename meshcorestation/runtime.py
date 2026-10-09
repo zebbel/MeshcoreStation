@@ -4,6 +4,7 @@ from meshcorestation.bridge import bridge
 from meshcorestation.radio.companion import Companion
 from meshcorestation.radio.companion_control import CompanionControl
 from meshcorestation.radio.voltage_monitor import VoltageMonitor
+from meshcorestation.radio.oled import OledDisplay
 
 
 class Runtime:
@@ -12,6 +13,7 @@ class Runtime:
         self.companion = self.control = self.voltage = None
         self.reconnect_requested = asyncio.Event()
         self.requests = set()
+        self.oled = None
         self.maintenance = False
         self.usb_closed = asyncio.Event()
         self.resume_radio = asyncio.Event()
@@ -52,6 +54,9 @@ class Runtime:
         if self.voltage is not None:
             await self.voltage.close()
             self.voltage = None
+        if self.oled is not None:
+            await self.oled.close()
+            self.oled = None
         if self.companion is not None:
             try:
                 await asyncio.wait_for(self.companion.disconnect(), timeout=10)
@@ -88,6 +93,8 @@ class Runtime:
         self.control = CompanionControl(self.companion)
         self.voltage = VoltageMonitor(self.companion)
         self.voltage.start()
+        self.oled = OledDisplay(self.companion)
+        self.oled.start()
         self.logger.set_log_level()
         while True:
             connected = self.companion.mc.connection_manager.is_connected
