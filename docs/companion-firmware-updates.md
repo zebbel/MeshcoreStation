@@ -65,3 +65,13 @@ Use `.venv/bin/python3 -m scripts.check_dependencies` for the Station's validate
 check, followed by `.venv/bin/python3 -m scripts.check_install`. The known metadata
 case needs neither recompilation nor compiler installation. This is not a general
 claim that arbitrary ARMv7 binaries work on a Pi Zero.
+
+## Companion clock initialization (v2.4.7)
+
+Every serial connection, including reconnection after flashing, synchronizes the
+companion RTC to the Pi clock before starting monitoring or accepting management
+requests. The new time is read back and checked. Read/set failures prevent that
+session from becoming ready; the runtime closes it and retries normally. A clock
+more than five seconds ahead of the Pi is reported rather than moved backwards.
+Keep the Pi system clock/NTP correct. This avoids stale request timestamps after
+companion resets triggering the repeater's replay protection.

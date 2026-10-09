@@ -6,6 +6,7 @@ import hashlib
 import hmac
 from meshcore import MeshCore, EventType
 
+from meshcorestation.radio.clock import synchronize_clock
 from meshcorestation.radio.bot import Bot
 from meshcorestation.commands.templates import split_reply
 from meshcorestation.radio.repeater_sync import RepeaterSync
@@ -50,6 +51,9 @@ class Companion:
                 return await original_send(*args, **kwargs)
 
         self.mc.commands.send = serialized_send
+
+        # Complete RTC initialization before subscriptions, monitoring or controls.
+        await synchronize_clock(self.mc.commands, self.logger)
 
         self.logger.info("MeshCore companion connected.")
         self.mc.set_decrypt_channel_logs(True)
