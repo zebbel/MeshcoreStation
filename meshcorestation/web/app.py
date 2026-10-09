@@ -22,6 +22,8 @@ def create_app():
     register_map_routes(app.server)
     from meshcorestation.web.update_api import register_update_routes
     register_update_routes(app.server)
+    from meshcorestation.web.firmware_api import register_firmware_routes
+    register_firmware_routes(app.server)
     from meshcorestation.web.passive_api import register_passive_routes
     register_passive_routes(app.server)
     return app

@@ -3,3 +3,4 @@ meshcore==2.3.14
 pyserial==3.5
 dash==3.4.0
 waitress==3.0.2
+esptool==4.8.1

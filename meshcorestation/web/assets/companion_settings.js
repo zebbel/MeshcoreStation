@@ -12,7 +12,7 @@
     function controls() {
         dialog.setAttribute('aria-busy', String(busy));
         // Serial controls remain independently available when the companion is offline.
-        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel, #scope-settings')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
+        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel, #firmware-panel, #scope-settings')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
         if (positionMarker) positionMarker.dragging[busy || !settings ? 'disable' : 'enable']();
         networkControls();
     }

@@ -12,9 +12,20 @@ class Runtime:
         self.companion = self.control = self.voltage = None
         self.reconnect_requested = asyncio.Event()
         self.requests = set()
+        self.maintenance = False
+        self.usb_closed = asyncio.Event()
+        self.resume_radio = asyncio.Event()
+        self.close_error = None
+        self.device_info = {}
+        from meshcorestation.firmware import FirmwareUpdater
+        self.firmware = FirmwareUpdater(self)
 
     async def dispatch(self, payload):
         """Serialize control changes with bot replies and telemetry requests."""
+        if payload.get('operation') == 'firmware':
+            return await self.firmware.request(payload)
+        if self.maintenance:
+            return {'ok': False, 'error': 'Companion firmware update in progress.'}
         control, companion = self.control, self.companion
         if control is None or companion is None:
             return {'ok': False, 'error': 'Companion offline. Select a serial port and check its connection.'}
@@ -45,13 +56,34 @@ class Runtime:
             try:
                 await asyncio.wait_for(self.companion.disconnect(), timeout=10)
             except Exception as exc:
+                self.close_error = exc
                 self.logger.warning('Closing companion: %s', exc)
             self.companion = None
+
+    async def pause_for_firmware(self):
+        self.usb_closed.clear()
+        self.resume_radio.clear()
+        self.close_error = None
+        self.maintenance = True
+        self.reconnect_requested.set()
+        await asyncio.wait_for(self.usb_closed.wait(), 30)
+        if self.close_error:
+            raise RuntimeError('USB connection did not close cleanly; update stopped')
+
+    def resume_after_firmware(self):
+        self.maintenance = False
+        self.resume_radio.set()
+        self.reconnect_requested.set()
 
     async def session(self):
         self.companion = Companion(self.logger, self.database)
         if not await self.companion.connect():
             raise ConnectionError('No response from companion')
+        try:
+            event = await self.companion.mc.commands.send_device_query()
+            self.device_info = {key: event.payload.get(key) for key in ('ver', 'model', 'fw_build')}
+        except Exception:
+            self.device_info = {}
         await self.companion.subscribe()
         self.control = CompanionControl(self.companion)
         self.voltage = VoltageMonitor(self.companion)
@@ -84,6 +116,10 @@ class Runtime:
                     reconnect.cancel()
                     await asyncio.gather(session, reconnect, return_exceptions=True)
                     await self.close_session()
+                if self.maintenance:
+                    bridge.status = ('Updating firmware', 'Radio paused for USB flashing', 'unknown')
+                    self.usb_closed.set()
+                    await self.resume_radio.wait()
                 # Failed connection attempts never prevent access to web settings.
                 if not self.reconnect_requested.is_set():
                     try:

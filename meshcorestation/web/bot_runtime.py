@@ -19,6 +19,9 @@ def runtime_request(request):
                 initialize(db)
             if request.method == 'GET':
                 return {'ok': True, 'settings': read_settings(db), 'ports': available}, 200
+            from meshcorestation.bridge import bridge
+            if bridge.runtime and bridge.runtime.firmware.state.get('busy'):
+                return {'ok': False, 'error': 'Wait for the companion firmware update to finish.'}, 409
             if request.mimetype != 'application/json':
                 return {'ok': False, 'error': 'Expected JSON.'}, 415
             raw = request.stream.read(4097)

@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.0.0**.
+Current application version: **2.4.0**.
 
 ## What it does
 
@@ -402,3 +402,10 @@ The **Update sender position** action accepts `position 49.123456, 8.654321` (la
 A command with no coordinates retains the acknowledgment and scoped telemetry flow. Position acknowledgments and sender mention placeholders use `@[{sender_name}]`, for example `@[zebbel]`. Existing position action assignments and custom replies are preserved; unbracketed sender mention placeholders in position templates are converted on upgrade and save.
 
 Saved reply scopes can be added, edited and removed in **Settings → Scopes**, directly below Network settings. These local controls remain available while the companion is offline.
+
+## Companion firmware updates
+
+**Settings → Companion firmware** installs published Heltec V4 OLED USB builds from
+`zebbel/MeshCore`, with progress logs, a full flash backup, partition checks and
+automatic radio reconnection. Firmware releases must include the application
+binary and its manifest. See [firmware release packaging and recovery](docs/companion-firmware-updates.md).
