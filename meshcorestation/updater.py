@@ -130,17 +130,8 @@ def healthy(target, port):
 
 
 def check_dependencies(python):
-    try:
-        run(python, '-m', 'pip', 'check')
-    except RuntimeError as exc:
-        # Preserve the installer's recovery for incompatible Pi native wheels.
-        names = re.findall(r'^(dbus-fast|pycryptodome|markupsafe) (\S+) is not supported on this platform\s*$', str(exc), re.M | re.I)
-        if not names:
-            raise
-        run(python, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', '--no-cache-dir',
-            '--no-binary=dbus-fast,pycryptodome,markupsafe',
-            *(name + '==' + version for name, version in names), timeout=1800)
-        run(python, '-m', 'pip', 'check')
+    # Run the newly checked-out repair code, not a stale copy loaded by the worker.
+    run(python, '-m', 'scripts.check_dependencies', timeout=7200)
 
 
 def recover(transaction):

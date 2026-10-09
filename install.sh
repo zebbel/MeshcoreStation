@@ -66,29 +66,13 @@ PY
 apt_packages() {
     local opts=(-o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
     sudo apt-get "${opts[@]}" update
-    sudo apt-get "${opts[@]}" install -y python3 python3-venv python3-pip python3-dev build-essential tzdata git
+    sudo apt-get "${opts[@]}" install -y python3 python3-venv python3-pip python3-dev build-essential libffi-dev libssl-dev pkg-config rustc cargo tzdata git
 }
 
 install_python_dependencies() {
     local py="$1" work_dir="$2"
     "$py" -m pip install -r "$project_dir/requirements.txt"
-    # Keep the tested Pi Zero recovery for native wheels that are incompatible with the local platform.
-    if ! "$py" -m pip check > "$work_dir/pip-check.txt" 2>&1; then
-        cat "$work_dir/pip-check.txt"
-        "$py" - "$work_dir/pip-check.txt" > "$work_dir/rebuild.txt" <<'PY'
-import re, sys
-from pathlib import Path
-from importlib.metadata import version
-text = Path(sys.argv[1]).read_text()
-for name in ('dbus-fast', 'pycryptodome', 'markupsafe'):
-    if re.search(r'^' + re.escape(name) + r' \S+ is not supported on this platform\s*$', text, re.M | re.I):
-        print(f'{name}=={version(name)}')
-PY
-        mapfile -t rebuild < "$work_dir/rebuild.txt"
-        ((${#rebuild[@]})) || fail 'Dependency check failed; review the messages above.'
-        "$py" -m pip install --force-reinstall --no-deps --no-cache-dir --no-binary=dbus-fast,pycryptodome,markupsafe "${rebuild[@]}"
-    fi
-    "$py" -m pip check
+    PYTHONPATH="$project_dir" "$py" "$project_dir/scripts/check_dependencies.py"
     cd -- "$project_dir"
     PYTHONPATH="$project_dir" "$py" scripts/check_install.py
     "$py" -m pip freeze > requirements-installed.txt
@@ -223,6 +207,8 @@ ENV
 apply_update() (
     check_host
     require_installation
+    # Native fallback builds need the same toolchain as a fresh installation.
+    if (( ! skip_apt )); then apt_packages; fi
     local service_user service_group work_dir completed=0 restart_after
     service_user="$(id -un)"; service_group="$(id -gn)"
     restart_after="${MESHCORESTATION_UPDATE_RESTART:-1}"
