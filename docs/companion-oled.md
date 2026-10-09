@@ -1,61 +1,83 @@
-# Companion OLED pages
+# Companion OLED page editor
 
-MeshcoreStation 2.5.0 automatically probes the private MCOD v1 extension on the
-existing USB companion connection. It supports the text and graphics protocol in
-`zebbel/MeshCore`, branch `feature/usb-oled-control`, documented in
-`docs/usb-oled-control.md`. Upstream/unsupported firmware keeps its normal screen.
+From MeshcoreStation 2.6.0, open **Settings → OLED pages → Open screen editor**.
+The companion needs the private MCOD v1 extension from
+`zebbel/MeshCore`, branch `feature/usb-oled-control`.
+Graphics require LINE or POLYLINE support. Short-press navigation requires
+the button-reporting capability. Unsupported firmware keeps its normal screen.
 
-Select a repeater in the dashboard's **Repeater battery** settings. The OLED uses
-that selection, its voltage channel and the already stored measurements:
+## Design pages
 
-- Repeater name (printable ASCII, shortened to fit).
-- Latest voltage and approximate 1S LiPo percentage, using the dashboard curve.
-  Out-of-range voltages show `--%`; old readings say `stale`; failed or missing
-  latest readings say `No current reading`.
-- Last 24 hours of voltage, with a fixed 3.0–4.2 V range and time
-  endpoints. Failures and long sampling gaps interrupt the line. A single sample
-  is a point. Values outside the range are clipped to the graph edges; the
-  numeric voltage reading still shows the measured value.
+The editor starts with editable Battery and Commands pages. Existing battery
+selection and stored readings are used; no additional telemetry is requested.
 
-The scene refreshes every 10 seconds. No extra radio telemetry is requested.
+- Add, duplicate, rename, reorder, enable or delete pages (up to 12).
+- Add **Text**, **Database value** or **Graph** elements (up to 16 per page).
+- Drag an element to move it. Drag its blue bottom-right corner to resize it.
+- Use X, Y, Width and Height for exact placement. Arrow keys move a focused
+  element by one pixel; Shift + arrow moves eight pixels.
+- Text uses the firmware's small 6×8 or large 12×16 font. Text is converted to
+  printable ASCII and shortened to its box, up to 21 characters. It does not wrap.
+- Database values have an optional label, units and 0–4 decimal places.
+- Graphs have editable minimum, maximum, width, height and 1–720 hour time range.
+  Out-of-range samples are clipped; axes are drawn inside the box.
+  Add text elements if you want visible range or axis labels.
 
-With firmware advertising button reporting (CAPABILITIES bit 2), a short press
-of the onboard user/PRG button cycles between two pages:
+The editor offers these named sources, without custom SQL:
 
-1. The repeater battery and 24-hour graph, fixed at 3.0–4.2 V.
-2. The three latest received commands, newest first, each with local receive
-   time, sender and command text. Long names/messages are shortened to fit the
-   128×64 display. An empty history shows `No commands yet`.
+| Database values | Graph series |
+| --- | --- |
+| Selected battery repeater name, voltage and approximate 1S percentage | Selected battery voltage or percentage |
+| Known repeater count and received command count | Received-command RSSI, SNR and hop count |
+| Latest three commands: sender, message, receive time, RSSI, SNR and hop count | |
 
-A recognized short press requests a redraw without waiting for the periodic
-refresh. Long, double and triple presses have no assigned action. The battery
-page is selected after reconnecting. Firmware without button reporting keeps
-the existing battery screen.
+Battery sources follow the dashboard's selected battery repeater and voltage
+channel. Command times use the station's configured dashboard timezone. Missing
+values show `--`. Stored samples can be old; values do not trigger fresh requests.
+Percentage is an approximate 1S LiPo estimate and unavailable outside 3.0–4.2 V.
 
-After BEGIN the host enables BUTTON_SUBSCRIBE (operation 10). It handles
-unsolicited operation 0x80 separately from command replies, rejects malformed
-events and ignores duplicate/old sequences using 16-bit wraparound arithmetic.
-The reader only selects a page and wakes the display worker; it never sends a
-display command while handling a notification. Repeated subscription is
-idempotent and restores reporting if a lease was reacquired.
-Graphics firmware supports LINE/POLYLINE; earlier text-only MCOD firmware shows
-battery text and `Graph FW required`. Firmware without MCOD is probed once per
-connection and otherwise left alone. Check `data/logs/logs.log` for detection or
-protocol errors. Set `MESHCORESTATION_OLED=0` in `meshcorestation.env` and restart
-the service to disable the feature.
+The default battery graph stays fixed at **3.0–4.2 V over 24 hours**. You can
+change these bounds in the editor. Graph data is reduced to pixel buckets in
+SQLite; missing battery samples and long telemetry gaps break the line.
+At most four graphs and 256 total line segments are emitted per page. On
+text-only firmware, graph elements are omitted.
 
-The screen has a 60-second lease. Every complete refresh renews it; release on
-shutdown restores the normal UI. If the process or connection disappears, lease
-expiry restores the normal display. Errors stop this display worker until the
-next connection, without stopping the radio. Reconnecting after a firmware update
-probes again. The normal firmware UI/buttons are suppressed while the lease is
-active, as defined by the firmware protocol.
+## Preview and save
 
-There is one USB connection and one framing parser. A small reader adapter handles
-MCOD replies and button events, forwards normal radio notifications, and matches request ID
-and operation. Display and normal commands share the serial command lock; each
-reply is awaited before the next command. Graphics are staged with BEGIN and
-shown atomically with SHOW; append commands are never blindly retried. Tests cover
-reply matching, interleaved gestures, sequence wrap, page cycling, history layout,
-unsupported firmware, graph scaling/gaps and polyline limits.
-Physical OLED/radio coexistence still needs validation on the Heltec.
+The browser preview uses the same database renderer as the OLED, refreshing
+after edits and every ten seconds. Its browser font is an approximation of the
+firmware font. Blue outlines are editor guides and are not sent to the OLED.
+
+**Save pages** persists the draft in SQLite and makes it active within ten
+seconds. Invalid bounds, unsupported sources, excessive elements and changes
+from another editor window are rejected. Reload before saving after a conflict.
+
+**Preview on companion (30s)** temporarily displays the selected draft page
+without saving. The OLED must already be connected and active. The preview
+appears at the next refresh (within ten seconds). It expires automatically;
+Stop companion preview, closing the editor or saving also restores saved pages.
+The database and updater backups include saved pages.
+
+## Buttons and lifecycle
+
+A short press cycles enabled pages in their configured order. Long, double and
+triple presses have no assigned action. Reconnecting starts on the first enabled
+page. Firmware without button reporting displays the first enabled page.
+
+The screen refreshes every ten seconds and has a 60-second lease. A recognized
+short press wakes the worker early. Shutdown releases the screen; if the process
+or connection disappears, firmware lease expiry restores its normal UI.
+Set `MESHCORESTATION_OLED=0` in `meshcorestation.env` and restart to disable OLED
+control. Errors stop the display worker until the next connection, without
+stopping the radio.
+
+The existing serial connection and framing parser are reused. Display commands
+share the radio command lock. BUTTON_SUBSCRIBE (operation 10) follows BEGIN;
+unsolicited operation 0x80 is handled separately from command replies, with
+validation and modulo-65536 sequence deduplication. Reader callbacks never send
+display commands. Normal MeshCore notifications continue to the original reader.
+
+Automated tests cover document validation, SQL source selection, rendering
+bounds, graph budgets, save conflicts, preview expiry, route protection,
+button events, page cycling and browser drag/resize editing. Physical OLED and
+radio coexistence require on-device testing.

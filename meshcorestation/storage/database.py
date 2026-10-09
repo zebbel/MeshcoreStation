@@ -41,6 +41,8 @@ class Database:
         legacy = self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='repeaters'").fetchone() is not None
         initialize_commands(self.db, legacy=legacy)
         initialize(self.db)
+        from meshcorestation.storage.oled_store import initialize as initialize_oled
+        initialize_oled(self.db)
         self.db.execute("CREATE TABLE IF NOT EXISTS repeaters (public_key TEXT PRIMARY KEY, name TEXT, adv_type INTEGER, flags INTEGER, latitude REAL, longitude REAL, out_path_len INTEGER, out_path TEXT, last_advert INTEGER, lastmod INTEGER, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, advert_count INTEGER NOT NULL DEFAULT 1)")
         self.db.execute("CREATE TABLE IF NOT EXISTS companion_positions (public_key TEXT PRIMARY KEY, name TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL, altitude REAL, updated_at INTEGER NOT NULL)")
         if "is_bot" not in {row["name"] for row in self.db.execute("PRAGMA table_info(companion_positions)")}:

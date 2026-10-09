@@ -26,4 +26,6 @@ def create_app():
     register_firmware_routes(app.server)
     from meshcorestation.web.passive_api import register_passive_routes
     register_passive_routes(app.server)
+    from meshcorestation.web.oled_api import register_oled_routes
+    register_oled_routes(app.server)
     return app

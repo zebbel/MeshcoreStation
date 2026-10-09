@@ -151,12 +151,13 @@ class OledDisplay:
         self.task = None
         self.acquired = False
         self.page = 0
+        self.page_count = 2
         self.buttons = False
         self.redraw = asyncio.Event()
 
     def on_button(self, gesture):
         if self.buttons and gesture == 1:
-            self.page = (self.page + 1) % 2
+            self.page = (self.page + 1) % self.page_count
             self.redraw.set()
 
     def start(self):
@@ -165,6 +166,30 @@ class OledDisplay:
             self.task = asyncio.create_task(self.run(), name='companion-oled')
 
     async def draw(self, graphics):
+        db = self.companion.database.db
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='oled_pages'").fetchone():
+            from meshcorestation.storage.oled_store import active
+            from meshcorestation.radio.oled_scene import render
+            pages = active(db, time.time())
+            self.page_count = len(pages)
+            self.page %= self.page_count
+            drawing = render(db, pages[self.page], time.time())
+            send = self.transport.command
+            await send(1, struct.pack('<H', 60))
+            self.acquired = True
+            if self.buttons:
+                await send(10, b'\x01')
+            for x,y,size,text in drawing['texts']:
+                await send(2, bytes([x,y,size]) + text.encode('ascii'))
+            if graphics:
+                flags,capacity,max_points = graphics
+                for line in drawing['lines'][:capacity]:
+                    if flags & 1:
+                        await send(8, bytes(line))
+                    elif flags & 2 and max_points >= 2:
+                        await send(9, bytes([2,*line]))
+            await send(4)
+            return
         page = self.page
         texts, runs = (command_scene(self.companion.database.db) if page else
                        scene(self.companion.database.db, time.time()))

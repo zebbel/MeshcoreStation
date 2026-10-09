@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.5.2**.
+Current application version: **2.6.0**.
 
 ## What it does
 
@@ -416,3 +416,12 @@ Custom Heltec V4 USB firmware with MCOD display support can show the selected
 repeater's battery voltage, estimated percentage and a 24-hour voltage graph.
 The display uses saved battery readings, without extra telemetry traffic.
 See [OLED screen and firmware requirements](docs/companion-oled.md).
+
+## OLED screen editor
+
+In **Settings → OLED pages → Open screen editor**, drag and resize text,
+database values and graphs on a 128×64 canvas. Add and reorder pages, choose
+named database sources, and set each graph's time range, minimum and maximum.
+Save to activate the pages, or preview a draft on the companion for 30 seconds.
+A short user-button press cycles enabled pages on compatible firmware.
+See [the OLED editor guide](docs/companion-oled.md) for sources and limits.
