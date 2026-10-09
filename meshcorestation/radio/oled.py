@@ -111,10 +111,7 @@ def scene(db, now):
     if not values:
         texts += [(0, 32, 'No 24h history'), (0, 56, '-24h'), (108, 56, 'now')]
         return texts, []
-    low, high = min(values), max(values)
-    if high - low < 0.1:
-        middle = (low + high) / 2
-        low, high = middle - 0.05, middle + 0.05
+    low, high = 3.0, 4.2
     texts += [(0, 56, ascii_text(f'24h {low:.2f}-{high:.2f}V', 17)), (108, 56, 'now')]
     points = [[(x, max(24, min(51, 51 - round((v - low) / (high - low) * 27)))) for x, v in run] for run in runs]
     return texts, points

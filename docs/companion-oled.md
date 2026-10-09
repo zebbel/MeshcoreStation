@@ -12,9 +12,10 @@ that selection, its voltage channel and the already stored measurements:
 - Latest voltage and approximate 1S LiPo percentage, using the dashboard curve.
   Out-of-range voltages show `--%`; old readings say `stale`; failed or missing
   latest readings say `No current reading`.
-- Last 24 hours of voltage, with an automatically scaled voltage range and time
+- Last 24 hours of voltage, with a fixed 3.0–4.2 V range and time
   endpoints. Failures and long sampling gaps interrupt the line. A single sample
-  is a point; a flat history uses a nonzero scale.
+  is a point. Values outside the range are clipped to the graph edges; the
+  numeric voltage reading still shows the measured value.
 
 The scene refreshes every 10 seconds. No extra radio telemetry is requested.
 Graphics firmware supports LINE/POLYLINE; earlier text-only MCOD firmware shows
