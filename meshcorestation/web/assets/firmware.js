@@ -4,7 +4,7 @@
         const response = await fetch('/api/companion/firmware', {
             method: body ? 'POST' : 'GET', cache: 'no-store',
             headers: {'X-Meshcore-Control': '1', 'Content-Type': 'application/json'},
-            ...(body ? {body: JSON.stringify(body)} : {}), signal: AbortSignal.timeout(120000)
+            ...(body ? {body: JSON.stringify(body)} : {}), signal: AbortSignal.timeout(body?.action === 'check' ? 35000 : 15000)
         });
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error(result.error || 'Firmware request failed');
@@ -32,11 +32,13 @@
         controls();
     }
     async function request(body) {
+        if (pending) return;
         pending = true; controls();
+        if (body?.action === 'check') panel.querySelector('.firmware-message').textContent = 'Checking GitHub firmware releases…';
         try {
             render(await api(body));
             if (body?.action === 'check' && !state.releases.length) panel.querySelector('.firmware-message').textContent = 'No compatible releases published in zebbel/MeshCore yet. A release needs the Heltec V4 USB manifest and application binary.';
-        } catch (error) { panel.querySelector('.firmware-message').textContent = error.message; }
+        } catch (error) { if (body?.action === 'install') state.status = {...state.status, busy: true}; panel.querySelector('.firmware-message').textContent = ['TimeoutError', 'AbortError'].includes(error.name) ? 'Firmware request timed out. Try again; check the flashing status before retrying an installation.' : error.message; }
         finally { pending = false; controls(); }
     }
     function attach() {
@@ -55,7 +57,8 @@
             }
         });
         request();
-        timer = setInterval(() => { if (!pending && (dialog.open || state.status?.busy)) request(); }, 2500);
+        new MutationObserver(() => { if (dialog.open && !pending) request(); }).observe(dialog, {attributes: true, attributeFilter: ['open']});
+        timer = setInterval(() => { if (!pending && state.status?.busy) request(); }, 2500);
     }
     new MutationObserver(attach).observe(document.documentElement, {childList: true, subtree: true});
     attach();

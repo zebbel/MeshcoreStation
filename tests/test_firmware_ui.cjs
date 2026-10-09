@@ -5,9 +5,11 @@ const dom = new JSDOM('<dialog id="companion-dialog" open><div class="companion-
 const w = dom.window;
 w.AbortSignal.timeout = () => undefined;
 w.confirm = () => true;
+let requests = 0;
 let tick, checked = false, busy = false, installs = 0;
 w.setInterval = cb => { tick = cb; return 1; };
 w.fetch = async (url, options) => {
+    requests++;
     assert.equal(options.headers['X-Meshcore-Control'], '1');
     const body = options.body ? JSON.parse(options.body) : {};
     if (body.action === 'check') checked = true;
@@ -20,6 +22,7 @@ const settle = () => new Promise(r => setImmediate(r));
     await settle();
     const panel = w.document.querySelector('#firmware-panel');
     assert(panel.querySelector('.firmware-install').disabled);
+    const idleRequests = requests; tick(); await settle(); assert.equal(requests, idleRequests);
     panel.querySelector('.firmware-check').click(); await settle();
     assert(!panel.querySelector('.firmware-install').disabled);
     assert(panel.querySelector('option').textContent.includes('prerelease'));

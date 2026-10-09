@@ -1,5 +1,7 @@
 """Release-based, app-only Heltec V4 USB updates. Never erase the whole flash."""
 import asyncio
+import concurrent.futures
+import threading
 import hashlib
 import importlib.util
 import json
@@ -100,6 +102,9 @@ class FirmwareUpdater:
         self.runtime = runtime
         self.task = None
         self.catalog = []
+        self.check_lock = threading.Lock()
+        self.check_future = None
+        self.check_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="firmware-releases")
         self.state = updater.read('firmware-status.json')
         if self.state.get('busy'):
             self.set_state('interrupted', 'Previous firmware update was interrupted. Check the companion before retrying.', busy=False)
@@ -108,13 +113,35 @@ class FirmwareUpdater:
         self.state = {**self.state, 'phase': phase, 'message': message, **values}
         updater.write('firmware-status.json', self.state)
 
+    def snapshot(self):
+        # Immutable-by-replacement snapshots; no radio-loop handoff for HTTP reads.
+        return {'ok': True, 'status': dict(self.state),
+                'ready': importlib.util.find_spec('esptool') is not None,
+                'device': dict(self.runtime.device_info),
+                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog]}
+
+    def check_releases(self):
+        """Runs on an HTTP worker, independent of radio connectivity/activity."""
+        if not self.check_lock.acquire(blocking=False):
+            raise ValueError('A firmware release check is already running.')
+        try:
+            if self.state.get('busy'):
+                raise ValueError('Firmware update already running')
+            if self.check_future is not None and not self.check_future.done():
+                raise ValueError('The previous GitHub request is still finishing; try again shortly.')
+            self.check_future = self.check_pool.submit(releases)
+            try:
+                catalog = self.check_future.result(timeout=25)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError('GitHub release check timed out after 25 seconds. Check the Pi network and retry.') from None
+            self.catalog = catalog
+            return self.snapshot()
+        finally:
+            self.check_lock.release()
+
     async def request(self, payload):
         action = payload.get('action', 'status')
-        if action == 'check':
-            if self.task and not self.task.done():
-                raise ValueError('Firmware update already running')
-            self.catalog = await asyncio.to_thread(releases)
-        elif action == 'install':
+        if action == 'install':
             if self.task and not self.task.done():
                 raise ValueError('Firmware update already running')
             release = next((r for r in self.catalog if r['id'] == payload.get('release_id')), None)
@@ -128,9 +155,7 @@ class FirmwareUpdater:
             self.task = asyncio.create_task(self.install(release))
         elif action != 'status':
             raise ValueError('Unknown firmware operation')
-        return {'ok': True, 'status': self.state, 'ready': importlib.util.find_spec('esptool') is not None,
-                'device': self.runtime.device_info,
-                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog]}
+        return self.snapshot()
 
     async def tool(self, port, *args, timeout=600):
         process = await asyncio.create_subprocess_exec(

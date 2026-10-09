@@ -126,7 +126,7 @@ def test_http_guard(monkeypatch):
     from meshcorestation.web import firmware_api
     app = Flask(__name__)
     register_firmware_routes(app)
-    monkeypatch.setattr(firmware_api.bridge, 'request', lambda body: {'ok': True, 'status': {}})
+    monkeypatch.setattr(firmware_api.bridge, 'runtime', SimpleNamespace(firmware=SimpleNamespace(snapshot=lambda: {'ok': True, 'status': {}})))
     client = app.test_client()
     assert client.get('/api/companion/firmware').status_code == 403
     headers = {'X-Meshcore-Control': '1'}
@@ -189,3 +189,40 @@ def test_packaging_roundtrip(tmp_path):
     result = json.loads((output / fw.MANIFEST).read_text())
     fw.validate_layout(flash, result, len(fixture_image()))
     assert hashlib.sha256((output / result['image']).read_bytes()).hexdigest() == result['sha256']
+
+
+def test_release_check_and_status_never_use_radio_bridge(manager, monkeypatch):
+    from meshcorestation.web import firmware_api
+    monkeypatch.setattr(fw, 'releases', lambda: [{'id': 7, 'tag': 'test', 'name': 'test', 'prerelease': False, 'assets': {}}])
+    monkeypatch.setattr(firmware_api.bridge, 'runtime', SimpleNamespace(firmware=manager))
+    def forbidden(*a, **kw):
+        raise AssertionError('Radio runtime must not be called')
+    monkeypatch.setattr(firmware_api.bridge, 'request', forbidden)
+    app = Flask(__name__)
+    register_firmware_routes(app)
+    client = app.test_client()
+    headers = {'X-Meshcore-Control': '1'}
+    response = client.post('/api/companion/firmware', json={'action': 'check'}, headers=headers)
+    assert response.status_code == 200
+    assert response.json['releases'][0]['id'] == 7
+    assert client.get('/api/companion/firmware', headers=headers).json['releases'][0]['id'] == 7
+    manager.check_pool.shutdown()
+
+
+def test_release_timeout_keeps_status_readable_and_prevents_duplicate(manager):
+    import concurrent.futures
+    class Pending:
+        def result(self, timeout):
+            assert timeout == 25
+            raise concurrent.futures.TimeoutError()
+        def done(self):
+            return False
+    manager.check_pool.shutdown()
+    calls = []
+    manager.check_pool = SimpleNamespace(submit=lambda *a: calls.append(a) or Pending())
+    with pytest.raises(TimeoutError, match='25 seconds'):
+        manager.check_releases()
+    assert manager.snapshot()['ok']
+    with pytest.raises(ValueError, match='previous GitHub'):
+        manager.check_releases()
+    assert len(calls) == 1

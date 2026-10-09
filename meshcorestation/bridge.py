@@ -13,13 +13,13 @@ class RuntimeBridge:
         self.runtime = runtime
         self.loop = asyncio.get_running_loop()
 
-    def request(self, payload):
+    def request(self, payload, timeout=180):
         # All radio and bot database access stays on the owning event-loop thread.
         if self.runtime is None or self.loop is None or self.loop.is_closed():
             raise OSError('MeshcoreStation runtime unavailable')
         future = asyncio.run_coroutine_threadsafe(self.runtime.dispatch(payload), self.loop)
         try:
-            return future.result(timeout=180)
+            return future.result(timeout=timeout)
         except concurrent.futures.CancelledError:
             raise OSError('Companion is reconnecting; refresh before retrying') from None
         except concurrent.futures.TimeoutError:

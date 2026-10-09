@@ -1,4 +1,5 @@
 """Firmware controls share the dashboard's local-origin protection."""
+import logging
 from urllib.parse import urlsplit
 from flask import jsonify, request
 from meshcorestation.bridge import bridge
@@ -18,9 +19,23 @@ def register_firmware_routes(server):
             body = request.get_json(silent=True) if request.method == 'POST' else {'action': 'status'}
             if not isinstance(body, dict) or len(str(body)) > 2048:
                 raise ValueError('Invalid firmware request')
-            result = bridge.request({**body, 'operation': 'firmware'})
+            action = body.get('action', 'status')
+            runtime = bridge.runtime
+            if runtime is None:
+                raise OSError('Radio runtime is starting; retry shortly.')
+            if action == 'status':
+                result = runtime.firmware.snapshot()
+            elif action == 'check':
+                logging.info('Checking companion firmware releases on GitHub')
+                result = runtime.firmware.check_releases()
+                logging.info('Companion firmware check complete: %s compatible releases', len(result['releases']))
+            elif action == 'install':
+                result = bridge.request({**body, 'operation': 'firmware'}, timeout=10)
+            else:
+                raise ValueError('Unknown firmware operation')
             response = jsonify(result)
             response.headers['Cache-Control'] = 'no-store'
             return response
         except Exception as exc:
+            logging.warning('Companion firmware request failed: %s', exc)
             return jsonify(ok=False, error=str(exc)), 409
