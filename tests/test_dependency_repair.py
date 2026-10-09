@@ -123,3 +123,27 @@ def test_native_failure_is_not_ignored_or_rebuilt(monkeypatch):
     with pytest.raises(RuntimeError, match='NOT accepted'):
         deps.check()
     assert calls == [('check',)]
+
+
+@pytest.mark.parametrize('native', [False, True])
+def test_yaml_probe_supports_optional_c_extension(monkeypatch, native):
+    import sys
+    safe, accelerated = object(), object()
+    used = []
+    module = SimpleNamespace(SafeLoader=safe, safe_load=lambda text: {'test': True})
+    def load(text, Loader):
+        used.append(Loader)
+        return {'test': True}
+    module.load = load
+    if native:
+        module.CSafeLoader = accelerated
+    monkeypatch.setitem(sys.modules, 'yaml', module)
+    exec(deps.PIWHEELS_CHECKS['pyyaml'][1], {})
+    assert used == [accelerated if native else safe]
+
+
+def test_yaml_probe_still_rejects_wrong_result(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, 'yaml', SimpleNamespace(safe_load=lambda text: None))
+    with pytest.raises(AssertionError):
+        exec(deps.PIWHEELS_CHECKS['pyyaml'][1], {})

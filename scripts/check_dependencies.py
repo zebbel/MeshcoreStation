@@ -27,7 +27,7 @@ def pip(*args):
 # piwheels documents ARMv6 wheels renamed from ARMv7 builds:
 # https://www.piwheels.org/faq.html#why-are-the-wheel-files-are-tagged-with-armv6-and-armv7
 PIWHEELS_CHECKS = {
-    'pyyaml': ('6.0.3', "import yaml; assert yaml.load('test: true', Loader=yaml.CSafeLoader) == {'test': True}"),
+    'pyyaml': ('6.0.3', "import yaml; assert yaml.safe_load('test: true') == {'test': True}; loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader); assert yaml.load('test: true', Loader=loader) == {'test': True}"),
     'cffi': ('2.1.1', "from cffi import FFI; f=FFI(); p=f.new('int *', 42); assert p[0] == 42"),
     'tibs': ('0.5.7', "from tibs import Tibs; assert len(Tibs('0b101')) == 3"),
     'bitarray': ('3.11.0', "from bitarray import bitarray; assert bitarray('101').count() == 2"),
