@@ -18,8 +18,10 @@ class DisplayError(RuntimeError):
 
 
 class DisplayTransport:
-    def __init__(self, companion):
+    def __init__(self, companion, on_button=None):
         self.companion = companion
+        self.on_button = on_button
+        self.last_sequence = None
         self.original = companion.mc._reader
         self.pending = None
         self.request_id = 0
@@ -28,6 +30,17 @@ class DisplayTransport:
     async def handle_rx(self, data):
         data = bytes(data)
         if data.startswith(MAGIC):
+            # Unsolicited gestures have no status byte and must never satisfy
+            # an outstanding display request. Never draw inside the reader.
+            if len(data) >= 8 and data[7] == 0x80:
+                if len(data) == 16 and data[6] == 0 and data[8] == 0 and data[9] in (1, 2, 3, 4):
+                    sequence = int.from_bytes(data[10:12], 'little')
+                    delta = None if self.last_sequence is None else (sequence - self.last_sequence) & 0xffff
+                    if delta is None or 0 < delta < 0x8000:
+                        self.last_sequence = sequence
+                        if self.on_button:
+                            self.on_button(data[9])
+                return
             if self.pending and len(data) >= 9:
                 request_id, operation, future = self.pending
                 if data[6:8] == bytes([request_id, operation]) and not future.done():
@@ -117,30 +130,58 @@ def scene(db, now):
     return texts, points
 
 
+def command_scene(db):
+    rows = db.execute("""SELECT recv_time,sender,message FROM logger
+        ORDER BY recv_time DESC,id DESC LIMIT 3""").fetchall()
+    texts = [(0, 0, 'Last commands     2/2')]
+    if not rows:
+        texts.append((0, 24, 'No commands yet'))
+    for index, row in enumerate(rows):
+        stamp = time.strftime('%H:%M', time.localtime(row['recv_time'])) if row['recv_time'] else '--:--'
+        texts.append((0, 8 + index * 16, ascii_text(f"{stamp} {row['sender'] or 'Unknown'}")))
+        texts.append((0, 16 + index * 16, ascii_text(row['message'] or '-')))
+    texts.append((0, 56, 'Short press: battery'))
+    return texts, []
+
+
 class OledDisplay:
     def __init__(self, companion):
         self.companion = companion
         self.transport = None
         self.task = None
         self.acquired = False
+        self.page = 0
+        self.buttons = False
+        self.redraw = asyncio.Event()
+
+    def on_button(self, gesture):
+        if self.buttons and gesture == 1:
+            self.page = (self.page + 1) % 2
+            self.redraw.set()
 
     def start(self):
         if os.getenv('MESHCORESTATION_OLED', '1').lower() not in ('0', 'false', 'off'):
-            self.transport = DisplayTransport(self.companion)
+            self.transport = DisplayTransport(self.companion, self.on_button)
             self.task = asyncio.create_task(self.run(), name='companion-oled')
 
     async def draw(self, graphics):
-        texts, runs = scene(self.companion.database.db, time.time())
+        page = self.page
+        texts, runs = (command_scene(self.companion.database.db) if page else
+                       scene(self.companion.database.db, time.time()))
         send = self.transport.command
         # BEGIN clears pending content and renews the lease, including after an
         # expired lease. Never retry append operations after an uncertain reply.
         await send(1, struct.pack('<H', 60))
         self.acquired = True
+        if self.buttons:
+            # Idempotent: preserves queued gestures on redraw, also restores
+            # subscription if BEGIN reacquired an expired lease.
+            await send(10, b'\x01')
         for x, y, text in texts:
-            if not graphics and y == 32:
+            if not page and not graphics and y == 32:
                 continue
             await send(2, bytes([x, y, 1]) + text.encode('ascii'))
-        if graphics:
+        if graphics and not page:
             flags, capacity, max_points = graphics
             segments = 0
             if flags & 1:
@@ -167,7 +208,7 @@ class OledDisplay:
                         break
                     offset += count
                     segments += count
-        else:
+        elif not page:
             await send(2, b'\x00\x20\x01Graph FW required')
         await send(4)
 
@@ -185,10 +226,16 @@ class OledDisplay:
             except DisplayError as exc:
                 if exc.status != 3:
                     raise
-            self.companion.logger.info('Companion OLED detected; displaying selected repeater battery.')
+            self.buttons = bool(graphics and graphics[0] & 4)
+            self.companion.logger.info('Companion OLED detected; battery screen%s.',
+                                       ' and short-press command page' if self.buttons else '')
             while True:
+                self.redraw.clear()
                 await self.draw(graphics)
-                await asyncio.sleep(10)
+                try:
+                    await asyncio.wait_for(self.redraw.wait(), 10)
+                except asyncio.TimeoutError:
+                    pass
         except asyncio.CancelledError:
             raise
         except Exception as exc:

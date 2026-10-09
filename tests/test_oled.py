@@ -135,3 +135,64 @@ def test_draw_failure_releases_without_retrying_append(db):
     asyncio.run(display.run())
     assert calls == [0,7,1,2,5]
     assert not display.acquired
+
+
+def test_button_events_interleaved_with_reply_and_sequence_wrap():
+    import struct
+    async def scenario():
+        callback = Mock()
+        original = NS(handle_rx=AsyncMock())
+        manager = NS(set_reader=Mock())
+        transport = DisplayTransport(NS(mc=NS(_reader=original, connection_manager=manager),
+                                        serial_command_lock=asyncio.Lock()), callback)
+        def event(sequence, gesture=1):
+            return MAGIC + bytes([0, 0x80, 0, gesture]) + struct.pack('<HI', sequence, 123)
+        async def send(payload):
+            for data in (event(65535), event(65535), event(0), event(65534), event(1, 2),
+                         event(2)[:-1]):
+                await transport.handle_rx(data)
+                assert not transport.pending[2].done()
+            await transport.handle_rx(b'\x88radio')
+            await transport.handle_rx(payload[:8] + b'\x00')
+        manager.send = send
+        assert await transport.command(4) == b''
+        assert [c.args for c in callback.call_args_list] == [(1,), (1,), (2,)]
+        original.handle_rx.assert_awaited_once_with(b'\x88radio')
+    asyncio.run(scenario())
+
+
+def test_command_page_latest_three_and_button_cycle(db):
+    from meshcorestation.radio.oled import command_scene
+    db.execute('CREATE TABLE logger (id INTEGER PRIMARY KEY, recv_time INTEGER, sender TEXT, message TEXT)')
+    assert 'No commands yet' in [t for _, _, t in command_scene(db)[0]]
+    for i in range(4):
+        db.execute('INSERT INTO logger VALUES (?,?,?,?)', (i, 200000+i, 'Sender\n' + 'x'*30, f'command{i}'))
+    texts, runs = command_scene(db)
+    assert [t for _, _, t in texts if t.startswith('command')] == ['command3', 'command2', 'command1']
+    assert not runs
+    assert all(x+len(t)*6 <= 128 and y+8 <= 64 and all(32 <= ord(c) <= 126 for c in t)
+               for x,y,t in texts)
+    display = OledDisplay(NS(database=NS(db=db)))
+    display.transport = NS(command=AsyncMock())
+    display.on_button(1)
+    assert display.page == 0  # No capability: battery remains available.
+    display.buttons = True
+    for gesture in (2,3,4):
+        display.on_button(gesture)
+    assert display.page == 0
+    display.on_button(1)
+    assert display.page == 1 and display.redraw.is_set()
+    asyncio.run(display.draw((7,256,83)))
+    calls = [c.args for c in display.transport.command.await_args_list]
+    assert calls[0][0] == 1 and calls[1] == (10, b'\x01') and calls[-1][0] == 4
+    assert not any(c[0] in (8,9) for c in calls)
+    assert not any(b'Graph FW' in c[1] for c in calls if c[0] == 2)
+    display.on_button(1)
+    assert display.page == 0
+
+
+def test_fixed_voltage_bounds(db):
+    for i,v in enumerate((2.9,3.0,3.6,4.2,4.3)):
+        add(db, 100000+i*1800, v)
+    _,runs = scene(db,107200)
+    assert [y for run in runs for _,y in run] == [51,51,37,24,24]
