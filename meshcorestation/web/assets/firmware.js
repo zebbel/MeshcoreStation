@@ -28,7 +28,6 @@
         panel.querySelector('.firmware-current').textContent = `Companion: ${result.device?.ver || 'version unavailable'} · ${result.device?.model || 'model unavailable'} ${result.device?.fw_build || ''}`;
         panel.querySelector('.firmware-message').textContent = result.status?.message || (!result.ready ? 'Update MeshcoreStation dependencies to install esptool before flashing.' : result.releases.length ? 'Select a release to install.' : 'Check for published Heltec V4 OLED USB releases.');
         panel.querySelector('pre').textContent = result.status?.log || '';
-        panel.querySelector('.firmware-backup').textContent = result.status?.backup ? `Backup on Pi: ${result.status.backup}` : '';
         controls();
     }
     async function request(body) {
@@ -46,13 +45,13 @@
         if (!dialog || panel) return;
         panel = document.createElement('section'); panel.id = 'firmware-panel'; panel.className = 'companion-section';
         panel.style.gridColumn = '1 / -1';
-        panel.innerHTML = '<h3>Companion firmware</h3><p class="firmware-current muted"></p><p>Heltec V4 OLED · USB companion · releases from zebbel/MeshCore. Radio commands pause during installation. Keep USB and power connected.</p><label for="firmware-release">Firmware release</label><select id="firmware-release"></select><div class="companion-toolbar"><button type="button" class="firmware-check">Check firmware releases</button><button type="button" class="firmware-install" disabled>Install firmware</button></div><p class="firmware-message" role="status" aria-live="polite"></p><p class="firmware-backup muted"></p><details><summary>Flashing log</summary><pre style="white-space:pre-wrap;max-height:240px;overflow:auto"></pre></details>';
+        panel.innerHTML = '<h3>Companion firmware</h3><p class="firmware-current muted"></p><p>Heltec V4 OLED · USB companion · releases from zebbel/MeshCore. Radio commands pause during installation. Keep USB and power connected.</p><label for="firmware-release">Firmware release</label><select id="firmware-release"></select><div class="companion-toolbar"><button type="button" class="firmware-check">Check firmware releases</button><button type="button" class="firmware-install" disabled>Install firmware</button></div><p class="firmware-message" role="status" aria-live="polite"></p><details><summary>Flashing log</summary><pre style="white-space:pre-wrap;max-height:240px;overflow:auto"></pre></details>';
         dialog.querySelector('.companion-grid').append(panel);
         panel.querySelector('select').addEventListener('change', controls);
         panel.querySelector('.firmware-check').addEventListener('click', () => request({action: 'check'}));
         panel.querySelector('.firmware-install').addEventListener('click', () => {
             const select = panel.querySelector('select');
-            if (window.confirm(`Install ${select.selectedOptions[0]?.textContent} on the USB-connected Heltec V4 OLED companion?\n\nConfirm this is the Heltec V4 OLED, not another ESP32 device. A full flash backup is saved first; only the application partition is written. Radio service pauses for several minutes. Keep power connected.`)) {
+            if (window.confirm(`Install ${select.selectedOptions[0]?.textContent} on the USB-connected Heltec V4 OLED companion?\n\nConfirm this is the Heltec V4 OLED, not another ESP32 device. Only the application partition is written. No full flash backup is made. Radio service pauses during installation. Keep power connected.`)) {
                 request({action: 'install', release_id: Number(select.value), confirm_heltec_v4: true});
             }
         });

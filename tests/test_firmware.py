@@ -31,20 +31,26 @@ def manifest(data):
             'partition_sha256': hashlib.sha256(data[0x8000:0x8C00]).hexdigest()}
 
 
+def validate_flash(flash, expected, size):
+    ota = fw.validate_layout(flash[0x8000:0x8C00], expected, size)
+    if ota:
+        fw.validate_boot_selection(flash[ota[0]:ota[0] + 8192])
+
+
 def test_partition_guards():
     backup = fixture_flash()
     expected = manifest(backup)
-    fw.validate_layout(backup, expected, 256)
+    validate_flash(backup, expected, 256)
     struct.pack_into('<I', backup, 0xE000, 1)
-    fw.validate_layout(backup, expected, 256)
+    validate_flash(backup, expected, 256)
     struct.pack_into('<I', backup, 0xE000, 2)
     with pytest.raises(ValueError, match='OTA slot'):
-        fw.validate_layout(backup, expected, 256)
+        validate_flash(backup, expected, 256)
     with pytest.raises(ValueError, match='fit'):
-        fw.validate_layout(backup, expected, 0x300001)
+        validate_flash(backup, expected, 0x300001)
     backup[0x8005] ^= 1
     with pytest.raises(ValueError, match='layout differs'):
-        fw.validate_layout(backup, expected, 256)
+        validate_flash(backup, expected, 256)
 
 
 def test_download_guards(monkeypatch):
@@ -90,7 +96,8 @@ def test_layout_failure_never_writes_and_resumes(manager, monkeypatch):
         calls.append(args)
         if 'read_flash' in args:
             from pathlib import Path
-            Path(args[-1]).write_bytes(backup)
+            start, length = int(args[-3], 0), int(args[-2], 0)
+            Path(args[-1]).write_bytes(backup[start:start + length])
     manager.tool = tool
     resumed = []
     manager.runtime.resume_after_firmware = lambda: resumed.append(True)
@@ -154,7 +161,7 @@ def test_runtime_pause_handshake(manager):
     asyncio.run(scenario())
 
 
-def test_success_writes_only_app_after_pause_and_backup(manager, monkeypatch):
+def test_success_reads_only_metadata_then_writes_app(manager, monkeypatch):
     backup = fixture_flash()
     monkeypatch.setattr(fw, 'prepare', lambda _: (manifest(backup), fixture_image()))
     calls = []
@@ -163,15 +170,20 @@ def test_success_writes_only_app_after_pause_and_backup(manager, monkeypatch):
         calls.append(args)
         if 'read_flash' in args:
             from pathlib import Path
-            Path(args[-1]).write_bytes(backup)
+            start, length = int(args[-3], 0), int(args[-2], 0)
+            Path(args[-1]).write_bytes(backup[start:start + length])
     manager.tool = tool
     monkeypatch.setattr(fw.asyncio, 'sleep', AsyncMock())
     resumed = []
     manager.runtime.resume_after_firmware = lambda: resumed.append(True)
     asyncio.run(manager.install({'tag': 'test'}))
-    assert calls[0][:4] == ('--after', 'no_reset', 'read_flash', '0')
-    assert calls[1][:2] == ('write_flash', '0x10000')
-    assert len(calls) == 2
+    assert calls[0][:-1] == ('--after', 'no_reset', 'read_flash', '0x8000', '0xc00')
+    assert calls[1][:-1] == ('--after', 'no_reset', 'read_flash', '0xe000', '0x2000')
+    assert calls[2][:2] == ('write_flash', '0x10000')
+    assert len(calls) == 3
+    from pathlib import Path
+    assert not Path(calls[0][-1]).parent.exists()
+    assert manager.state.get('backup') is None
     assert resumed == [True]
     assert manager.state['phase'] == 'complete' and manager.state['busy'] is False
 
@@ -187,7 +199,7 @@ def test_packaging_roundtrip(tmp_path):
     output = tmp_path / 'release'
     package(build, output)
     result = json.loads((output / fw.MANIFEST).read_text())
-    fw.validate_layout(flash, result, len(fixture_image()))
+    validate_flash(flash, result, len(fixture_image()))
     assert hashlib.sha256((output / result['image']).read_bytes()).hexdigest() == result['sha256']
 
 
@@ -226,3 +238,10 @@ def test_release_timeout_keeps_status_readable_and_prevents_duplicate(manager):
     with pytest.raises(ValueError, match='previous GitHub'):
         manager.check_releases()
     assert len(calls) == 1
+
+
+def test_short_metadata_reads_are_rejected():
+    with pytest.raises(ValueError, match='Incomplete partition'):
+        fw.validate_layout(b'', {}, 256)
+    with pytest.raises(ValueError, match='Incomplete boot'):
+        fw.validate_boot_selection(b'\xff' * 4096)

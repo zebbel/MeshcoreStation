@@ -28,19 +28,18 @@ hardware. Installed version/build/model comes from the radio's device query;
 custom builds may report the same version even with different code.
 
 The app downloads and validates the firmware, pauses its radio session, releases
-USB, backs up all 16 MB of flash, and checks the installed partition table against
-the build. It writes only the first application partition at `0x10000` and uses
+USB, and reads the 3 KB partition table plus (where present) 8 KB of OTA boot
+selection data. It checks the installed partition table against the build. It writes only the first application partition at `0x10000` and uses
 esptool's write verification. Bootloader, partition table, identity, contacts,
 channels and filesystem are not written. Changed partition layouts and devices
 with noninitial OTA slot selection are rejected and require manual migration.
 Radio service reconnects automatically; a failure to reconnect is reported
 separately from successful flashing. Logs remain visible after closing Settings.
 
-Backups (which include private device identity) are stored under
-`DATA_DIR/firmware-backups/<timestamp>/` in a private directory. Retain them until
-the new firmware works. No automatic rollback or power-loss recovery is claimed.
-To recover a damaged app, use the saved backup with esptool on the Pi or a PC;
-a full backup restore writes configuration too and must target the same device.
+No full flash backup is created. Downloaded firmware and small validation reads
+are staged on the Pi's data filesystem and removed when the operation ends.
+Existing backups from earlier versions are left in place. Recovery from failed
+flashing may require manually reflashing a known-good firmware image.
 
 Automatic bootloader entry depends on the USB connection. If it fails, hold BOOT,
 tap RESET, release BOOT, and use a manual esptool update; reconnect the running

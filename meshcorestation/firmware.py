@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import struct
 import sys
-import time
+import tempfile
 import urllib.request
 from meshcorestation import updater
 from meshcorestation.config import DATA_DIR
@@ -67,8 +67,9 @@ def prepare(release):
     return manifest, image
 
 
-def validate_layout(backup, manifest, image_size):
-    table = backup[0x8000:0x8C00]
+def validate_layout(table, manifest, image_size):
+    if len(table) != 0xC00:
+        raise ValueError('Incomplete partition table; nothing was written')
     if hashlib.sha256(table).hexdigest() != manifest['partition_sha256']:
         raise ValueError('Installed partition layout differs from this build; use a manual firmware migration')
     apps, ota = [], None
@@ -86,15 +87,21 @@ def validate_layout(backup, manifest, image_size):
         raise ValueError('Application does not fit the supported first app partition')
     if ota:
         start, size = ota
-        if size < 8192 or start + size > len(backup):
+        if size < 8192 or start < 0x9000 or start + size > 0x1000000 or start % 4096:
             raise ValueError('Invalid OTA partition')
-        # Support stock initial boot_app0 (sequence 1) or erased OTA selection only.
-        # Never guess the active slot of a device previously updated over OTA.
-        sequences = [struct.unpack_from('<I', backup, start + sector)[0] for sector in (0, 4096)]
-        if any(seq not in (1, 0xFFFFFFFF) for seq in sequences):
-            raise ValueError('Device has an OTA slot selection; use a manual firmware update')
     elif app[0] != 0:
         raise ValueError('OTA application requires an OTA data partition')
+    return ota
+
+
+def validate_boot_selection(data):
+    if len(data) != 8192:
+        raise ValueError('Incomplete boot selection read; nothing was written')
+    # Never guess the active slot of a device previously updated over OTA.
+    sequences = [struct.unpack_from('<I', data, sector)[0] for sector in (0, 4096)]
+    if any(seq not in (1, 0xFFFFFFFF) for seq in sequences):
+        raise ValueError('Device has an OTA slot selection; use a manual firmware update')
+
 
 
 class FirmwareUpdater:
@@ -151,7 +158,7 @@ class FirmwareUpdater:
                 raise ValueError('Install updated MeshcoreStation dependencies first (esptool missing)')
             if self.runtime.companion is None or self.runtime.control is None:
                 raise ValueError('Connect the companion before starting a firmware update')
-            self.set_state('queued', 'Preparing firmware update…', busy=True, release=release['tag'], log='')
+            self.set_state('queued', 'Preparing firmware update…', busy=True, release=release['tag'], log='', backup=None)
             self.task = asyncio.create_task(self.install(release))
         elif action != 'status':
             raise ValueError('Unknown firmware operation')
@@ -187,6 +194,7 @@ class FirmwareUpdater:
     async def _install(self, release):
         paused = False
         bootloader = False
+        staging = None
         try:
             if updater.read('status.json').get('phase') in updater.ACTIVE or (updater.STATE / 'request.json').exists():
                 raise ValueError('Wait for the MeshcoreStation update to finish')
@@ -196,21 +204,23 @@ class FirmwareUpdater:
             if companion is None:
                 raise ValueError('Companion disconnected before update')
             port = companion.serial_port
-            directory = DATA_DIR / 'firmware-backups' / str(time.time_ns())
-            directory.mkdir(parents=True, mode=0o700)
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            staging = tempfile.TemporaryDirectory(prefix='firmware-update-', dir=DATA_DIR)
+            directory = Path(staging.name)
             firmware = directory / 'application.bin'
             firmware.write_bytes(image)
-            self.set_state('pausing', 'Pausing radio commands and releasing USB…', backup=str(directory))
+            self.set_state('pausing', 'Pausing radio commands and releasing USB…', backup=None)
             paused = True
             await self.runtime.pause_for_firmware()
-            self.set_state('backing_up', 'Entering bootloader and backing up all 16 MB of flash…')
-            backup_path = directory / 'flash-backup.bin'
+            self.set_state('validating', 'Checking partition layout and boot selection…')
+            table_path = directory / 'partitions.bin'
             bootloader = True
-            await self.tool(port, '--after', 'no_reset', 'read_flash', '0', '0x1000000', str(backup_path))
-            backup = backup_path.read_bytes()
-            if len(backup) != 0x1000000:
-                raise ValueError('Incomplete flash backup; nothing was written')
-            validate_layout(backup, manifest, len(image))
+            await self.tool(port, '--after', 'no_reset', 'read_flash', '0x8000', '0xc00', str(table_path))
+            ota = validate_layout(table_path.read_bytes(), manifest, len(image))
+            if ota:
+                ota_path = directory / 'boot-selection.bin'
+                await self.tool(port, '--after', 'no_reset', 'read_flash', hex(ota[0]), '0x2000', str(ota_path))
+                validate_boot_selection(ota_path.read_bytes())
             self.set_state('flashing', 'Writing application firmware; configuration partitions are preserved…')
             await self.tool(port, 'write_flash', '0x10000', str(firmware))
             bootloader = False
@@ -234,3 +244,5 @@ class FirmwareUpdater:
                     except Exception:
                         pass
                 self.runtime.resume_after_firmware()
+            if staging is not None:
+                staging.cleanup()

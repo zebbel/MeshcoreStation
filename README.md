@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.4.5**.
+Current application version: **2.4.6**.
 
 ## What it does
 
@@ -406,6 +406,6 @@ Saved reply scopes can be added, edited and removed in **Settings → Scopes**, 
 ## Companion firmware updates
 
 **Settings → Companion firmware** installs published Heltec V4 OLED USB builds from
-`zebbel/MeshCore`, with progress logs, a full flash backup, partition checks and
+`zebbel/MeshCore`, with progress logs, small partition/boot-selection checks and
 automatic radio reconnection. Firmware releases must include the application
 binary and its manifest. See [firmware release packaging and recovery](docs/companion-firmware-updates.md).
