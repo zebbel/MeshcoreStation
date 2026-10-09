@@ -50,3 +50,19 @@ check Settings if reconnection fails. Do not disconnect power during flashing.
 Station updates and companion updates share a lock, so a dashboard Station
 update cannot restart the service while a firmware job is running. External
 service restarts/power loss can interrupt a job; the next startup reports this.
+
+## Pi Zero wheel metadata (v2.4.3)
+
+PiWheels distributes ARMv6 wheels whose internal WHEEL metadata can still say
+ARMv7. The Station dependency checker accepts this specific mismatch only on an
+ARMv6 Raspberry Pi, for the five explicitly listed versions in
+`scripts/check_dependencies.py`, with a matching Python ABI and successful native
+runtime tests. It does not rewrite installed metadata or suppress other package
+conflicts. A failed native test stops the update. Unknown versions retain the
+normal compatibility/repair path.
+
+Consequently, plain `pip check` may still print those platform-label warnings.
+Use `.venv/bin/python3 -m scripts.check_dependencies` for the Station's validated
+check, followed by `.venv/bin/python3 -m scripts.check_install`. The known metadata
+case needs neither recompilation nor compiler installation. This is not a general
+claim that arbitrary ARMv7 binaries work on a Pi Zero.

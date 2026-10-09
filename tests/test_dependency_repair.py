@@ -77,3 +77,49 @@ def test_rust_only_for_crypto_and_no_sudo_without_opt_in(monkeypatch):
     deps.build_tools([('cryptography', '50.0.2')], install=True)
     assert 'rustc' in calls[-1] and 'cargo' in calls[-1]
     assert calls[-1][:2] == ['sudo', 'apt-get']
+
+
+def test_verified_metadata_skips_all_reinstallation(monkeypatch):
+    monkeypatch.setattr(deps, 'verified_piwheels', lambda name, version: True)
+    calls = fake(monkeypatch, [(1, ERROR)])
+    deps.check()
+    assert calls == [('check',)]
+
+
+def test_verified_metadata_does_not_hide_conflicts(monkeypatch):
+    monkeypatch.setattr(deps, 'verified_piwheels', lambda name, version: True)
+    fake(monkeypatch, [(1, ERROR + '\nfoo requires bar, which is not installed.')])
+    with pytest.raises(RuntimeError):
+        deps.check()
+
+
+def test_native_exception_checks_version_platform_abi_and_execution(monkeypatch):
+    monkeypatch.setattr(deps, 'is_pi_zero', lambda: True)
+    monkeypatch.setattr(deps, 'supported_tags', lambda: {'cp313-cp313-linux_armv6l'})
+    wheel = SimpleNamespace(version='6.0.3', read_text=lambda _: 'Tag: cp313-cp313-linux_armv7l\n')
+    monkeypatch.setattr(deps, 'distribution', lambda _: wheel)
+    calls = []
+    def run(*args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=0, stdout='')
+    monkeypatch.setattr(deps.subprocess, 'run', run)
+    assert deps.verified_piwheels('PyYAML', '6.0.3')
+    assert len(calls) == 1
+    assert not deps.verified_piwheels('PyYAML', '6.0.4')
+    assert not deps.verified_piwheels('unknown', '6.0.3')
+    monkeypatch.setattr(deps, 'supported_tags', lambda: {'cp312-cp312-linux_armv6l'})
+    assert not deps.verified_piwheels('PyYAML', '6.0.3')
+    monkeypatch.setattr(deps, 'is_pi_zero', lambda: False)
+    assert not deps.verified_piwheels('PyYAML', '6.0.3')
+    assert len(calls) == 1
+
+
+def test_native_failure_is_not_ignored_or_rebuilt(monkeypatch):
+    monkeypatch.setattr(deps, 'is_pi_zero', lambda: True)
+    monkeypatch.setattr(deps, 'supported_tags', lambda: {'cp313-cp313-linux_armv6l'})
+    monkeypatch.setattr(deps, 'distribution', lambda _: SimpleNamespace(version='6.0.3', read_text=lambda _: 'Tag: cp313-cp313-linux_armv7l\n'))
+    monkeypatch.setattr(deps.subprocess, 'run', lambda *a, **kw: SimpleNamespace(returncode=-4, stdout='Illegal instruction'))
+    calls = fake(monkeypatch, [(1, 'PyYAML 6.0.3 is not supported on this platform')])
+    with pytest.raises(RuntimeError, match='NOT accepted'):
+        deps.check()
+    assert calls == [('check',)]
