@@ -1,4 +1,5 @@
 """Repair incompatible installed wheels without ignoring dependency failures."""
+import argparse
 import re
 import subprocess
 import sys
@@ -18,7 +19,32 @@ def pip(*args):
     return result
 
 
-def check():
+def build_tools(packages, install=False):
+    names = {name.lower().replace('_', '-') for name, _ in packages}
+    required = ['python3-dev', 'build-essential', 'pkg-config']
+    if names & {'cffi', 'cryptography'}:
+        required.append('libffi-dev')
+    if 'cryptography' in names:
+        required.extend(['libssl-dev', 'rustc', 'cargo'])
+    missing = []
+    for package in required:
+        result = subprocess.run(['dpkg-query', '-W', '-f=${Status}', package],
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        if result.returncode or result.stdout.strip() != 'install ok installed':
+            missing.append(package)
+    if not missing:
+        return
+    if not install:
+        raise RuntimeError('Source rebuild needs system tools: ' + ' '.join(missing)
+                           + '. Run meshcorestation update in the Pi terminal to install them.')
+    print('No compatible wheel available; installing build tools: ' + ' '.join(missing), flush=True)
+    options = ['-o', 'Acquire::ForceIPv4=true', '-o', 'Acquire::Retries=2',
+               '-o', 'Acquire::http::Timeout=30', '-o', 'Acquire::https::Timeout=30']
+    subprocess.run(['sudo', 'apt-get', *options, 'update'], check=True)
+    subprocess.run(['sudo', 'apt-get', *options, 'install', '-y', *missing], check=True)
+
+
+def check(install_build_tools=False):
     result = pip('check')
     if result.returncode == 0:
         return
@@ -35,6 +61,7 @@ def check():
         return
     remaining = unsupported(result.stdout)
     if remaining:
+        build_tools(remaining, install=install_build_tools)
         result = pip('install', '--force-reinstall', '--no-deps', '--no-cache-dir',
                      '--no-binary=' + ','.join(name for name, _ in remaining),
                      *(name + '==' + version for name, version in remaining))
@@ -45,4 +72,6 @@ def check():
 
 
 if __name__ == '__main__':
-    check()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--install-build-tools', action='store_true')
+    check(parser.parse_args().install_build_tools)

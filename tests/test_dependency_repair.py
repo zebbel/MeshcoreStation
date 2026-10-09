@@ -26,6 +26,7 @@ def test_all_reported_packages_repaired(monkeypatch):
 
 
 def test_missing_wheel_falls_back_to_source(monkeypatch):
+    monkeypatch.setattr(deps, 'build_tools', lambda packages, install=False: None)
     error = 'cffi 2.1.1 is not supported on this platform'
     calls = fake(monkeypatch, [(1, error), (1, 'No wheel'), (1, error), (0, ''), (0, '')])
     deps.check()
@@ -48,3 +49,31 @@ def test_repair_cannot_mask_other_conflict(monkeypatch):
 def test_reject_argument_injection():
     assert deps.unsupported('--evil 1 is not supported on this platform') == []
     assert deps.unsupported('name 1;touch is not supported on this platform') == []
+
+
+def test_build_tools_only_requested_for_source_fallback(monkeypatch):
+    calls = []
+    monkeypatch.setattr(deps, 'build_tools', lambda packages, install=False: calls.append((packages, install)))
+    error = 'cffi 2.1.1 is not supported on this platform'
+    fake(monkeypatch, [(1, error), (0, ''), (0, '')])
+    deps.check(install_build_tools=True)
+    assert calls == []
+    fake(monkeypatch, [(1, error), (1, ''), (1, error), (0, ''), (0, '')])
+    deps.check(install_build_tools=True)
+    assert calls == [([('cffi', '2.1.1')], True)]
+
+
+def test_rust_only_for_crypto_and_no_sudo_without_opt_in(monkeypatch):
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=1, stdout='')
+    monkeypatch.setattr(deps.subprocess, 'run', run)
+    with pytest.raises(RuntimeError, match='Pi terminal'):
+        deps.build_tools([('cffi', '2.1.1')])
+    assert all(c[0] == 'dpkg-query' for c in calls)
+    assert not any('rustc' in c for c in calls)
+    calls.clear()
+    deps.build_tools([('cryptography', '50.0.2')], install=True)
+    assert 'rustc' in calls[-1] and 'cargo' in calls[-1]
+    assert calls[-1][:2] == ['sudo', 'apt-get']

@@ -66,13 +66,15 @@ PY
 apt_packages() {
     local opts=(-o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
     sudo apt-get "${opts[@]}" update
-    sudo apt-get "${opts[@]}" install -y python3 python3-venv python3-pip python3-dev build-essential libffi-dev libssl-dev pkg-config rustc cargo tzdata git
+    sudo apt-get "${opts[@]}" install -y python3 python3-venv python3-pip tzdata git
 }
 
 install_python_dependencies() {
     local py="$1" work_dir="$2"
     "$py" -m pip install -r "$project_dir/requirements.txt"
-    PYTHONPATH="$project_dir" "$py" "$project_dir/scripts/check_dependencies.py"
+    local repair_options=()
+    if (( ! skip_apt )); then repair_options+=(--install-build-tools); fi
+    PYTHONPATH="$project_dir" "$py" "$project_dir/scripts/check_dependencies.py" "${repair_options[@]}"
     cd -- "$project_dir"
     PYTHONPATH="$project_dir" "$py" scripts/check_install.py
     "$py" -m pip freeze > requirements-installed.txt
@@ -207,8 +209,6 @@ ENV
 apply_update() (
     check_host
     require_installation
-    # Native fallback builds need the same toolchain as a fresh installation.
-    if (( ! skip_apt )); then apt_packages; fi
     local service_user service_group work_dir completed=0 restart_after
     service_user="$(id -un)"; service_group="$(id -gn)"
     restart_after="${MESHCORESTATION_UPDATE_RESTART:-1}"
