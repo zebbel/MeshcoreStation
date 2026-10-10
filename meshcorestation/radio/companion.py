@@ -28,6 +28,8 @@ class Companion:
         self.channel_idx = None
         self.channel_hash = None
         self.recent_rx_logs = deque(maxlen=MAX_RECENT_RX_LOGS)
+        self.active_command_id = None
+        self.tracking_key = None
         self.reply_lock = asyncio.Lock()
         self.control_lock = asyncio.Lock()
 
@@ -61,6 +63,7 @@ class Companion:
         # A fresh install has no selected channel; never select an empty radio slot.
         self.channel_idx, channel = await self._find_channel_by_name(self.channel_name) if self.channel_name.strip() else (None, None)
         self.channel_hash = (channel or {}).get("channel_hash")
+        self.tracking_key = (channel or {}).get("channel_secret")
 
         if self.channel_idx is None:
             self.logger.error(f"Channel '{self.channel_name}' was not found.")
@@ -118,15 +121,37 @@ class Companion:
             message = "scope not known"
 
         async with self.reply_lock:
+            reply_id = None
+            from meshcorestation.storage import reply_store
             try:
+                stamp = int(time.time())
+                if self.active_command_id is not None and isinstance(self.tracking_key, bytes):
+                    name = self.mc.self_info.get('name') or self.mc.self_info.get('adv_name')
+                    if name:
+                        try:
+                            reply_id = reply_store.begin(self.database.db,self.active_command_id,message,
+                                name,self.tracking_key,stamp,scope_name,scope_key)
+                        except Exception as exc:
+                            self.logger.warning('Reply tracking unavailable: %s',exc)
                 result = await self.mc.commands.set_flood_scope("*" if scope_key is None else scope_key)
 
                 if result is None or result.type != EventType.OK:
+                    if reply_id is not None:
+                        try:
+                            reply_store.finish(self.database.db,reply_id,'rejected','Scope selection failed; message not submitted.')
+                        except Exception as exc:
+                            self.logger.warning('Reply result could not be recorded: %s',exc)
                     self.logger.warning("Reply skipped: could not select scope %s", scope_name)
                     return False
 
-                result = await self.mc.commands.send_chan_msg(channel, message)
+                result = await self.mc.commands.send_chan_msg(channel, message, timestamp=stamp)
 
+                if reply_id is not None:
+                    try:
+                        reply_store.finish(self.database.db, reply_id,
+                            'accepted' if result and result.type == EventType.OK else 'rejected' if result and result.type == EventType.ERROR else 'uncertain')
+                    except Exception as exc:
+                        self.logger.warning('Reply send result could not be recorded: %s',exc)
                 if result is None or result.type != EventType.OK:
                     self.logger.warning("Reply send failed: %s", getattr(result, "payload", None))
                     return False
@@ -135,6 +160,11 @@ class Companion:
                 return scope_name
 
             except Exception as exc:
+                if reply_id is not None:
+                    try:
+                        reply_store.finish(self.database.db,reply_id,'uncertain',type(exc).__name__)
+                    except Exception:
+                        pass
                 self.logger.warning("Scoped reply failed: %s %s", type(exc).__name__, exc)
                 return False
 
@@ -241,22 +271,35 @@ class Companion:
         if command is not None:
             self.logger.info("%s | sender=%r | path=%r", command['trigger'], message_data['name'], message_data['path'])
             matched_rx = self._find_matching_rx(message_data)
-            reply = await self.bot.handle_message(message_data, matched_rx, command)
-            if not reply:
-                return
+            command_id = self.database.add_logger(message_data, matched_rx, 'processing', '')
+            self.active_command_id = command_id
             sent = []
-            for part in split_reply(reply):
-                if sent:
-                    await asyncio.sleep(1)
-                scope_name = await self.send_channel_message(self.channel_idx, part, matched_rx)
-                if scope_name is False:
-                    break
-                if scope_name == 'unscoped (unknown request scope)':
-                    sent = ['scope not known']
-                    break
-                sent.append(part)
-            if sent:
-                self.database.add_logger(message_data, matched_rx, scope_name if scope_name is not False else 'partial reply', ''.join(sent))
+            scope_name = 'no reply'
+            try:
+                reply = await self.bot.handle_message(message_data, matched_rx, command)
+                if not reply:
+                    return
+                for part in split_reply(reply):
+                    if sent:
+                        await asyncio.sleep(1)
+                    scope_name = await self.send_channel_message(self.channel_idx, part, matched_rx)
+                    if scope_name is False:
+                        break
+                    if scope_name == 'unscoped (unknown request scope)':
+                        sent = ['scope not known']
+                        break
+                    sent.append(part)
+            finally:
+                self.active_command_id = None
+                positions = self.database.get_companion_positions_by_name(message_data.get('name'))
+                position = positions[0] if len(positions)==1 else {}
+                with self.database.db:
+                    self.database.db.execute('''UPDATE logger SET sender_public_key=?,sender_latitude=?,
+                        sender_longitude=?,sender_altitude=?,sender_position_updated_at=? WHERE id=?''',
+                        (position.get('public_key'),position.get('latitude'),position.get('longitude'),
+                         position.get('altitude'),position.get('updated_at'),command_id))
+                    self.database.db.execute('UPDATE logger SET scope_name=?,reply=? WHERE id=?',
+                        (scope_name if scope_name is not False else 'partial or failed reply',''.join(sent),command_id))
 
 ################################################
 # RX LOG FUNCTIONS
@@ -266,6 +309,12 @@ class Companion:
         rx = event.payload or {}
         from meshcorestation.storage.passive_stats import collector
         collector.submit(rx)
+        if rx.get("payload_type") == 5 and isinstance(getattr(self, "tracking_key", None), bytes):
+            try:
+                from meshcorestation.storage.reply_store import observe
+                observe(self.database.db,rx,self.tracking_key,self.database.get_scopes() if rx.get("route_type")==0 else [])
+            except Exception as exc:
+                self.logger.warning('Reply observation could not be recorded: %s',exc)
         
         payload_type = rx.get("payload_type")
         payload_typename = str(rx.get("payload_typename", "")).upper()

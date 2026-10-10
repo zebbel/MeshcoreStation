@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.6.1**.
+Current application version: **2.7.0**.
 
 ## What it does
 
@@ -450,3 +450,41 @@ shutdown the browser waits to reconnect. The first update installing these
 improvements still uses the previous updater; subsequent updates use the faster
 path. This change improves the web updater; terminal install/repair keeps its
 existing dependency workflow.
+
+## Outgoing reply observations
+
+From 2.7.0, open a command's **Details → Outgoing replies** to see each reply
+part and any repeated copies heard by the station. Position-request
+acknowledgments are included. The section refreshes every five seconds while
+open. Tracking applies to new commands only.
+
+- **Accepted by companion** means the USB send command succeeded, not confirmed
+  over-air transmission or delivery.
+- **Forwarding observed** means a matching flooded packet contained a prefix
+  resolving to one known repeater. Prefix collisions are shown as **ambiguous
+  repeater**; unrecognized prefixes remain **unknown repeater**.
+- **Forwarding not confirmed** means no matching copy was recorded. This does
+  not prove the repeater failed to receive or forward the reply.
+- Radio rejections and uncertain send results remain visible separately.
+
+Matching validates the configured channel's MAC, decrypts the payload and
+compares the explicit send timestamp, companion sender name and exact reply
+text. Scoped packets must also match the recorded scope. The short packet hash
+alone is never used for matching. Indistinguishable duplicate submissions are
+left unconfirmed. This is passive path evidence, not a per-repeater delivery
+acknowledgment or cryptographic proof of repeater identity: paths use short
+public-key prefixes and unknown collisions are possible.
+
+For five minutes after each submission, the station records up to 64 distinct
+payload/path observations per reply. Identical payload/path copies are
+collapsed. Each observation shows its time, elapsed time since submission,
+ordered repeater path, and RSSI/SNR measured **at this station**, not at the
+remote repeater. Direct packets and malformed paths are excluded from forwarding
+evidence. No extra mesh messages or telemetry requests are generated.
+
+Records live beside command history in SQLite and are included in update
+backups. Channel and scope secrets are never stored in tracking rows or returned
+by the details API. Reconnects can resume matching within the five-minute window
+when the same channel/scope configuration is available. USB downtime and
+unheard retransmissions reduce coverage; historical replies cannot be recovered
+retrospectively.

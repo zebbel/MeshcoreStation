@@ -85,6 +85,8 @@ class Database:
             )""")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_logger_recv_time ON logger(recv_time)")
 
+        from meshcorestation.storage.reply_store import initialize as initialize_replies
+        initialize_replies(self.db)
         self.db.commit()
 
 ################################################
@@ -123,8 +125,9 @@ class Database:
         columns = ", ".join(data)
         placeholders = ", ".join("?" for _ in data)
 
-        self.db.execute(f"INSERT INTO logger ({columns}) VALUES ({placeholders})", tuple(data.values()))
+        cursor = self.db.execute(f"INSERT INTO logger ({columns}) VALUES ({placeholders})", tuple(data.values()))
         self.db.commit()
+        return cursor.lastrowid
 
 ################################################
 # REPEATER FUNCTIONS

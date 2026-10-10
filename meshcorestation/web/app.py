@@ -28,4 +28,6 @@ def create_app():
     register_passive_routes(app.server)
     from meshcorestation.web.oled_api import register_oled_routes
     register_oled_routes(app.server)
+    from meshcorestation.web.reply_api import register_reply_routes
+    register_reply_routes(app.server)
     return app
