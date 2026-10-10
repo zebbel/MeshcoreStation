@@ -4,3 +4,6 @@ pyserial==3.5
 dash==3.4.0
 waitress==3.0.2
 esptool==4.8.1
+
+# Pure-Python QR generation; no image or native build dependency.
+qrcode==8.2

@@ -9,13 +9,10 @@
         if (node.public_key) box.append(text('p', node.public_key, 'map-key'));
         if (node.updated_at) box.append(text('p', `Saved / last seen: ${new Date(node.updated_at * 1000).toLocaleString()}`));
         if (node.role === 'repeater' && node.public_key) {
-            const battery = text('button', 'Battery history'); battery.type = 'button';
-            battery.addEventListener('click', () => {
+            window.meshcorestationRepeaterActions(box, node, () => {
                 document.getElementById('repeaters-dialog')?.close();
                 document.getElementById('details-dialog')?.close();
-                document.dispatchEvent(new CustomEvent('meshcore-voltage-open', {detail: {public_key: node.public_key}}));
             });
-            box.append(battery);
         }
         return box;
     }
@@ -65,7 +62,7 @@
             for (const node of data.nodes) {
                 const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
                 const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
-                L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).addTo(map).bindPopup(describe(node));
+                L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).addTo(map).bindPopup(() => describe(node));
             }
             notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
             if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));

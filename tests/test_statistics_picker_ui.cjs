@@ -1,10 +1,10 @@
 const {JSDOM}=require('jsdom');const fs=require('node:fs');const assert=require('node:assert/strict');
 const dom=new JSDOM('<html><body></body></html>',{runScripts:'outside-only',url:'http://localhost/'}),w=dom.window;
 w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'))};w.requestAnimationFrame=fn=>fn();
-const icons=[];
+const icons=[];w.meshcorestationRepeaterActions=()=>{};
 const key='76'.repeat(32),other='ab'.repeat(32),selected=[],popups=[];let fail=false,removed=0;
 w.fetch=async()=>{if(fail)throw Error('Offline');return {ok:true,json:async()=>({nodes:[{role:'repeater',public_key:key,position:[50,8]},{role:'bot',public_key:other,position:[51,8]}]})}};
-w.L={divIcon:options=>{icons.push(options);return options},map:()=>({setView(){return this},invalidateSize(){},fitBounds(){},remove(){removed++}}),tileLayer:()=>({on(){return this},addTo(){}}),marker:position=>({addTo(){return this},bindPopup(node){popups.push(node);return this},getLatLng(){return position},openPopup(){}})};
+w.L={divIcon:options=>{icons.push(options);return options},map:()=>({setView(){return this},invalidateSize(){},fitBounds(){},remove(){removed++}}),tileLayer:()=>({on(){return this},addTo(){}}),marker:position=>({addTo(){return this},bindPopup(node){popups.push(typeof node==='function'?node():node);return this},getLatLng(){return position},openPopup(){}})};
 w.document.addEventListener('stats-picker-selected',e=>selected.push(e.detail));
 const settle=()=>new Promise(r=>setImmediate(r));
 const open=()=>w.document.dispatchEvent(new w.CustomEvent('stats-picker-open',{detail:{repeaters:[{public_key:key,name:'My <b>repeater</b>'},{public_key:other,name:'No coordinates'}],selected:key}}));

@@ -8,7 +8,13 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.7.2**.
+Current application version: **2.7.3**.
+
+## Latest dashboard additions
+
+- Select the battery repeater on a map. Save its battery settings to change monitoring.
+- Add repeaters to companion contacts from map popups. Existing contacts and the selected repeater’s Battery history button are grayed out.
+- Settings → Share companion (QR) creates a local contact QR code, downloadable image and contact link for the MeshCore Android app. This shares the public contact, not a radio pairing or private key.
 
 ## What it does
 

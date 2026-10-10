@@ -1,13 +1,13 @@
 (() => {
-    let dialog,map,controller,repeaters=[],selected='',markers=new Map();
+    let dialog,map,controller,repeaters=[],selected='',selectionEvent='stats-picker-selected',markers=new Map();
     const el=(tag,value,cls)=>{const n=document.createElement(tag);if(value!=null)n.textContent=value;if(cls)n.className=cls;return n;};
     function choose(repeater){
         dialog.close();
-        document.dispatchEvent(new CustomEvent('stats-picker-selected',{detail:repeater.public_key}));
+        document.dispatchEvent(new CustomEvent(selectionEvent,{detail:repeater.public_key}));
     }
     function details(repeater){
         const box=el('div');box.append(el('strong',repeater.name),el('p',repeater.public_key,'map-key'));
-        const button=el('button','Use this repeater');button.type='button';button.onclick=()=>choose(repeater);box.append(button);return box;
+        const button=el('button','Use this repeater');button.type='button';button.onclick=()=>choose(repeater);box.append(button);window.meshcorestationRepeaterActions(box,repeater,()=>dialog.close());return box;
     }
     function filter(){
         const query=dialog.querySelector('.stats-map-search').value.trim().toLowerCase();
@@ -34,7 +34,8 @@
             dialog.addEventListener('close',()=>{controller?.abort();if(map){map.remove();map=null;}markers.clear();});
         }
         controller?.abort();if(map){map.remove();map=null;}markers.clear();
-        repeaters=detail.repeaters;selected=detail.selected;
+        repeaters=detail.repeaters;selected=detail.selected;selectionEvent=detail.selectionEvent||'stats-picker-selected';
+        dialog.querySelector('#stats-picker-title').textContent=detail.title||'Choose my repeater';
         dialog.querySelector('.stats-map-search').value='';dialog.querySelector('.stats-map-fallback').open=false;
         const message=dialog.querySelector('.stats-picker-message');message.textContent='Loading known repeater positions…';
         dialog.showModal();filter();dialog.querySelector('.stats-picker-close').focus();
@@ -53,7 +54,7 @@
                 const chosen=repeater.public_key===selected;
                 const badge=el('span','R','map-marker repeater'+(chosen?' stats-selected-marker':''));
                 const icon=L.divIcon({html:badge,className:'map-icon',iconSize:[28,28],iconAnchor:[14,14]});
-                const marker=L.marker(node.position,{icon,title:repeater.name+(chosen?' (selected)':''),zIndexOffset:chosen?100:0}).addTo(map).bindPopup(details(repeater));
+                const marker=L.marker(node.position,{icon,title:repeater.name+(chosen?' (selected)':''),zIndexOffset:chosen?100:0}).addTo(map).bindPopup(() => details({...node,...repeater}));
                 markers.set(repeater.public_key,marker);positions.push(node.position);
             }
             filter();message.textContent=`${markers.size} of ${repeaters.length} repeaters shown. Use the list for missing positions.`;

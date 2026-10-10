@@ -1,0 +1,3 @@
+#companion-share-dialog { width: min(480px, 92vw); }
+#companion-share-dialog img { display: block; width: 100%; max-width: 380px; height: auto; margin: 16px auto; background: white; }
+#companion-share-dialog textarea { width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }

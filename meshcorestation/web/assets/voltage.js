@@ -93,7 +93,7 @@
         dialog.innerHTML=`<div class="dialog-header"><h2 id="voltage-title">Repeater battery</h2><button type="button" id="voltage-close" aria-label="Close battery history">×</button></div>
         <p id="voltage-message" role="status" aria-live="polite"></p><p id="voltage-worker" class="muted"></p>
         <form id="voltage-form"><div class="voltage-fields">
-        <label class="voltage-wide">Repeater<select id="voltage-repeater"></select></label>
+        <label class="voltage-wide">Repeater<select id="voltage-repeater"></select></label><button type="button" id="voltage-map">Select repeater on map</button>
         <label><input type="checkbox" id="voltage-enabled"> Enable monitoring</label><label><input type="checkbox" id="voltage-reports"> Send two daily reports</label>
         <label>Read every (minutes)<input id="voltage-interval" type="number" min="5" max="1440" required></label>
         <label>Voltage LPP channel<input id="voltage-lpp" type="number" min="1" max="255" required></label>
@@ -110,6 +110,7 @@
         document.body.append(dialog);
         el('voltage-close').addEventListener('click',close);dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
         el('voltage-form').addEventListener('submit',save);
+        el('voltage-map').onclick=()=>pick(snapshot);
         el('voltage-form').addEventListener('input',e=>{if(e.target.id!=='voltage-repeater'){dirty=true;controls();}});
         el('voltage-repeater').addEventListener('change',()=>choose(el('voltage-repeater').value));
         el('voltage-search').addEventListener('input',filter);el('voltage-read').addEventListener('click',read);
@@ -121,6 +122,19 @@
         wantedKey=key;dirty=false;snapshot=null;dialog.showModal();load(true);
         clearInterval(timer);timer=setInterval(()=>{if(dialog.open)load(false,true);},15000);
     }
-    document.addEventListener('meshcore-voltage-open',e=>open(e.detail?.public_key||''));
+    function pick(data) {
+        if (!data) return;
+        document.dispatchEvent(new CustomEvent('stats-picker-open', {detail: {repeaters:data.repeaters,selected:dialog?.open ? el('voltage-repeater').value : data.config.public_key,selectionEvent:'battery-picker-selected',title:'Select battery repeater'}}));
+    }
+    document.addEventListener('battery-picker-selected',event=>{if(dialog?.open)choose(event.detail);else open(event.detail);});
+    document.addEventListener('click',async event=>{
+        const button=event.target.closest('#select-voltage-repeater');if(!button)return;
+        button.disabled=true;
+        try {
+            const response=await fetch('/api/bot/voltage?days=1',{cache:'no-store',headers:{'X-Meshcore-Control':'1'}});
+            const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||'Could not load repeaters.');pick(data);
+        } catch(error) {window.alert(error.message);} finally {button.disabled=false;}
+    });
+    document.addEventListener('meshcore-voltage-open',e=>{const key=e.detail?.public_key||'';if(dialog?.open&&key)choose(key);else open(key);});
     document.addEventListener('click',e=>{if(e.target.closest('#open-voltage'))open();});
 })();

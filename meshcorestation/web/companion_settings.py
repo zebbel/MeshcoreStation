@@ -75,6 +75,7 @@ def register_companion_routes(server):
     @server.route("/api/bot/scopes", methods=["GET", "POST"])
     @server.route("/api/bot/voltage", methods=["GET", "POST"])
     @server.route("/api/bot/runtime", methods=["GET", "POST"])
+    @server.route("/api/companion/share", methods=["GET"])
     @server.route("/api/companion", methods=["GET", "POST"])
     @server.route("/api/companion/network", methods=["GET", "POST"])
     @server.route("/api/companion/contacts", methods=["GET", "POST"])
@@ -187,6 +188,9 @@ def register_companion_routes(server):
             return reply({"ok": False, "error": "Another settings request is running. Wait, then reload."}, 409)
         try:
             result = bot_request(payload)
+            if request.path == "/api/companion/share" and result["ok"]:
+                from meshcorestation.web.companion_share import contact_card
+                result = contact_card(result["settings"])
             return reply(result, 200 if result["ok"] else 409)
         except FileNotFoundError:
             return reply({"ok": False, "error": "MeshcoreStation companion is offline. Check the selected serial port."}, 503)
