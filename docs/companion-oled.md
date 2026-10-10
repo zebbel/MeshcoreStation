@@ -68,8 +68,9 @@ The screen refreshes every ten seconds and has a 60-second lease. A recognized
 short press wakes the worker early. Shutdown releases the screen; if the process
 or connection disappears, firmware lease expiry restores its normal UI.
 Set `MESHCORESTATION_OLED=0` in `meshcorestation.env` and restart to disable OLED
-control. Errors stop the display worker until the next connection, without
-stopping the radio.
+control. Recoverable errors on a confirmed custom companion restart the display
+worker automatically, without stopping the radio. Unsupported protocols and
+invalid page errors stop it until the next connection.
 
 The existing serial connection and framing parser are reused. Display commands
 share the radio command lock. BUTTON_SUBSCRIBE (operation 10) follows BEGIN;
@@ -104,3 +105,36 @@ up to three attempts, with a one-second pause between attempts. Explicit
 unsupported replies are not retried, and drawing commands are never retried
 after an uncertain response. Settings reports the actual discovery or rendering
 failure instead of treating every failure as incompatible hardware.
+
+
+## Automatic OLED recovery
+
+A watchdog supervises the display worker after the custom MCOD protocol has
+been confirmed. Timeouts, connection errors and firmware BAD_STATE responses
+restart that worker after 10, 30, then at most 60 seconds between failed attempts.
+A successful SHOW resets the backoff. Unsupported firmware and invalid drawing
+commands do not cause endless retries.
+
+The last successful SHOW is recorded with a monotonic clock. Before a refresh,
+a gap longer than 30 seconds is logged and the screen is reacquired. Every fresh
+scene already sends BEGIN, restores button subscription, draws all elements and
+ends with SHOW. Recovery follows the same sequence instead of retrying uncertain
+TEXT/LINE appends. Each full refresh has a 30-second deadline, including waits
+for the shared serial lock. Cancelling a blocked OLED refresh does not cancel the
+radio command holding that lock.
+
+The firmware lease remains 60 seconds. A blocked event loop or unavailable USB
+connection can still let it expire; recovery runs once those resources become
+available again. Shutdown, disconnect and firmware maintenance cancel both the
+watchdog and its worker, release display control when possible, and detach the
+reader. No background OLED restart is allowed after shutdown.
+
+
+## Battery value fallback (2.7.2)
+
+Battery voltage and percentage use the last successful stored reading for the
+selected repeater and voltage channel. A failed latest read or an old reading
+adds an asterisk (*) to the displayed value; the editor explains its age and
+whether the latest request failed. With no successful reading, values remain
+unavailable. Reading age in minutes, status, and sample time are selectable
+fields. Graphs retain failed-reading gaps rather than filling them with old data.

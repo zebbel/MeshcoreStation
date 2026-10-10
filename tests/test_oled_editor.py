@@ -123,3 +123,26 @@ def test_incompatible_companion_blocks_all_editor_operations(db,monkeypatch):
     assert client.get('/api/oled/pages',headers=headers).status_code==409
     for action in ('preview','device_preview','save'):
         assert client.post('/api/oled/pages',headers=headers,json={'action':action,'pages':store.defaults()}).status_code==409
+
+
+def test_failed_battery_read_uses_marked_last_success(db):
+    conn,_=db
+    conn.execute("INSERT INTO voltage_samples (public_key,name,sampled_at,voltage,error,voltage_channel,interval_seconds) VALUES ('abc','Test',100060,NULL,'timeout',1,1800)")
+    drawing=render(conn,store.defaults()[0],100120)
+    assert '*3.60V' in [t[-1] for t in drawing['texts']]
+    assert any('Latest read failed' in w and '2 minutes' in w for w in drawing['warnings'])
+    conn.execute("UPDATE voltage_config SET voltage_channel=2")
+    drawing=render(conn,store.defaults()[0],100120)
+    assert '--V' in [t[-1] for t in drawing['texts']]
+    assert not any('*3.60V' == t[-1] for t in drawing['texts'])
+
+
+def test_old_battery_read_age_and_recovery(db):
+    conn,_=db
+    page={'elements':[store.element('value',0,0,128,8,source='battery.age_minutes',size=1,label='',units='m',precision=0)]}
+    assert render(conn,page,100120)['texts'][0][-1]=='2m'
+    assert render(conn,store.defaults()[0],104000)['warnings']
+    conn.execute("INSERT INTO voltage_samples (public_key,name,sampled_at,voltage,voltage_channel,interval_seconds) VALUES ('abc','Test',104001,3.8,1,1800)")
+    drawing=render(conn,store.defaults()[0],104002)
+    assert '3.80V' in [t[-1] for t in drawing['texts']]
+    assert drawing['warnings']==[]

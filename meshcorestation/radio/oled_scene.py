@@ -10,11 +10,28 @@ def render(db, page, now):
     # Imported lazily to keep the transport independent of storage/rendering.
     from meshcorestation.radio.oled import ascii_text
     cfg = config(db)
-    sample = latest(db, cfg)
+    newest = latest(db, cfg)
+    sample = db.execute('''SELECT sampled_at,voltage FROM voltage_samples
+        WHERE public_key=? AND voltage_channel=? AND sampled_at<=?
+        AND voltage BETWEEN -1e308 AND 1e308
+        ORDER BY sampled_at DESC,id DESC LIMIT 1''',
+        (cfg['public_key'],cfg['voltage_channel'],now)).fetchone()
+    age = max(0,now-sample['sampled_at']) if sample else None
+    stale = bool(sample and ((newest and newest['voltage'] is None) or
+                 age > max(120,cfg['interval_minutes']*120)))
+    warnings = []
+    if stale:
+        warnings.append(f'Battery values marked * use the last successful reading ({int(age//60)} minutes old).'
+                        + (' Latest read failed.' if newest and newest['voltage'] is None else ''))
+    elif sample is None:
+        warnings.append('No successful battery reading for the selected repeater and voltage channel.')
     node = db.execute('SELECT name FROM repeaters WHERE lower(public_key)=?', (cfg['public_key'],)).fetchone()
     voltage = sample['voltage'] if sample else None
     values = {'battery.name': node['name'] if node else 'Select battery node',
               'battery.voltage': voltage, 'battery.percent': percent(voltage) if voltage is not None else None,
+              'battery.age_minutes': age/60 if age is not None else None,
+              'battery.status': 'No reading' if sample is None else 'Old reading *' if stale else 'Current',
+              'battery.sample_time': datetime.fromtimestamp(sample['sampled_at'], TIMEZONE).strftime('%H:%M') if sample else None,
               'repeaters.count': db.execute('SELECT count(*) FROM repeaters').fetchone()[0],
               'commands.count': db.execute('SELECT count(*) FROM logger').fetchone()[0]}
     for n,row in enumerate(db.execute('SELECT recv_time,sender,message,rssi,snr,path_len FROM logger ORDER BY recv_time DESC,id DESC LIMIT 3'),1):
@@ -32,6 +49,8 @@ def render(db, page, now):
             else:
                 v = values.get(e['source'])
                 v = '--' if v is None else (f"{v:.{e['precision']}f}" if isinstance(v,(int,float)) else str(v))
+                if stale and e['source'] in ('battery.voltage','battery.percent'):
+                    v = '*' + v
                 value = e['label'] + v + e['units']
             texts.append((x,y,e['size'],ascii_text(value,min(21,w//(6*e['size'])))))
             continue
@@ -83,4 +102,4 @@ def render(db, page, now):
         for px,py,broken in buckets.values():
             lines.append((px,py,px,py) if previous is None or broken else (*previous,px,py))
             previous = px,py
-    return {'texts':texts,'lines':lines}
+    return {'texts':texts,'lines':lines,'warnings':warnings}

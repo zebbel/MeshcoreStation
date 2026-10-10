@@ -24,7 +24,7 @@
             const result=await request({action:device?'device_preview':'preview',pages:clone(draft),page:current});
             if(id!==sequence)return;
             draw(result.drawing);
-            message(device?'Companion preview requested for 30 seconds; appears within 10 seconds.':'Live database preview. Text is shortened to its box; firmware fonts may look slightly different.');
+            message((device?'Companion preview requested for 30 seconds; appears within 10 seconds.':'Live database preview. Text is shortened to its box; firmware fonts may look slightly different.') + ' ' + (result.drawing.warnings||[]).join(' '));
         } catch(e){if(id===sequence){$('oled-pixels').replaceChildren();message(e.message);}}
     }
     function draw(drawing){

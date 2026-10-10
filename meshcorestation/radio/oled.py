@@ -12,6 +12,8 @@ MAGIC = b'\xf0MCOD\x01'
 OPERATIONS = ('INFO', 'BEGIN', 'TEXT', 'CLEAR', 'SHOW', 'RELEASE', 'KEEPALIVE', 'CAPABILITIES', 'LINE', 'POLYLINE', 'BUTTON_SUBSCRIBE')
 DISCOVERY_TIMEOUT = 5
 COMMAND_TIMEOUT = 2
+REFRESH_DEADLINE = 30
+RECOVERY_DELAYS = (10, 30, 60)
 
 
 class DisplayError(RuntimeError):
@@ -157,6 +159,9 @@ class OledDisplay:
         self.companion = companion
         self.transport = None
         self.task = None
+        self.worker_task = None
+        self.protocol_confirmed = False
+        self.last_show = None
         self.acquired = False
         self.page = 0
         self.page_count = 2
@@ -179,7 +184,7 @@ class OledDisplay:
             return
         if os.getenv('MESHCORESTATION_OLED', '1').lower() not in ('0', 'false', 'off'):
             self.transport = DisplayTransport(self.companion, self.on_button)
-            self.task = asyncio.create_task(self.run(), name='companion-oled')
+            self.task = asyncio.create_task(self.supervise(), name='companion-oled-watchdog')
         else:
             self.reason = 'OLED disabled by MESHCORESTATION_OLED.'
 
@@ -207,6 +212,7 @@ class OledDisplay:
                     elif flags & 2 and max_points >= 2:
                         await send(9, bytes([2,*line]))
             await send(4)
+            self.last_show = time.monotonic()
             return
         page = self.page
         texts, runs = (command_scene(self.companion.database.db) if page else
@@ -254,6 +260,7 @@ class OledDisplay:
         elif not page:
             await send(2, b'\x00\x20\x01Graph FW required')
         await send(4)
+        self.last_show = time.monotonic()
 
     async def probe(self, operation):
         # Read-only discovery may be retried. Never retry append/drawing or
@@ -268,12 +275,44 @@ class OledDisplay:
                 self.companion.logger.warning('MCOD %s discovery timed out; retrying (%s/3).', OPERATIONS[operation], attempt + 1)
                 await asyncio.sleep(1)
 
+    async def supervise(self):
+        failures = 0
+        try:
+            while True:
+                previous_show = self.last_show
+                self.worker_task = asyncio.create_task(self.run(), name='companion-oled-worker')
+                retry = await self.worker_task
+                if not retry:
+                    return
+                if self.last_show != previous_show:
+                    failures = 0
+                delay = RECOVERY_DELAYS[min(failures, len(RECOVERY_DELAYS)-1)]
+                failures += 1
+                self.reason += f' Retrying in {delay}s.'
+                self.companion.logger.warning('OLED watchdog restarting worker in %ss.', delay)
+                await asyncio.sleep(delay)
+        finally:
+            # Shutdown/firmware updates must not leave a worker restarting USB.
+            if self.worker_task and not self.worker_task.done():
+                self.worker_task.cancel()
+                await asyncio.gather(self.worker_task, return_exceptions=True)
+
+    async def refresh(self, graphics):
+        if self.last_show is not None and time.monotonic() - self.last_show > REFRESH_DEADLINE:
+            self.companion.logger.warning('OLED refresh overdue by %ss; reacquiring host display with BEGIN.',
+                                          int(time.monotonic() - self.last_show))
+        # draw always begins a fresh scene with BEGIN and restores subscription.
+        # Bound the whole frame, including time waiting for the shared serial lock.
+        # An uncertain append is abandoned; recovery rebuilds from BEGIN.
+        await asyncio.wait_for(self.draw(graphics), REFRESH_DEADLINE)
+
     async def run(self):
         stage = 'INFO'
         try:
             info = await self.probe(0)
             if len(info) != 5 or info[:4] != bytes([128, 64, 16, 21]):
                 raise RuntimeError('Unsupported OLED dimensions or text limits')
+            self.protocol_confirmed = True
             graphics = None
             try:
                 stage = 'CAPABILITIES'
@@ -292,7 +331,7 @@ class OledDisplay:
             while True:
                 self.redraw.clear()
                 stage = 'screen rendering'
-                await self.draw(graphics)
+                await self.refresh(graphics)
                 try:
                     await asyncio.wait_for(self.redraw.wait(), 10)
                 except asyncio.TimeoutError:
@@ -302,8 +341,11 @@ class OledDisplay:
         except Exception as exc:
             self.reason = f'OLED {stage} failed: {str(exc) or type(exc).__name__}'
             self.companion.logger.warning('Companion OLED unavailable; radio continues normally: %s', self.reason)
-            # No loop of unsupported commands on standard firmware. On errors,
-            # the display lease expires; next reconnect probes again.
+            # Only a previously confirmed custom device gets automatic recovery.
+            # Protocol rejection or invalid scenes are not transient failures.
+            return self.protocol_confirmed and (
+                isinstance(exc, (TimeoutError, OSError)) or
+                isinstance(exc, DisplayError) and exc.status == 2)
         finally:
             self.compatible = False
             self.buttons = False

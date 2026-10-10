@@ -8,6 +8,9 @@ VALUES = {
     'battery.name': 'Selected battery repeater', 'battery.voltage': 'Battery voltage',
     'battery.percent': 'Battery percent', 'repeaters.count': 'Known repeaters',
     'commands.count': 'Received command count',
+    'battery.age_minutes': 'Battery reading age (minutes)',
+    'battery.status': 'Battery reading status',
+    'battery.sample_time': 'Battery reading time',
 }
 for n in range(1, 4):
     for field in ('sender', 'message', 'time', 'rssi', 'snr', 'path_len'):

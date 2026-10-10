@@ -253,3 +253,90 @@ def test_timeout_identifies_operation_and_clears_pending(monkeypatch):
             await transport.command(0)
         assert transport.pending is None
     asyncio.run(scenario())
+
+
+def test_watchdog_restarts_after_timeout_and_reacquires(db, monkeypatch):
+    import meshcorestation.radio.oled as oled
+    async def scenario():
+        monkeypatch.setattr(oled,'RECOVERY_DELAYS',(0,0,0))
+        display=OledDisplay(NS(logger=Mock(),database=NS(db=db)))
+        shown=asyncio.Event();calls=[];failed=False
+        async def command(op,args=b''):
+            nonlocal failed
+            calls.append(op)
+            if op==0:return bytes([128,64,16,21,0])
+            if op==7:return bytes([1,7,0,1,83])
+            if op==2 and not failed:
+                failed=True
+                raise TimeoutError('lost TEXT reply')
+            if op==4:shown.set()
+            return b''
+        display.transport=NS(command=command,detach=Mock())
+        display.task=asyncio.create_task(display.supervise())
+        await asyncio.wait_for(shown.wait(),1)
+        assert calls.count(0)==2 and calls.count(1)==2 and calls.count(10)==2
+        assert calls.count(4)==1 and display.last_show is not None
+        assert display.compatible
+        await display.close()
+        assert display.task.done() and display.worker_task.done()
+        assert calls[-1]==5
+        display.transport.detach.assert_called_once()
+    asyncio.run(scenario())
+
+
+def test_overdue_refresh_sends_begin_then_subscribe_and_show(db,monkeypatch):
+    import meshcorestation.radio.oled as oled
+    async def scenario():
+        monkeypatch.setattr(oled.time,'monotonic',lambda:100)
+        display=OledDisplay(NS(logger=Mock(),database=NS(db=db)))
+        display.last_show=60;display.buttons=True
+        display.transport=NS(command=AsyncMock())
+        await display.refresh((7,256,83))
+        ops=[c.args[0] for c in display.transport.command.await_args_list]
+        assert ops[:2]==[1,10] and ops[-1]==4
+        assert display.last_show==100
+        display.companion.logger.warning.assert_called_once()
+    asyncio.run(scenario())
+
+
+def test_refresh_deadline_cancels_blocked_draw_without_marking_success(monkeypatch):
+    import meshcorestation.radio.oled as oled
+    async def scenario():
+        monkeypatch.setattr(oled,'REFRESH_DEADLINE',.001)
+        display=OledDisplay(NS(logger=Mock()))
+        cancelled=asyncio.Event()
+        async def blocked(graphics):
+            try:await asyncio.Event().wait()
+            finally:cancelled.set()
+        display.draw=blocked
+        with pytest.raises(TimeoutError):await display.refresh(None)
+        assert cancelled.is_set() and display.last_show is None
+    asyncio.run(scenario())
+
+
+def test_watchdog_backoff_is_bounded_and_stops_on_permanent_failure(monkeypatch):
+    import meshcorestation.radio.oled as oled
+    async def scenario():
+        display=OledDisplay(NS(logger=Mock()))
+        display.run=AsyncMock(side_effect=[True,True,True,True,False])
+        pauses=AsyncMock();monkeypatch.setattr(oled.asyncio,'sleep',pauses)
+        await display.supervise()
+        assert [c.args[0] for c in pauses.await_args_list]==[10,30,60,60]
+        assert display.run.await_count==5
+    asyncio.run(scenario())
+
+
+def test_close_cancels_watchdog_during_backoff(monkeypatch):
+    import meshcorestation.radio.oled as oled
+    async def scenario():
+        display=OledDisplay(NS(logger=Mock()))
+        display.run=AsyncMock(return_value=True)
+        sleeping=asyncio.Event()
+        async def pause(delay):
+            sleeping.set();await asyncio.Event().wait()
+        monkeypatch.setattr(oled.asyncio,'sleep',pause)
+        display.task=asyncio.create_task(display.supervise())
+        await asyncio.wait_for(sleeping.wait(),1)
+        await display.close()
+        assert display.task.done() and display.run.await_count==1
+    asyncio.run(scenario())
