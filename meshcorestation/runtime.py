@@ -89,6 +89,7 @@ class Runtime:
             self.device_info = {key: event.payload.get(key) for key in ('ver', 'model', 'fw_build')}
         except Exception:
             self.device_info = {}
+        self.companion.device_info = self.device_info
         await self.companion.subscribe()
         self.control = CompanionControl(self.companion)
         self.voltage = VoltageMonitor(self.companion)

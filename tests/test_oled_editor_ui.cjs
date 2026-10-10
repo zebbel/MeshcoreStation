@@ -7,13 +7,13 @@ let stored=[{name:'Battery',enabled:true,elements:[{kind:'text',x:0,y:0,w:96,h:8
 w.fetch=async(url,opts)=>{
  const body=opts.body?JSON.parse(opts.body):null;calls.push(body);
  if(body?.action==='save')stored=body.pages;
- return {ok:true,json:async()=>({ok:true,pages:structuredClone(stored),revision:'rev',values:{'battery.voltage':'Battery voltage'},series:{'battery.voltage':'Battery voltage'},drawing:{texts:[[0,0,1,'<test>']],lines:[]}})};
+ return {ok:true,json:async()=>({ok:true,compatible:true,pages:structuredClone(stored),revision:'rev',values:{'battery.voltage':'Battery voltage'},series:{'battery.voltage':'Battery voltage'},drawing:{texts:[[0,0,1,'<test>']],lines:[]}})};
 };
 const tick=()=>new Promise(r=>setImmediate(r));
 const button=t=>[...d.querySelectorAll('button')].find(b=>b.textContent===t);
 (async()=>{
  w.eval(fs.readFileSync('meshcorestation/web/assets/oled_editor.js','utf8'));
- button('Open screen editor').click();await tick();await tick();
+ await tick();button('Open screen editor').click();await tick();await tick();
  assert(d.getElementById('oled-editor').open);
  assert(d.getElementById('oled-pixels').textContent.includes('<test>'));
  assert.equal(d.querySelectorAll('#oled-pixels test').length,0);

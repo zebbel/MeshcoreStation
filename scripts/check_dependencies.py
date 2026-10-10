@@ -140,4 +140,22 @@ def check(install_build_tools=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--install-build-tools', action='store_true')
-    check(parser.parse_args().install_build_tools)
+    parser.add_argument('--check-only', action='store_true', help='Validate without installing or rebuilding anything.')
+    options = parser.parse_args()
+    if options.check_only:
+        from pip._vendor.packaging.requirements import Requirement
+        requirements = Path(__file__).resolve().parents[1] / 'requirements.txt'
+        for line in requirements.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            requirement = Requirement(line)
+            if requirement.marker and not requirement.marker.evaluate():
+                continue
+            if distribution(requirement.name).version not in requirement.specifier:
+                raise SystemExit(f'Installed {requirement.name} does not match {requirement.specifier}.')
+        result = dependency_check()
+        if result.returncode:
+            raise SystemExit(result.stdout or 'Dependency validation failed.')
+    else:
+        check(options.install_build_tools)

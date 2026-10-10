@@ -57,6 +57,7 @@ def test_worker_success_and_rollback(area, monkeypatch, fail_at):
     monkeypatch.setattr(config, 'PORT', 8080)
     monkeypatch.setattr(u, 'validate_checkout', lambda: None)
     monkeypatch.setattr(u, 'local_revision', lambda: 'a'*40)
+    monkeypatch.setattr(u, 'prepare_dependencies', lambda *a: area/'wheels')
     services, resets = [], []
     monkeypatch.setattr(u, 'service', services.append)
     def run(*args, **kwargs):
@@ -153,3 +154,91 @@ def test_health_requires_consecutive_correct_replies(monkeypatch):
     monkeypatch.setattr(u.time,'sleep',lambda seconds:None)
     u.healthy('new',80)
     assert len(seen)==5
+
+
+def test_dependency_preparation_fast_path_and_binary_download(area, monkeypatch):
+    calls=[]
+    def run(*args,**kwargs):
+        calls.append(args)
+        if args[:2]==('git','show'):return 'dash==3.4.0'
+        return ''
+    monkeypatch.setattr(u,'run',run)
+    assert u.prepare_dependencies('a','b') is None
+    assert any('--check-only' in c for c in calls)
+    assert not any('download' in c or 'install' in c for c in calls)
+    calls.clear()
+    def changed(*args,**kwargs):
+        calls.append(args)
+        if args[:2]==('git','show'):return 'dash=='+('3.4.0' if args[2].startswith('a:') else '3.5.0')
+        return ''
+    monkeypatch.setattr(u,'run',changed)
+    wheels=u.prepare_dependencies('a','b')
+    assert (wheels/'requirements.txt').read_text().strip()=='dash==3.5.0'
+    assert any('download' in c and '--only-binary=:all:' in c for c in calls)
+    assert not any('install' in c for c in calls)
+
+
+def test_missing_wheels_does_not_stop_station(area,monkeypatch):
+    monkeypatch.setattr(u,'validate_checkout',lambda:None)
+    monkeypatch.setattr(u,'local_revision',lambda:'a'*40)
+    services=[]
+    monkeypatch.setattr(u,'service',services.append)
+    def run(*args,**kwargs):
+        if args[:2]==('git','show'):return args[2]
+        if 'download' in args:raise RuntimeError('No matching distribution')
+        return ''
+    monkeypatch.setattr(u,'run',run)
+    u.write('request.json',{'current':'a'*40,'target':'b'*40})
+    u.worker()
+    assert not services
+    assert 'not stopped' in u.read('status.json')['message']
+
+
+@pytest.mark.parametrize('failure',[False,True])
+def test_fast_update_never_copies_or_restores_venv(area,monkeypatch,failure):
+    from meshcorestation import config
+    data=area/'data';data.mkdir();(data/'db').write_text('old')
+    venv=area/'.venv';venv.mkdir();(venv/'pkg').write_text('untouched')
+    (area/'meshcorestation.env').write_text('settings')
+    monkeypatch.setattr(config,'DATA_DIR',data);monkeypatch.setattr(config,'PORT',80)
+    monkeypatch.setattr(u,'validate_checkout',lambda:None)
+    monkeypatch.setattr(u,'local_revision',lambda:'a'*40)
+    monkeypatch.setattr(u,'prepare_dependencies',lambda *a:None)
+    monkeypatch.setattr(u,'service',lambda action:None)
+    calls=[]
+    monkeypatch.setattr(u,'run',lambda *a,**k:calls.append(a) or '')
+    def health(target,port):
+        if target=='b'*40:
+            (data/'db').write_text('new')
+            if failure:raise RuntimeError('unhealthy')
+    monkeypatch.setattr(u,'healthy',health)
+    u.write('request.json',{'current':'a'*40,'target':'b'*40})
+    u.worker()
+    status=u.read('status.json')
+    assert status['phase']==('failed' if failure else 'complete')
+    assert not (Path(status['backup'])/'venv').exists()
+    assert (venv/'pkg').read_text()=='untouched'
+    assert (data/'db').read_text()==('old' if failure else 'new')
+    assert not any('pip' in c for c in calls)
+
+
+def test_streaming_output_and_timeout(area,monkeypatch):
+    import sys
+    chunks=[]
+    monkeypatch.setattr(u,'_progress',chunks.append)
+    assert u.run(sys.executable,'-c',"print('progress',flush=True)")=='progress'
+    assert 'progress' in ''.join(chunks)
+    with pytest.raises(subprocess.TimeoutExpired):
+        u.run(sys.executable,'-c','import time; time.sleep(10)',timeout=.05)
+
+
+def test_interrupted_fast_update_keeps_venv(area,monkeypatch):
+    data=area/'data';data.mkdir();(data/'db').write_text('new')
+    venv=area/'.venv';venv.mkdir();(venv/'pkg').write_text('keep')
+    backup=area/'.updates/backup';(backup/'data').mkdir(parents=True)
+    (backup/'data/db').write_text('old');(backup/'meshcorestation.env').write_text('settings')
+    monkeypatch.setattr(u,'run',lambda *a,**k:'')
+    monkeypatch.setattr(u,'service',lambda *a:None);monkeypatch.setattr(u,'healthy',lambda *a:None)
+    u.recover(dict(old='a'*40,target='b'*40,backup=str(backup),data=str(data),port=80,backup_complete=True,backup_venv=False))
+    assert (venv/'pkg').read_text()=='keep'
+    assert (data/'db').read_text()=='old'

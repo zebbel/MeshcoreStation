@@ -27,6 +27,8 @@
         const state = result.status || {};
         busy = active.has(state.phase);
         message(state.message || (result.ready ? 'Check GitHub for a newer version.' : 'One-time setup needed: run meshcorestation update in the Pi terminal.'));
+        const progress = panel.querySelector('.update-progress');
+        if (progress) progress.textContent = (state.elapsed_seconds !== undefined ? 'Step elapsed: ' + state.elapsed_seconds + 's\n' : '') + (state.log || '');
         panel.querySelector('.update-reload').hidden = state.phase !== 'complete';
         buttons();
         if (!reloading && state.phase === 'complete' && state.target === result.revision && pageRevision && pageRevision !== 'unknown' && pageRevision !== result.revision) {
@@ -70,7 +72,7 @@
         const dialog = document.getElementById('companion-dialog');
         if (!dialog || panel) return;
         panel = document.createElement('section'); panel.id = 'update-panel'; panel.className = 'companion-section';
-        panel.innerHTML = '<h3>Updates</h3><p class="update-version muted"></p><p class="update-latest muted"></p><p>Updates come from zebbel/MeshcoreStation on GitHub. Backups are kept on this Pi.</p><div class="companion-toolbar"><button type="button" class="update-check">Check for updates</button><button type="button" class="update-install" disabled>Install update</button><a class="update-changes" target="_blank" rel="noopener noreferrer" hidden>View changes on GitHub ↗</a><button type="button" class="update-reload" hidden>Reload dashboard</button></div><p class="update-message" role="status" aria-live="polite"></p>';
+        panel.innerHTML = '<h3>Updates</h3><p class="update-version muted"></p><p class="update-latest muted"></p><p>Updates come from zebbel/MeshcoreStation on GitHub. Backups are kept on this Pi.</p><div class="companion-toolbar"><button type="button" class="update-check">Check for updates</button><button type="button" class="update-install" disabled>Install update</button><a class="update-changes" target="_blank" rel="noopener noreferrer" hidden>View changes on GitHub ↗</a><button type="button" class="update-reload" hidden>Reload dashboard</button></div><p class="update-message" role="status" aria-live="polite"></p><details><summary>Update progress</summary><pre class="update-progress" style="white-space:pre-wrap;max-height:180px;overflow:auto"></pre></details>';
         dialog.querySelector('.companion-grid').append(panel);
         panel.querySelector('.update-check').addEventListener('click', check);
         panel.querySelector('.update-install').addEventListener('click', install);

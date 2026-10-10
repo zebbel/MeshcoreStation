@@ -153,6 +153,7 @@ class OledDisplay:
         self.page = 0
         self.page_count = 2
         self.buttons = False
+        self.compatible = False
         self.redraw = asyncio.Event()
 
     def on_button(self, gesture):
@@ -161,6 +162,10 @@ class OledDisplay:
             self.redraw.set()
 
     def start(self):
+        # Board identity comes from the normal device query, before any private
+        # protocol traffic. TFT and unknown models must not be probed.
+        if getattr(self.companion, 'device_info', {}).get('model') not in ('Heltec V4 OLED', 'Heltec V4.3 OLED'):
+            return
         if os.getenv('MESHCORESTATION_OLED', '1').lower() not in ('0', 'false', 'off'):
             self.transport = DisplayTransport(self.companion, self.on_button)
             self.task = asyncio.create_task(self.run(), name='companion-oled')
@@ -251,6 +256,7 @@ class OledDisplay:
             except DisplayError as exc:
                 if exc.status != 3:
                     raise
+            self.compatible = True  # Matching private MCOD INFO confirms this extension.
             self.buttons = bool(graphics and graphics[0] & 4)
             self.companion.logger.info('Companion OLED detected; battery screen%s.',
                                        ' and short-press command page' if self.buttons else '')
@@ -268,6 +274,8 @@ class OledDisplay:
             # No loop of unsupported commands on standard firmware. On errors,
             # the display lease expires; next reconnect probes again.
         finally:
+            self.compatible = False
+            self.buttons = False
             if self.acquired:
                 try:
                     await asyncio.wait_for(self.transport.command(5), 3)

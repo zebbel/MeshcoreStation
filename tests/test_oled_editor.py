@@ -77,11 +77,14 @@ def test_api_guards_preview_save_and_expiry(db,monkeypatch):
     headers={'X-Meshcore-Control':'1'}
     assert client.get('/api/oled/pages').status_code==403
     assert client.get('/api/oled/pages',headers={**headers,'Origin':'https://evil.test'}).status_code==403
+    monkeypatch.setattr(bridge,'runtime',NS(
+        companion=NS(mc=NS(connection_manager=NS(is_connected=True))),
+        oled=NS(task=NS(done=lambda:False),acquired=True,compatible=True)))
     original=client.get('/api/oled/pages',headers=headers).json
     pages=original['pages'];pages[0]['name']='Draft'
     assert client.post('/api/oled/pages',headers=headers,json={'action':'preview','pages':pages}).json['drawing']
     assert store.snapshot(conn)['pages'][0]['name']=='Battery'
-    monkeypatch.setattr(bridge,'runtime',NS(oled=NS(task=NS(done=lambda:False),acquired=True)))
+    monkeypatch.setattr(bridge,'runtime',NS(companion=NS(mc=NS(connection_manager=NS(is_connected=True))),oled=NS(task=NS(done=lambda:False),acquired=True,compatible=True)))
     assert client.post('/api/oled/pages',headers=headers,json={'action':'device_preview','pages':pages}).status_code==200
     assert store.active(conn,0)[0]['name']=='Draft'
     assert store.active(conn,1e12)[0]['name']=='Battery'
@@ -106,3 +109,17 @@ def test_runtime_uses_saved_pages_font_size_and_cycles(db):
         display.on_button(1);display.on_button(1)
         assert display.page==0
     asyncio.run(scenario())
+
+
+def test_incompatible_companion_blocks_all_editor_operations(db,monkeypatch):
+    from meshcorestation.web import oled_api
+    from meshcorestation.bridge import bridge
+    _,path=db
+    monkeypatch.setattr(oled_api,'DB_PATH',path)
+    monkeypatch.setattr(bridge,'runtime',None)
+    app=Flask(__name__);oled_api.register_oled_routes(app);client=app.test_client()
+    headers={'X-Meshcore-Control':'1'}
+    assert client.get('/api/oled/pages?status=1',headers=headers).json['compatible'] is False
+    assert client.get('/api/oled/pages',headers=headers).status_code==409
+    for action in ('preview','device_preview','save'):
+        assert client.post('/api/oled/pages',headers=headers,json={'action':action,'pages':store.defaults()}).status_code==409

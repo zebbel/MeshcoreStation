@@ -196,3 +196,31 @@ def test_fixed_voltage_bounds(db):
         add(db, 100000+i*1800, v)
     _,runs = scene(db,107200)
     assert [y for run in runs for _,y in run] == [51,51,37,24,24]
+
+
+@pytest.mark.parametrize('model',['Heltec V3','Heltec V4 TFT','Heltec V4.3 TFT','Other',''])
+def test_non_oled_v4_never_attaches_or_sends(model):
+    display=OledDisplay(NS(device_info={'model':model}))
+    display.start()
+    assert display.transport is None and display.task is None and not display.compatible
+
+
+def test_supported_model_probes_stock_once_and_releases_reader(monkeypatch):
+    async def scenario():
+        original=NS(handle_rx=AsyncMock())
+        manager=NS(set_reader=Mock())
+        companion=NS(device_info={'model':'Heltec V4 OLED'},logger=Mock(),
+                     mc=NS(_reader=original,connection_manager=manager),serial_command_lock=asyncio.Lock())
+        display=OledDisplay(companion)
+        calls=[]
+        async def send(payload):
+            calls.append(payload)
+            await display.transport.handle_rx(b'\x01\x01')
+        manager.send=send
+        display.start()
+        await display.task
+        assert len(calls)==1 and calls[0][7]==0
+        assert not display.compatible and not display.acquired
+        await display.close()
+        manager.set_reader.assert_called_with(original)
+    asyncio.run(scenario())

@@ -81,3 +81,17 @@ Automated tests cover document validation, SQL source selection, rendering
 bounds, graph budgets, save conflicts, preview expiry, route protection,
 button events, page cycling and browser drag/resize editing. Physical OLED and
 radio coexistence require on-device testing.
+
+
+## Hardware compatibility (2.6.1)
+
+Only models identifying as **Heltec V4 OLED** or **Heltec V4.3 OLED** are
+probed for the private MCOD extension. Other boards, TFT variants and unknown
+models receive no OLED commands. Matching MCOD INFO dimensions and limits
+confirm the custom extension before taking display control. Stock firmware on
+an eligible board receives only the discovery probe and remains in normal UI.
+
+The editor, browser preview, device preview and save API are disabled unless
+that compatible companion is connected and its OLED worker is active.
+Stored pages are retained when switching companions. The dashboard checks
+availability every five seconds; server-side checks apply to every request.

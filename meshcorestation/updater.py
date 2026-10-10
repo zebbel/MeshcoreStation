@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import re
 import shutil
+import selectors
+import signal
 import subprocess
 import time
 import urllib.request
@@ -17,13 +19,47 @@ SERVICE = 'meshcorestation.service'
 ACTIVE = {'queued', 'preparing', 'backing_up', 'installing', 'verifying', 'rolling_back'}
 
 
+_progress = None
+
+
 def run(*args, timeout=120):
-    result = subprocess.run(args, cwd=ROOT, text=True, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, timeout=timeout,
-                            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'})
-    if result.returncode:
-        raise RuntimeError(f'{args[0]} failed:\n{result.stdout[-2000:]}')
-    return result.stdout.strip()
+    # Stream worker output while retaining command results for Git/API callers.
+    process = subprocess.Popen(args, cwd=ROOT, stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT, start_new_session=True,
+        env={**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'PYTHONUNBUFFERED': '1',
+             'PIP_DISABLE_PIP_VERSION_CHECK': '1'})
+    output = bytearray()
+    deadline = time.monotonic() + timeout
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while selector.get_map():
+                if time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired(args, timeout)
+                for key, _ in selector.select(timeout=min(1,max(0,deadline-time.monotonic()))):
+                    chunk = os.read(key.fileobj.fileno(), 8192)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                    else:
+                        output.extend(chunk)
+                        if _progress:
+                            text = chunk.decode('utf-8', 'replace')
+                            print(text, end='', flush=True)
+                            _progress(text)
+                if _progress:
+                    _progress('')
+        process.wait(timeout=max(.01,deadline-time.monotonic()))
+    except BaseException:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        raise
+    finally:
+        process.stdout.close()
+    text = output.decode('utf-8', 'replace')
+    if process.returncode:
+        raise RuntimeError(f'{args[0]} failed:\n{text[-2000:]}')
+    return text.strip()
 
 
 def write(name, value):
@@ -134,6 +170,31 @@ def check_dependencies(python):
     run(python, '-m', 'scripts.check_dependencies', timeout=7200)
 
 
+def prepare_dependencies(old, target):
+    """Return None for a validated unchanged environment, or a staged wheelhouse."""
+    python = str(ROOT / '.venv/bin/python3')
+    before = run('git', 'show', f'{old}:requirements.txt')
+    after = run('git', 'show', f'{target}:requirements.txt')
+    if before == after:
+        try:
+            run(python, '-m', 'scripts.check_dependencies', '--check-only', timeout=600)
+            return None
+        except (RuntimeError, subprocess.TimeoutExpired):
+            pass  # Repair only from prebuilt wheels, with the station still running.
+    wheelhouse = STATE / ('wheels-' + target)
+    wheelhouse.mkdir(parents=True, exist_ok=True)
+    requirements = wheelhouse / 'requirements.txt'
+    requirements.write_text(after + '\n')
+    try:
+        run(python, '-m', 'pip', 'download', '--only-binary=:all:',
+            '--dest', str(wheelhouse), '-r', str(requirements), timeout=1800)
+    except (RuntimeError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError('Compatible prebuilt dependencies could not be downloaded. '
+                           'The station was not stopped. Retry the download or prepare matching wheels; '
+                           'web updates never compile on the Pi. ' + str(exc)) from exc
+    return wheelhouse
+
+
 def recover(transaction):
     """Resume rollback after a killed worker or reboot, using the stopped-data backup."""
     backup = Path(transaction['backup'])
@@ -145,9 +206,10 @@ def recover(transaction):
         service('stop')
         if transaction['backup_complete']:
             run('git', 'reset', '--hard', transaction['old'])
-            if (ROOT / '.venv').exists():
-                shutil.rmtree(ROOT / '.venv')
-            shutil.copytree(backup / 'venv', ROOT / '.venv', symlinks=True)
+            if transaction.get('backup_venv', True):
+                if (ROOT / '.venv').exists():
+                    shutil.rmtree(ROOT / '.venv')
+                shutil.copytree(backup / 'venv', ROOT / '.venv', symlinks=True)
             if data.exists():
                 shutil.rmtree(data)
             if (backup / 'data').exists():
@@ -163,6 +225,7 @@ def recover(transaction):
 
 
 def worker():
+    global _progress
     # Run by a separate systemd service, so stopping the dashboard cannot kill us.
     with lock():
         previous = read('transaction.json')
@@ -176,9 +239,24 @@ def worker():
         backup = None
         stopped = False
         backup_complete = False
+        phase_started = time.monotonic()
+        last_progress = 0
+        progress_state = {}
+        def progress(chunk):
+            nonlocal last_progress
+            progress_state['log'] = (progress_state.get('log', '') + chunk)[-4000:]
+            if time.monotonic() - last_progress >= 1:
+                progress_state['elapsed_seconds'] = int(time.monotonic() - phase_started)
+                write('status.json', progress_state)
+                last_progress = time.monotonic()
+        _progress = progress
         def status(phase, message):
-            write('status.json', {'phase': phase, 'message': message,
-                                 'target': request['target'], 'backup': str(backup) if backup else None})
+            nonlocal phase_started
+            phase_started = time.monotonic()
+            progress_state.update(phase=phase, message=message, elapsed_seconds=0, started_at=time.time(),
+                                  target=request['target'], backup=str(backup) if backup else None)
+            write('status.json', progress_state)
+            print(message, flush=True)
         try:
             status('preparing', 'Checking source and available disk space…')
             validate_checkout()
@@ -186,25 +264,29 @@ def worker():
             if old != request['current'] or not re.fullmatch('[0-9a-f]{40}', target):
                 raise RuntimeError('Source changed since the update was checked.')
             run('git', 'merge-base', '--is-ancestor', old, target)
+            status('preparing', 'Validating dependencies and preparing compatible wheels while the station runs…')
+            wheelhouse = prepare_dependencies(old, target)
+            backup_venv = wheelhouse is not None
             from meshcorestation.config import DATA_DIR, PORT
             data = DATA_DIR
             if data == ROOT or ROOT.is_relative_to(data) or data.is_relative_to(STATE):
                 raise RuntimeError('Unsupported data directory for automatic backup.')
             if (ROOT / '.venv').is_symlink() or data.is_symlink():
                 raise RuntimeError('Symlinked runtime directories need a manual update.')
-            size = sum(p.stat().st_size for base in (data, ROOT / '.venv') for p in base.rglob('*') if p.is_file())
+            size = sum(p.stat().st_size for base in ((data, ROOT / '.venv') if backup_venv else (data,)) for p in base.rglob('*') if p.is_file())
             if shutil.disk_usage(ROOT).free < size * 2 + 512 * 1024**2:
                 raise RuntimeError('Not enough free disk space for backup and dependency installation.')
             backup = STATE / ('backup-' + time.strftime('%Y%m%d-%H%M%S'))
             backup.mkdir(mode=0o700)
-            status('backing_up', 'Stopping MeshcoreStation and backing up code, data and dependencies…')
+            status('backing_up', 'Stopping MeshcoreStation and backing up code, data' + (' and dependencies…' if backup_venv else ' and settings; unchanged dependencies are retained…'))
             transaction = {'old': old, 'data': str(data), 'port': PORT,
-                           'backup': str(backup), 'backup_complete': False, 'target': target}
+                           'backup': str(backup), 'backup_complete': False, 'backup_venv': backup_venv, 'target': target}
             write('transaction.json', transaction)
             stopped = True
             service('stop')
             run('git', 'archive', '--format=tar', '-o', str(backup / 'source.tar'), old)
-            shutil.copytree(ROOT / '.venv', backup / 'venv', symlinks=True)
+            if backup_venv:
+                shutil.copytree(ROOT / '.venv', backup / 'venv', symlinks=True)
             if data.exists():
                 shutil.copytree(data, backup / 'data', symlinks=True)
             shutil.copy2(ROOT / 'meshcorestation.env', backup / 'meshcorestation.env')
@@ -215,8 +297,12 @@ def worker():
             status('installing', 'Installing the update and checking dependencies…')
             run('git', 'reset', '--hard', target)
             python = str(ROOT / '.venv/bin/python3')
-            run(python, '-m', 'pip', 'install', '-r', 'requirements.txt', timeout=1800)
-            check_dependencies(python)
+            if wheelhouse is not None:
+                run(python, '-m', 'pip', 'install', '--force-reinstall', '--no-index', '--only-binary=:all:',
+                    '--find-links', str(wheelhouse), '-r', 'requirements.txt', timeout=1800)
+                run(python, '-m', 'scripts.check_dependencies', '--check-only', timeout=600)
+            else:
+                status('installing', 'Code-only update: keeping validated Python dependencies; no pip installation needed.')
             run(python, '-m', 'scripts.check_install')
             status('verifying', 'Restarting MeshcoreStation and checking the dashboard…')
             service('start')
@@ -232,8 +318,9 @@ def worker():
                     service('stop')
                     if backup_complete:
                         run('git', 'reset', '--hard', old)
-                        shutil.rmtree(ROOT / '.venv')
-                        shutil.copytree(backup / 'venv', ROOT / '.venv', symlinks=True)
+                        if backup_venv:
+                            shutil.rmtree(ROOT / '.venv')
+                            shutil.copytree(backup / 'venv', ROOT / '.venv', symlinks=True)
                         if data.exists():
                             shutil.rmtree(data)
                         if (backup / 'data').exists():
@@ -247,6 +334,8 @@ def worker():
                     status('failed', f'Update failed: {error}. Recovery needs attention: {rollback}. Backup: {backup}')
             else:
                 status('failed', error)
+        finally:
+            _progress = None
 
 
 if __name__ == '__main__':

@@ -26,10 +26,22 @@ def register_oled_routes(server):
                 or (origin and origin != request.host_url.rstrip('/'))):
             return reply(dict(ok=False,error='Open the OLED editor from this dashboard.'),403)
         try:
+            from meshcorestation.bridge import bridge
+            display = getattr(bridge.runtime, 'oled', None)
+            companion = getattr(bridge.runtime, 'companion', None)
+            connected = bool(companion and companion.mc and companion.mc.connection_manager.is_connected)
+            compatible = bool(connected and display and display.compatible and display.acquired
+                              and display.task and not display.task.done())
+            availability = dict(ok=True, compatible=compatible,
+                reason='' if compatible else 'OLED requires a connected Heltec V4 OLED with custom MCOD firmware.')
+            if request.method == 'GET' and request.args.get('status') == '1':
+                return reply(availability)
+            if not compatible:
+                return reply({**availability, 'ok': False, 'error': availability['reason']},409)
             with closing(sqlite3.connect(DB_PATH.as_uri()+'?mode=rw',uri=True,timeout=3)) as db:
                 db.row_factory = sqlite3.Row
                 if request.method=='GET':
-                    return reply({**store.snapshot(db),'values':store.VALUES,'series':store.SERIES})
+                    return reply({**store.snapshot(db),**availability,'values':store.VALUES,'series':store.SERIES})
                 if request.mimetype != 'application/json':
                     return reply(dict(ok=False,error='Expected JSON.'),415)
                 raw = request.stream.read(65537)

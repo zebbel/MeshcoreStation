@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.6.0**.
+Current application version: **2.6.1**.
 
 ## What it does
 
@@ -425,3 +425,28 @@ named database sources, and set each graph's time range, minimum and maximum.
 Save to activate the pages, or preview a draft on the companion for 30 seconds.
 A short user-button press cycles enabled pages on compatible firmware.
 See [the OLED editor guide](docs/companion-oled.md) for sources and limits.
+
+
+### Faster web updates (2.6.1)
+
+When requirements are unchanged and installed dependency/native checks pass,
+web updates keep the existing Python environment and skip both its backup and
+pip installation. Source, stopped databases and settings still have rollback
+backups; the installation check and dashboard health checks still run.
+Interrupted code-only updates restore code/data without replacing the unchanged
+environment.
+
+When dependencies change or validation fails, compatible wheels are downloaded
+while the station is running. Installation then uses this local wheel cache
+without network access. Missing compatible wheels stop the update before service
+shutdown; web updates never compile dependencies or install OS build tools.
+This uses available package indexes, including a Pi's configured wheel mirror;
+it does not publish new wheel builds. Terminal install/repair remains available.
+
+The Update progress section shows recent subprocess output and elapsed step
+time while the dashboard is reachable. The complete stream is also available
+through `journalctl -u meshcorestation-update.service -f`. During service
+shutdown the browser waits to reconnect. The first update installing these
+improvements still uses the previous updater; subsequent updates use the faster
+path. This change improves the web updater; terminal install/repair keeps its
+existing dependency workflow.

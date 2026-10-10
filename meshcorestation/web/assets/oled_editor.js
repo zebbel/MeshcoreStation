@@ -1,6 +1,6 @@
 /* Local draft editor. Only Save persists pages; device previews expire after 30s. */
 (() => {
-    let dialog, draft, saved, catalog, current=0, selected=-1, timer, sequence=0, busy=false, drag=null;
+    let dialog, draft, saved, catalog, current=0, selected=-1, timer, sequence=0, busy=false, drag=null, compatible=false;
     const $=id=>document.getElementById(id), clone=v=>JSON.parse(JSON.stringify(v));
     const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
     const btn=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=fn;return b;};
@@ -16,7 +16,7 @@
         } finally {clearTimeout(timeout);}
     }
     function dirty(){return saved&&JSON.stringify(draft)!==JSON.stringify(saved.pages);}
-    function state(){ $('oled-dirty').textContent=dirty()?'Unsaved changes':'Saved';$('oled-fields').disabled=busy||!saved; }
+    function state(){ $('oled-dirty').textContent=dirty()?'Unsaved changes':'Saved';$('oled-fields').disabled=busy||!saved||!compatible; }
     function changed(){state();paintBoxes();clearTimeout(timer);const id=++sequence;timer=setTimeout(()=>preview(false,id),350);}
     async function preview(device=false,id=++sequence){
         if(!draft)return;
@@ -162,9 +162,20 @@
             if(!dialog)create();dialog.showModal();
             if(!draft){draft=[{name:'Loading',enabled:true,elements:[]}];}
             await load();
-        }));grid.append(section);
+        }));grid.append(section);section.querySelector('button').disabled=true;availability();
     }
-    window.addEventListener('beforeunload',e=>{if(dialog?.open&&dirty()){e.preventDefault();e.returnValue='';}});
+    async function availability(){
+        const section=$('oled-settings');if(!section)return;
+        try{
+            const r=await fetch('/api/oled/pages?status=1',{cache:'no-store',headers:{'X-Meshcore-Control':'1'}});
+            const data=await r.json();compatible=Boolean(r.ok&&data.compatible);
+            section.querySelector('button').disabled=!compatible;
+            section.querySelector('p').textContent=compatible?'Design custom companion screens using stored station data.':(data.reason||'Companion OLED unavailable.');
+        }catch(_){compatible=false;section.querySelector('button').disabled=true;}
+        if(dialog?.open){state();if(!compatible)message('Companion OLED unavailable. Your unsaved draft is retained.');}
+    }
+    setInterval(availability,5000);
+    window.addEventListener('beforeunload' ,e=>{if(dialog?.open&&dirty()){e.preventDefault();e.returnValue='';}});
     setInterval(()=>{if(dialog?.open&&saved&&!busy&&!drag)preview();},10000);
     new MutationObserver(attach).observe(document.documentElement,{childList:true,subtree:true});attach();
 })();
