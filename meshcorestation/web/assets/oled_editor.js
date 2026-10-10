@@ -156,13 +156,18 @@
     }
     function attach(){
         const grid=document.querySelector('#companion-dialog .companion-grid');
-        if(!grid||$('oled-settings'))return;
+        if(!grid)return;
+        const existing=$('oled-settings'),firmware=$('firmware-panel');
+        if(existing){
+            if(firmware?.parentElement===grid&&existing.nextElementSibling!==firmware)grid.insertBefore(existing,firmware);
+            return;
+        }
         const section=el('section');section.id='oled-settings';section.className='companion-section';
         section.append(el('h3','OLED pages'),el('p','Design custom companion screens using stored station data.'),btn('Open screen editor',async()=>{
             if(!dialog)create();dialog.showModal();
             if(!draft){draft=[{name:'Loading',enabled:true,elements:[]}];}
             await load();
-        }));grid.append(section);section.querySelector('button').disabled=true;availability();
+        }));grid.insertBefore(section,firmware?.parentElement===grid?firmware:null);section.querySelector('button').disabled=true;availability();
     }
     async function availability(){
         const section=$('oled-settings');if(!section)return;

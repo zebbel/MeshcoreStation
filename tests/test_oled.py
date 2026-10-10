@@ -224,3 +224,32 @@ def test_supported_model_probes_stock_once_and_releases_reader(monkeypatch):
         await display.close()
         manager.set_reader.assert_called_with(original)
     asyncio.run(scenario())
+
+
+def test_discovery_retries_only_timeouts(monkeypatch):
+    import meshcorestation.radio.oled as oled
+    async def scenario():
+        display=OledDisplay(NS(logger=Mock()))
+        display.transport=NS(command=AsyncMock(side_effect=[TimeoutError(),TimeoutError(),b'info']))
+        monkeypatch.setattr(oled.asyncio,'sleep',AsyncMock())
+        assert await display.probe(0)==b'info'
+        assert display.transport.command.await_count==3
+        display.transport.command=AsyncMock(side_effect=DisplayError(3))
+        with pytest.raises(DisplayError):await display.probe(0)
+        assert display.transport.command.await_count==1
+        display.transport.command=AsyncMock(side_effect=TimeoutError('no MCOD reply'))
+        with pytest.raises(TimeoutError,match='no MCOD reply'):await display.probe(7)
+        assert display.transport.command.await_count==3
+    asyncio.run(scenario())
+
+
+def test_timeout_identifies_operation_and_clears_pending(monkeypatch):
+    import meshcorestation.radio.oled as oled
+    async def scenario():
+        monkeypatch.setattr(oled,'DISCOVERY_TIMEOUT',.001)
+        manager=NS(send=AsyncMock(),set_reader=Mock())
+        transport=DisplayTransport(NS(mc=NS(_reader=NS(handle_rx=AsyncMock()),connection_manager=manager),serial_command_lock=asyncio.Lock()))
+        with pytest.raises(TimeoutError,match='MCOD INFO: no matching reply'):
+            await transport.command(0)
+        assert transport.pending is None
+    asyncio.run(scenario())

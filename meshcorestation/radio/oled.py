@@ -9,6 +9,9 @@ from meshcorestation.commands.context import percent
 from meshcorestation.storage.voltage_store import config, latest
 
 MAGIC = b'\xf0MCOD\x01'
+OPERATIONS = ('INFO', 'BEGIN', 'TEXT', 'CLEAR', 'SHOW', 'RELEASE', 'KEEPALIVE', 'CAPABILITIES', 'LINE', 'POLYLINE', 'BUTTON_SUBSCRIBE')
+DISCOVERY_TIMEOUT = 5
+COMMAND_TIMEOUT = 2
 
 
 class DisplayError(RuntimeError):
@@ -62,7 +65,12 @@ class DisplayTransport:
             self.pending = (self.request_id, operation, future)
             try:
                 await self.companion.mc.connection_manager.send(MAGIC + bytes([self.request_id, operation]) + arguments)
-                reply = await asyncio.wait_for(future, 2)
+                timeout = DISCOVERY_TIMEOUT if operation in (0, 7) else COMMAND_TIMEOUT
+                try:
+                    reply = await asyncio.wait_for(future, timeout)
+                except asyncio.TimeoutError as exc:
+                    name = OPERATIONS[operation] if operation < len(OPERATIONS) else str(operation)
+                    raise TimeoutError(f'MCOD {name}: no matching reply within {timeout}s (request {self.request_id})') from exc
                 if reply[8]:
                     raise DisplayError(reply[8])
                 return reply[9:]
@@ -154,6 +162,7 @@ class OledDisplay:
         self.page_count = 2
         self.buttons = False
         self.compatible = False
+        self.reason = 'Checking companion OLED support.'
         self.redraw = asyncio.Event()
 
     def on_button(self, gesture):
@@ -164,11 +173,15 @@ class OledDisplay:
     def start(self):
         # Board identity comes from the normal device query, before any private
         # protocol traffic. TFT and unknown models must not be probed.
-        if getattr(self.companion, 'device_info', {}).get('model') not in ('Heltec V4 OLED', 'Heltec V4.3 OLED'):
+        model = getattr(self.companion, 'device_info', {}).get('model')
+        if model not in ('Heltec V4 OLED', 'Heltec V4.3 OLED'):
+            self.reason = f'OLED not enabled for reported model: {model or "unknown"}.'
             return
         if os.getenv('MESHCORESTATION_OLED', '1').lower() not in ('0', 'false', 'off'):
             self.transport = DisplayTransport(self.companion, self.on_button)
             self.task = asyncio.create_task(self.run(), name='companion-oled')
+        else:
+            self.reason = 'OLED disabled by MESHCORESTATION_OLED.'
 
     async def draw(self, graphics):
         db = self.companion.database.db
@@ -242,26 +255,43 @@ class OledDisplay:
             await send(2, b'\x00\x20\x01Graph FW required')
         await send(4)
 
+    async def probe(self, operation):
+        # Read-only discovery may be retried. Never retry append/drawing or
+        # subscription commands after an uncertain response.
+        for attempt in range(1, 4):
+            self.reason = f'Checking MCOD {OPERATIONS[operation]} (attempt {attempt}/3).'
+            try:
+                return await self.transport.command(operation)
+            except asyncio.TimeoutError:
+                if attempt == 3:
+                    raise
+                self.companion.logger.warning('MCOD %s discovery timed out; retrying (%s/3).', OPERATIONS[operation], attempt + 1)
+                await asyncio.sleep(1)
+
     async def run(self):
+        stage = 'INFO'
         try:
-            info = await self.transport.command(0)
+            info = await self.probe(0)
             if len(info) != 5 or info[:4] != bytes([128, 64, 16, 21]):
                 raise RuntimeError('Unsupported OLED dimensions or text limits')
             graphics = None
             try:
-                caps = await self.transport.command(7)
+                stage = 'CAPABILITIES'
+                caps = await self.probe(7)
                 if len(caps) != 5 or caps[0] != 1:
                     raise RuntimeError('Unsupported OLED graphics capabilities')
                 graphics = caps[1], int.from_bytes(caps[2:4], 'little'), min(caps[4], 83)
             except DisplayError as exc:
                 if exc.status != 3:
                     raise
+            self.reason = ''
             self.compatible = True  # Matching private MCOD INFO confirms this extension.
             self.buttons = bool(graphics and graphics[0] & 4)
             self.companion.logger.info('Companion OLED detected; battery screen%s.',
                                        ' and short-press command page' if self.buttons else '')
             while True:
                 self.redraw.clear()
+                stage = 'screen rendering'
                 await self.draw(graphics)
                 try:
                     await asyncio.wait_for(self.redraw.wait(), 10)
@@ -270,7 +300,8 @@ class OledDisplay:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            self.companion.logger.warning('Companion OLED unavailable; radio continues normally: %s', str(exc) or type(exc).__name__)
+            self.reason = f'OLED {stage} failed: {str(exc) or type(exc).__name__}'
+            self.companion.logger.warning('Companion OLED unavailable; radio continues normally: %s', self.reason)
             # No loop of unsupported commands on standard firmware. On errors,
             # the display lease expires; next reconnect probes again.
         finally:

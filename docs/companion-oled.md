@@ -95,3 +95,12 @@ The editor, browser preview, device preview and save API are disabled unless
 that compatible companion is connected and its OLED worker is active.
 Stored pages are retained when switching companions. The dashboard checks
 availability every five seconds; server-side checks apply to every request.
+
+## Discovery diagnostics (2.7.1)
+
+OLED pages appears directly above Companion firmware in Settings. Read-only
+INFO and CAPABILITIES probes allow five seconds per reply and retry timeouts
+up to three attempts, with a one-second pause between attempts. Explicit
+unsupported replies are not retried, and drawing commands are never retried
+after an uncertain response. Settings reports the actual discovery or rendering
+failure instead of treating every failure as incompatible hardware.

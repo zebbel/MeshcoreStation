@@ -32,8 +32,11 @@ def register_oled_routes(server):
             connected = bool(companion and companion.mc and companion.mc.connection_manager.is_connected)
             compatible = bool(connected and display and display.compatible and display.acquired
                               and display.task and not display.task.done())
+            reason = ('Companion disconnected; OLED unavailable.' if not connected else
+                      getattr(display, 'reason', '') or 'Companion OLED worker is not active.')
             availability = dict(ok=True, compatible=compatible,
-                reason='' if compatible else 'OLED requires a connected Heltec V4 OLED with custom MCOD firmware.')
+                model=getattr(bridge.runtime, 'device_info', {}).get('model'),
+                reason='' if compatible else reason)
             if request.method == 'GET' and request.args.get('status') == '1':
                 return reply(availability)
             if not compatible:
