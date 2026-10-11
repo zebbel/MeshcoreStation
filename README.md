@@ -8,9 +8,12 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.7.3**.
+Current application version: **2.7.4**.
 
 ## Latest dashboard additions
+
+- OLED auto-rotation: enable it in the screen editor, choose seconds per page and the hold time after a short button press.
+- Medium OLED text (8×12) appears between Small and Large when the companion firmware reports support.
 
 - Select the battery repeater on a map. Save its battery settings to change monitoring.
 - Add repeaters to companion contacts from map popups. Existing contacts and the selected repeater’s Battery history button are grayed out.

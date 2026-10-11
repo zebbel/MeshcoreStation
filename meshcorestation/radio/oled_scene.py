@@ -52,7 +52,7 @@ def render(db, page, now):
                 if stale and e['source'] in ('battery.voltage','battery.percent'):
                     v = '*' + v
                 value = e['label'] + v + e['units']
-            texts.append((x,y,e['size'],ascii_text(value,min(21,w//(6*e['size'])))))
+            texts.append((x,y,e['size'],ascii_text(value,min(21,w//(8 if e['size']==3 else 6*e['size'])))))
             continue
         start = now - e['hours']*3600
         columns = min(w-2,budget-2)

@@ -165,6 +165,10 @@ class OledDisplay:
         self.acquired = False
         self.page = 0
         self.page_count = 2
+        self.rotation = None
+        self.rotate_at = None
+        self.rotation_preview = False
+        self.medium_font = False
         self.buttons = False
         self.compatible = False
         self.reason = 'Checking companion OLED support.'
@@ -173,7 +177,23 @@ class OledDisplay:
     def on_button(self, gesture):
         if self.buttons and gesture == 1:
             self.page = (self.page + 1) % self.page_count
+            if self.rotation and self.rotation['enabled']:
+                self.rotate_at = time.monotonic() + self.rotation['button_seconds']
             self.redraw.set()
+
+    def rotate(self, settings, count, preview, now):
+        self.page_count = count
+        self.page %= count
+        if settings != self.rotation or preview != self.rotation_preview:
+            self.rotate_at = now + settings['page_seconds']
+        self.rotation, self.rotation_preview = settings, preview
+        if not settings['enabled'] or count < 2 or preview:
+            self.rotate_at = None
+        elif self.rotate_at is None:
+            self.rotate_at = now + settings['page_seconds']
+        elif now >= self.rotate_at:
+            self.page = (self.page + 1) % count
+            self.rotate_at = now + settings['page_seconds']
 
     def start(self):
         # Board identity comes from the normal device query, before any private
@@ -191,19 +211,24 @@ class OledDisplay:
     async def draw(self, graphics):
         db = self.companion.database.db
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='oled_pages'").fetchone():
-            from meshcorestation.storage.oled_store import active
+            from meshcorestation.storage.oled_store import snapshot
             from meshcorestation.radio.oled_scene import render
-            pages = active(db, time.time())
-            self.page_count = len(pages)
-            self.page %= self.page_count
-            drawing = render(db, pages[self.page], time.time())
+            import json
+            saved = snapshot(db)
+            pages = [p for p in saved['pages'] if p['enabled']]
+            preview, until = db.execute('SELECT preview,preview_until FROM oled_pages WHERE id=1').fetchone()
+            preview_active = bool(preview and until > time.time())
+            self.rotate(saved['rotation'], len(pages), preview_active, time.monotonic())
+            drawing = render(db, json.loads(preview) if preview_active else pages[self.page], time.time())
             send = self.transport.command
             await send(1, struct.pack('<H', 60))
             self.acquired = True
             if self.buttons:
                 await send(10, b'\x01')
             for x,y,size,text in drawing['texts']:
-                await send(2, bytes([x,y,size]) + text.encode('ascii'))
+                # Saved medium pages remain usable after a firmware downgrade.
+                wire_size = 1 if size == 3 and not (graphics and graphics[0] & 8) else size
+                await send(2, bytes([x,y,wire_size]) + text.encode('ascii'))
             if graphics:
                 flags,capacity,max_points = graphics
                 for line in drawing['lines'][:capacity]:
@@ -325,6 +350,7 @@ class OledDisplay:
                     raise
             self.reason = ''
             self.compatible = True  # Matching private MCOD INFO confirms this extension.
+            self.medium_font = bool(graphics and graphics[0] & 8)
             self.buttons = bool(graphics and graphics[0] & 4)
             self.companion.logger.info('Companion OLED detected; battery screen%s.',
                                        ' and short-press command page' if self.buttons else '')
@@ -333,7 +359,7 @@ class OledDisplay:
                 stage = 'screen rendering'
                 await self.refresh(graphics)
                 try:
-                    await asyncio.wait_for(self.redraw.wait(), 10)
+                    await asyncio.wait_for(self.redraw.wait(), min(10, max(0.1, self.rotate_at - time.monotonic())) if self.rotate_at is not None else 10)
                 except asyncio.TimeoutError:
                     pass
         except asyncio.CancelledError:

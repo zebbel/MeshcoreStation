@@ -1,6 +1,7 @@
 /* Local draft editor. Only Save persists pages; device previews expire after 30s. */
 (() => {
-    let dialog, draft, saved, catalog, current=0, selected=-1, timer, sequence=0, busy=false, drag=null, compatible=false;
+    let dialog, draft, saved, catalog, rotation, current=0, selected=-1, timer, sequence=0, busy=false, drag=null, compatible=false;
+    const fontCell=size=>size===3?[8,12]:[6*size,8*size];
     const $=id=>document.getElementById(id), clone=v=>JSON.parse(JSON.stringify(v));
     const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
     const btn=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=fn;return b;};
@@ -15,7 +16,7 @@
             const data=await r.json();if(!r.ok||!data.ok)throw new Error(data.error||'OLED request failed.');return data;
         } finally {clearTimeout(timeout);}
     }
-    function dirty(){return saved&&JSON.stringify(draft)!==JSON.stringify(saved.pages);}
+    function dirty(){return saved&&(JSON.stringify(draft)!==JSON.stringify(saved.pages)||JSON.stringify(rotation)!==JSON.stringify(saved.rotation));}
     function state(){ $('oled-dirty').textContent=dirty()?'Unsaved changes':'Saved';$('oled-fields').disabled=busy||!saved||!compatible; }
     function changed(){state();paintBoxes();clearTimeout(timer);const id=++sequence;timer=setTimeout(()=>preview(false,id),350);}
     async function preview(device=false,id=++sequence){
@@ -37,7 +38,8 @@
         }
         for(const [x,y,size,text] of drawing.texts){
             const n=document.createElementNS(ns,'text');
-            for(const [k,v] of Object.entries({x,y:y+7*size,fill:'white','font-family':'monospace','font-size':8*size,textLength:text.length*6*size,lengthAdjust:'spacingAndGlyphs'}))n.setAttribute(k,v);
+            const [cw,ch]=fontCell(size);
+            for(const [k,v] of Object.entries({x,y:y+ch-1,fill:'white','font-family':'monospace','font-size':ch,textLength:text.length*cw,lengthAdjust:'spacingAndGlyphs'}))n.setAttribute(k,v);
             n.textContent=text;svg.append(n);
         }
     }
@@ -69,21 +71,21 @@
         if(!drag)return;const r=$('oled-canvas').getBoundingClientRect(),e=item(),s=drag.start;
         const dx=Math.round((ev.clientX-drag.x)/r.width*128),dy=Math.round((ev.clientY-drag.y)/r.height*64);
         if(drag.resize){
-            e.w=Math.max(e.kind==='graph'?8:6*e.size,Math.min(128-e.x,s.w+dx));
-            e.h=Math.max(e.kind==='graph'?8:8*e.size,Math.min(64-e.y,s.h+dy));
+            e.w=Math.max(e.kind==='graph'?8:fontCell(e.size)[0],Math.min(128-e.x,s.w+dx));
+            e.h=Math.max(e.kind==='graph'?8:fontCell(e.size)[1],Math.min(64-e.y,s.h+dy));
         } else {e.x=Math.max(0,Math.min(128-e.w,s.x+dx));e.y=Math.max(0,Math.min(64-e.h,s.y+dy));}
         properties();changed();
     });
     for(const event of ['pointerup','pointercancel'])document.addEventListener(event,()=>{drag=null;});
     function field(root,title,key,type='text',options=null){
         const label=el('label',title),input=el(options?'select':'input');
-        if(options)for(const [value,name] of Object.entries(options)){const o=el('option',name);o.value=value;input.append(o);}
+        if(options)for(const [value,name] of (Array.isArray(options)?options:Object.entries(options))){const o=el('option',name);o.value=value;if(key==='size'&&value==='3'&&!catalog.medium_font)o.disabled=true;input.append(o);}
         else {input.type=type;if(type==='number')input.step=['minimum','maximum'].includes(key)?'any':'1';}
         input.value=item()[key]??'';input.setAttribute('aria-label',title);
         input.onchange=()=>{
             item()[key]=(type==='number'||key==='size')?Number(input.value):input.value;
             if(key==='size'){
-                const e=item();e.w=Math.max(e.w,6*e.size);e.h=Math.max(e.h,8*e.size);
+                const e=item();e.w=Math.max(e.w,fontCell(e.size)[0]);e.h=Math.max(e.h,fontCell(e.size)[1]);
                 e.x=Math.min(e.x,128-e.w);e.y=Math.min(e.y,64-e.h);properties();
             }
             changed();
@@ -95,7 +97,7 @@
         if(selected<0||!item()){root.append(el('p','Select an element, or add one.'));return;}
         const e=item();root.append(el('h3','Element: '+e.kind));
         for(const k of ['x','y','w','h'])field(root,{x:'X',y:'Y',w:'Width',h:'Height'}[k],k,'number');
-        if(e.kind!=='graph')field(root,'Text size','size','number',{'1':'Small (6 × 8)','2':'Large (12 × 16)'});
+        if(e.kind!=='graph')field(root,'Text size','size','number',[['1','Small (6 × 8)'],['3','Medium (8 × 12)'],['2','Large (12 × 16)']]);
         if(e.kind==='text')field(root,'Text','text');
         else {
             field(root,'Database source','source','text',e.kind==='graph'?catalog.series:catalog.values);
@@ -124,22 +126,22 @@
     async function load(){
         if(busy||(dirty()&&!confirm('Discard unsaved OLED edits?')))return;
         busy=true;state();message('Loading pages…');
-        try {saved=await request();catalog=saved;draft=clone(saved.pages);current=0;selected=-1;render();}
+        try {saved=await request();catalog=saved;draft=clone(saved.pages);rotation=clone(saved.rotation);$('oled-rotate').checked=rotation.enabled;$('oled-page-seconds').value=rotation.page_seconds;$('oled-button-seconds').value=rotation.button_seconds;current=0;selected=-1;render();}
         catch(e){message(e.message);}finally{busy=false;state();}
     }
     async function save(){
         if(busy)return;busy=true;state();message('Saving…');clearTimeout(timer);++sequence;
-        try{saved={...catalog,...await request({action:'save',pages:clone(draft),revision:saved.revision})};draft=clone(saved.pages);message('Saved. Pages update on the companion within 10 seconds.');}
+        try{saved={...catalog,...await request({action:'save',pages:clone(draft),rotation:clone(rotation),revision:saved.revision})};draft=clone(saved.pages);message('Saved. Pages update on the companion within 10 seconds.');}
         catch(e){message(e.message);}finally{busy=false;state();}
     }
     function close(){
         if(busy||(dirty()&&!confirm('Discard unsaved OLED edits?')))return;
-        ++sequence;clearTimeout(timer);drag=null;dialog.close();if(saved)draft=clone(saved.pages);
+        ++sequence;clearTimeout(timer);drag=null;dialog.close();if(saved){draft=clone(saved.pages);rotation=clone(saved.rotation);}
         request({action:'stop_preview'}).catch(()=>{});
     }
     function create(){
         dialog=el('dialog');dialog.id='oled-editor';
-        dialog.innerHTML='<div class="dialog-header"><h2>OLED screen editor</h2><button type="button" id="oled-close" aria-label="Close editor">×</button></div><p>128 × 64 pixels · Drag elements to move. Drag the blue corner to resize. Arrow keys move selected elements.</p><p id="oled-message" role="status"></p><fieldset id="oled-fields"><div class="oled-toolbar" id="oled-actions"></div><div class="oled-workspace"><aside><h3>Pages</h3><div id="oled-pages"></div><div id="oled-page-actions"></div><label>Page name<input id="oled-name" maxlength="40"></label><label><input id="oled-enabled" type="checkbox"> Enabled</label></aside><section><div class="oled-toolbar" id="oled-add"></div><div id="oled-canvas"><svg id="oled-pixels" viewBox="0 0 128 64" aria-label="Live OLED preview"></svg><div id="oled-boxes"></div></div><p>Database values use the selected battery repeater/channel or received command history. Missing values show --. Graph values outside min/max are clipped.</p><p>Small/large text follows the firmware font sizes. Graphs need graphics-enabled firmware. Page cycling needs button-enabled firmware.</p></section><aside id="oled-properties"></aside></div></fieldset><p id="oled-dirty"></p>';
+        dialog.innerHTML='<div class="dialog-header"><h2>OLED screen editor</h2><button type="button" id="oled-close" aria-label="Close editor">×</button></div><p>128 × 64 pixels · Drag elements to move. Drag the blue corner to resize. Arrow keys move selected elements.</p><p id="oled-message" role="status"></p><fieldset id="oled-fields"><div class="oled-toolbar" id="oled-actions"></div><div class="oled-toolbar"><label><input id="oled-rotate" type="checkbox"> Auto-rotate pages</label><label>Seconds per page<input id="oled-page-seconds" type="number" min="1" max="3600" step="1"></label><label>Seconds to hold after button press<input id="oled-button-seconds" type="number" min="1" max="3600" step="1"></label></div><p>Rotate enabled pages in order. A short button press advances a page and restarts the hold timer. Save pages to apply these settings.</p><div class="oled-workspace"><aside><h3>Pages</h3><div id="oled-pages"></div><div id="oled-page-actions"></div><label>Page name<input id="oled-name" maxlength="40"></label><label><input id="oled-enabled" type="checkbox"> Enabled</label></aside><section><div class="oled-toolbar" id="oled-add"></div><div id="oled-canvas"><svg id="oled-pixels" viewBox="0 0 128 64" aria-label="Live OLED preview"></svg><div id="oled-boxes"></div></div><p>Database values use the selected battery repeater/channel or received command history. Missing values show --. Graph values outside min/max are clipped.</p><p>Medium (8 × 12) requires compatible firmware; Small and Large remain available. Graphs need graphics-enabled firmware. Manual page cycling needs button-enabled firmware.</p></section><aside id="oled-properties"></aside></div></fieldset><p id="oled-dirty"></p>';
         document.body.append(dialog);
         $('oled-close').onclick=close;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
         $('oled-actions').append(btn('Reload',load),btn('Save pages',save),btn('Preview on companion (30s)',()=>preview(true)),btn('Stop companion preview',async()=>{try{await request({action:'stop_preview'});message('Preview stopped; saved pages return within 10 seconds.');}catch(e){message(e.message);}}));
@@ -152,6 +154,8 @@
             btn('Move down',()=>{if(current<draft.length-1){[draft[current+1],draft[current]]=[draft[current],draft[current+1]];current++;render();}}),
             btn('Delete page',()=>{if(draft.length>1&&confirm('Delete this page from the draft?')){draft.splice(current,1);current=Math.min(current,draft.length-1);selected=-1;render();}}));
         $('oled-name').onchange=e=>{page().name=e.target.value;render();};
+        $('oled-rotate').onchange=e=>{rotation.enabled=e.target.checked;state();};
+        for(const [id,key] of [['oled-page-seconds','page_seconds'],['oled-button-seconds','button_seconds']])$(id).oninput=e=>{rotation[key]=Number(e.target.value);state();};
         $('oled-enabled').onchange=e=>{page().enabled=e.target.checked;changed();};
     }
     function attach(){

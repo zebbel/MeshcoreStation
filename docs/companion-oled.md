@@ -138,3 +138,31 @@ adds an asterisk (*) to the displayed value; the editor explains its age and
 whether the latest request failed. With no successful reading, values remain
 unavailable. Reading age in minutes, status, and sample time are selectable
 fields. Graphs retain failed-reading gaps rather than filling them with old data.
+
+
+## Automatic page rotation
+
+The OLED editor saves auto-rotation with the page document. It defaults to off,
+with 10 seconds per page and a 30-second hold after a short button press. Both
+durations accept whole seconds from 1 to 3600. Enabled pages rotate in editor
+order. A short press advances immediately and starts a new hold period; when
+that period ends, the next page appears and normal rotation continues.
+
+Disabled pages are skipped. A single enabled page stays visible. Device preview
+pauses rotation; when preview ends the saved page resumes with a fresh interval.
+Auto-rotation does not require button support, but manual cycling does. Timers
+use a monotonic clock and share the existing OLED worker and serial connection;
+radio work can delay actual screen updates. Existing installations keep their
+pages and manual-only behavior until auto-rotation is enabled and saved.
+
+
+## Medium text
+
+The editor supports Small (6×8, ID 1), Medium (8×12, ID 3), and Large
+(12×16, ID 2). Medium is enabled only when firmware advertises CAPABILITIES
+bit 3 (0x08). Layout bounds and truncation use the actual 8×12 cell size.
+Older firmware cannot save or preview medium text. Previously saved medium
+pages render as Small if the station reconnects to older firmware, keeping
+the display worker running without sending unsupported TEXT requests.
+The browser preview approximates glyph shapes; check the physical OLED for
+exact appearance.

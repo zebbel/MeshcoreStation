@@ -44,14 +44,30 @@ def defaults():
             dict(name='Commands', enabled=True, elements=commands)]
 
 
+def rotation_defaults():
+    return dict(enabled=False, page_seconds=10, button_seconds=30)
+
+
+def validate_rotation(value):
+    if not isinstance(value, dict) or type(value.get('enabled')) is not bool:
+        raise ValueError('Invalid auto-rotation settings.')
+    for key in ('page_seconds', 'button_seconds'):
+        if type(value.get(key)) is not int or not 1 <= value[key] <= 3600:
+            raise ValueError('Rotation durations must be whole seconds between 1 and 3600.')
+    return {key: value[key] for key in rotation_defaults()}
+
+
 def initialize(db):
     db.execute('CREATE TABLE IF NOT EXISTS oled_pages (id INTEGER PRIMARY KEY CHECK(id=1), document TEXT NOT NULL, preview TEXT, preview_until REAL NOT NULL DEFAULT 0)')
+    if 'rotation' not in {row[1] for row in db.execute('PRAGMA table_info(oled_pages)')}:
+        db.execute("ALTER TABLE oled_pages ADD COLUMN rotation TEXT NOT NULL DEFAULT '{\"enabled\":false,\"page_seconds\":10,\"button_seconds\":30}'")
     db.execute('INSERT OR IGNORE INTO oled_pages (id,document) VALUES (1,?)', (json.dumps(defaults()),))
 
 
 def snapshot(db):
-    document = db.execute('SELECT document FROM oled_pages WHERE id=1').fetchone()[0]
-    return dict(ok=True, pages=json.loads(document), revision=hashlib.sha256(document.encode()).hexdigest())
+    document, rotation = db.execute('SELECT document,rotation FROM oled_pages WHERE id=1').fetchone()
+    return dict(ok=True, pages=json.loads(document), rotation=json.loads(rotation),
+                revision=hashlib.sha256((document + rotation).encode()).hexdigest())
 
 
 def validate(pages):
@@ -93,8 +109,9 @@ def validate(pages):
                     raise ValueError('Graph minimum must be lower than maximum.')
                 item.update(source=e['source'], minimum=low, maximum=high, hours=integer(e.get('hours'),1,720))
             else:
-                size = integer(e.get('size'),1,2)
-                if w < 6*size or h < 8*size:
+                size = integer(e.get('size'),1,3)
+                cell_w, cell_h = (8,12) if size == 3 else (6*size,8*size)
+                if w < cell_w or h < cell_h:
                     raise ValueError('Text area is too small for the selected font size.')
                 item['size'] = size
                 if kind == 'text':
@@ -113,12 +130,13 @@ def validate(pages):
     return clean
 
 
-def save(db, pages, revision):
+def save(db, pages, revision, rotation=None):
     pages = validate(pages)
     db.execute('BEGIN IMMEDIATE')
     if snapshot(db)['revision'] != revision:
         raise RuntimeError('Pages changed in another window. Reload before saving.')
-    db.execute('UPDATE oled_pages SET document=?,preview=NULL,preview_until=0 WHERE id=1', (json.dumps(pages),))
+    rotation = validate_rotation(rotation if rotation is not None else snapshot(db)['rotation'])
+    db.execute('UPDATE oled_pages SET document=?,rotation=?,preview=NULL,preview_until=0 WHERE id=1', (json.dumps(pages),json.dumps(rotation)))
     return snapshot(db)
 
 

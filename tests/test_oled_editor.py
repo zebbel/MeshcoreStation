@@ -146,3 +146,89 @@ def test_old_battery_read_age_and_recovery(db):
     drawing=render(conn,store.defaults()[0],104002)
     assert '3.80V' in [t[-1] for t in drawing['texts']]
     assert drawing['warnings']==[]
+
+
+def test_rotation_migration_and_revision(db):
+    conn, _ = db
+    initial = store.snapshot(conn)
+    assert initial['rotation'] == dict(enabled=False, page_seconds=10, button_seconds=30)
+    settings = dict(enabled=True, page_seconds=5, button_seconds=45)
+    with conn:
+        saved = store.save(conn, initial['pages'], initial['revision'], settings)
+    assert saved['rotation'] == settings
+    assert saved['revision'] != initial['revision']
+    with pytest.raises(RuntimeError):
+        with conn:
+            store.save(conn, initial['pages'], initial['revision'], settings)
+    store.initialize(conn)
+    assert store.snapshot(conn)['rotation'] == settings
+
+
+@pytest.mark.parametrize('key,value', [('enabled', 1), ('page_seconds', 0),
+    ('page_seconds', 1.5), ('button_seconds', 3601), ('button_seconds', True)])
+def test_rotation_validation(key, value):
+    settings = store.rotation_defaults()
+    settings[key] = value
+    with pytest.raises(ValueError):
+        store.validate_rotation(settings)
+
+
+def test_auto_rotation_button_hold_preview_and_disable(monkeypatch):
+    display = OledDisplay(NS())
+    settings = dict(enabled=True, page_seconds=5, button_seconds=30)
+    display.rotate(settings, 3, False, 100)
+    display.rotate(settings, 3, False, 104)
+    assert display.page == 0
+    display.rotate(settings, 3, False, 105)
+    assert display.page == 1
+    display.buttons = True
+    monkeypatch.setattr('meshcorestation.radio.oled.time.monotonic', lambda: 107)
+    display.on_button(1)
+    assert display.page == 2 and display.rotate_at == 137
+    display.rotate(settings, 3, False, 136)
+    assert display.page == 2
+    monkeypatch.setattr('meshcorestation.radio.oled.time.monotonic', lambda: 136)
+    display.on_button(1)
+    assert display.page == 0 and display.rotate_at == 166
+    display.rotate(settings, 3, False, 166)
+    assert display.page == 1
+    display.rotate(settings, 3, True, 167)
+    display.rotate(settings, 3, True, 200)
+    assert display.page == 1 and display.rotate_at is None
+    display.rotate(settings, 3, False, 201)
+    assert display.page == 1 and display.rotate_at == 206
+    display.rotate({**settings, 'enabled': False}, 3, False, 210)
+    assert display.page == 1 and display.rotate_at is None
+    display.rotate(settings, 1, False, 220)
+    assert display.page == 0 and display.rotate_at is None
+
+
+def test_rotation_old_database_migration():
+    conn = sqlite3.connect(':memory:')
+    conn.execute('CREATE TABLE oled_pages (id INTEGER PRIMARY KEY, document TEXT NOT NULL, preview TEXT, preview_until REAL DEFAULT 0)')
+    pages = store.defaults()
+    pages[0]['name'] = 'Keep me'
+    conn.execute('INSERT INTO oled_pages(id,document) VALUES(1,?)', (json.dumps(pages),))
+    store.initialize(conn)
+    assert store.snapshot(conn)['pages'][0]['name'] == 'Keep me'
+    assert store.snapshot(conn)['rotation']['enabled'] is False
+    conn.close()
+
+
+@pytest.mark.parametrize('flags,wire_size', [(15,3),(7,1)])
+def test_medium_metrics_and_firmware_fallback(db, flags, wire_size):
+    conn,_ = db
+    page = dict(name='Medium',enabled=True,elements=[store.element('text',0,52,128,12,text='ABCDEFGHIJKLMNOPQ',size=3)])
+    store.validate([page])
+    drawing = render(conn,page,100001)
+    assert drawing['texts'] == [(0,52,3,'ABCDEFGHIJKLMNOP')]
+    with conn:
+        store.save(conn,[page],store.snapshot(conn)['revision'])
+    display = OledDisplay(NS(database=NS(db=conn)))
+    display.transport = NS(command=AsyncMock())
+    asyncio.run(display.draw((flags,256,83)))
+    texts = [c.args[1] for c in display.transport.command.await_args_list if c.args[0]==2]
+    assert texts == [bytes([0,52,wire_size])+b'ABCDEFGHIJKLMNOP']
+    page['elements'][0]['h'] = 11
+    with pytest.raises(ValueError):
+        store.validate([page])

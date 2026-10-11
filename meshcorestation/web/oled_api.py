@@ -34,7 +34,7 @@ def register_oled_routes(server):
                               and display.task and not display.task.done())
             reason = ('Companion disconnected; OLED unavailable.' if not connected else
                       getattr(display, 'reason', '') or 'Companion OLED worker is not active.')
-            availability = dict(ok=True, compatible=compatible,
+            availability = dict(ok=True, compatible=compatible, medium_font=bool(compatible and getattr(display, 'medium_font', False)),
                 model=getattr(bridge.runtime, 'device_info', {}).get('model'),
                 reason='' if compatible else reason)
             if request.method == 'GET' and request.args.get('status') == '1':
@@ -54,9 +54,13 @@ def register_oled_routes(server):
                 if not isinstance(body,dict):
                     raise ValueError('Invalid request.')
                 action = body.get('action')
+                if action in ('save','preview','device_preview'):
+                    pages = store.validate(body.get('pages'))
+                    if not availability['medium_font'] and any(e.get('size') == 3 for p in pages for e in p['elements']):
+                        raise ValueError('Medium text needs companion firmware with medium-font support. Choose Small or Large, or update the firmware.')
                 if action=='save':
                     with db:
-                        return reply(store.save(db,body.get('pages'),body.get('revision')))
+                        return reply(store.save(db,body.get('pages'),body.get('revision'),body.get('rotation')))
                 if action=='stop_preview':
                     with db:
                         db.execute('UPDATE oled_pages SET preview=NULL,preview_until=0 WHERE id=1')
