@@ -36,9 +36,15 @@ def releases():
         if item.get('draft'):
             continue
         assets = {a['name']: a for a in item.get('assets', [])}
-        if MANIFEST in assets:
+        names = [n for n in assets if n == MANIFEST or re.fullmatch(re.escape(TARGET) + r'-[A-Za-z0-9_.-]+-meshcoreStation\.json', n)]
+        if len(names) == 1:
+            candidate = dict(assets=assets, manifest=names[0])
+            try:
+                read_manifest(candidate)
+            except (ValueError, TypeError, KeyError):
+                continue
             result.append({'id': item['id'], 'tag': item['tag_name'], 'name': item['name'] or item['tag_name'],
-                           'prerelease': item['prerelease'], 'assets': assets})
+                           'prerelease': item['prerelease'], 'assets': assets, 'manifest': names[0]})
     return result
 
 
@@ -50,15 +56,27 @@ def asset(release, name, limit):
     return download(url, limit)
 
 
-def prepare(release):
-    manifest = json.loads(asset(release, MANIFEST, 16384))
+def read_manifest(release):
+    manifest = json.loads(asset(release, release.get('manifest', MANIFEST), 16384))
+    if not isinstance(manifest, dict):
+        raise ValueError('Invalid firmware manifest')
     if (manifest.get('schema') != 1 or manifest.get('target') != TARGET
             or manifest.get('chip') != 'esp32s3' or manifest.get('offset') != 0x10000):
         raise ValueError('Release is not a supported Heltec V4 OLED USB application')
     for key in ('sha256', 'partition_sha256'):
         if not re.fullmatch('[0-9a-f]{64}', str(manifest.get(key, ''))):
             raise ValueError('Release checksum missing')
-    image = asset(release, manifest.get('image'), MAX_IMAGE)
+    name = manifest.get('image')
+    if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+\.bin', name) or 'merged' in name.lower() or 'factory' in name.lower():
+        raise ValueError('Expected an application binary filename')
+    if 'assets' in release and name not in release['assets']:
+        raise ValueError('Application binary missing from release')
+    return manifest
+
+
+def prepare(release):
+    manifest = read_manifest(release)
+    image = asset(release, manifest['image'], MAX_IMAGE)
     if (len(image) < 64 or image[0] != 0xE9 or struct.unpack_from('<H', image, 12)[0] != 9
             or image[32:36] != b'\x32\x54\xcd\xab'):
         raise ValueError('Expected an ESP32-S3 application image, not a merged/factory image')
@@ -109,6 +127,7 @@ class FirmwareUpdater:
         self.runtime = runtime
         self.task = None
         self.catalog = []
+        self.catalog_device = None
         self.check_lock = threading.Lock()
         self.check_future = None
         self.check_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="firmware-releases")
@@ -120,12 +139,25 @@ class FirmwareUpdater:
         self.state = {**self.state, 'phase': phase, 'message': message, **values}
         updater.write('firmware-status.json', self.state)
 
+    def device_identity(self):
+        companion = self.runtime.companion
+        mc = getattr(companion, 'mc', None)
+        connected = bool(mc and getattr(getattr(mc, 'connection_manager', None), 'is_connected', False))
+        model = self.runtime.device_info.get('model')
+        if not connected or self.runtime.control is None or model not in ('Heltec V4 OLED', 'Heltec V4.3 OLED'):
+            return None
+        return (id(companion), companion.serial_port, model, (getattr(mc, 'self_info', None) or {}).get('public_key'))
+
     def snapshot(self):
         # Immutable-by-replacement snapshots; no radio-loop handoff for HTTP reads.
+        identity = self.device_identity()
+        supported = identity is not None
         return {'ok': True, 'status': dict(self.state),
-                'ready': importlib.util.find_spec('esptool') is not None,
+                'supported': supported,
+                'compatibility_message': '' if supported else 'No supported connected device. Automatic firmware updates support Heltec V4 OLED USB only; other devices require their own update method.',
+                'ready': supported and importlib.util.find_spec('esptool') is not None,
                 'device': dict(self.runtime.device_info),
-                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog]}
+                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog if identity is not None and identity == self.catalog_device]}
 
     def check_releases(self):
         """Runs on an HTTP worker, independent of radio connectivity/activity."""
@@ -136,12 +168,20 @@ class FirmwareUpdater:
                 raise ValueError('Firmware update already running')
             if self.check_future is not None and not self.check_future.done():
                 raise ValueError('The previous GitHub request is still finishing; try again shortly.')
+            identity = self.device_identity()
+            self.catalog = []
+            self.catalog_device = None
+            if identity is None:
+                return self.snapshot()
             self.check_future = self.check_pool.submit(releases)
             try:
                 catalog = self.check_future.result(timeout=25)
             except concurrent.futures.TimeoutError:
                 raise TimeoutError('GitHub release check timed out after 25 seconds. Check the Pi network and retry.') from None
+            if self.device_identity() != identity:
+                raise ValueError('Connected device changed. Check releases again.')
             self.catalog = catalog
+            self.catalog_device = identity
             return self.snapshot()
         finally:
             self.check_lock.release()
@@ -152,14 +192,14 @@ class FirmwareUpdater:
             if self.task and not self.task.done():
                 raise ValueError('Firmware update already running')
             release = next((r for r in self.catalog if r['id'] == payload.get('release_id')), None)
-            if not release or payload.get('confirm_heltec_v4') is not True:
+            if not release or self.device_identity() is None or self.device_identity() != self.catalog_device or payload.get('confirm_heltec_v4') is not True:
                 raise ValueError('Check releases and confirm the Heltec V4 OLED USB device first')
             if not importlib.util.find_spec('esptool'):
                 raise ValueError('Install updated MeshcoreStation dependencies first (esptool missing)')
             if self.runtime.companion is None or self.runtime.control is None:
                 raise ValueError('Connect the companion before starting a firmware update')
             self.set_state('queued', 'Preparing firmware update…', busy=True, release=release['tag'], log='', backup=None)
-            self.task = asyncio.create_task(self.install(release))
+            self.task = asyncio.create_task(self.install({**release, '_device': self.device_identity()}))
         elif action != 'status':
             raise ValueError('Unknown firmware operation')
         return self.snapshot()
@@ -198,11 +238,14 @@ class FirmwareUpdater:
         try:
             if updater.read('status.json').get('phase') in updater.ACTIVE or (updater.STATE / 'request.json').exists():
                 raise ValueError('Wait for the MeshcoreStation update to finish')
+            identity = self.device_identity()
+            if identity is None or release.get('_device', identity) != identity:
+                raise ValueError('Connected device is unsupported or changed; check releases again')
             self.set_state('downloading', 'Downloading and verifying release…')
             manifest, image = await asyncio.to_thread(prepare, release)
             companion = self.runtime.companion
-            if companion is None:
-                raise ValueError('Companion disconnected before update')
+            if companion is None or self.device_identity() != identity:
+                raise ValueError('Companion disconnected or changed before update')
             port = companion.serial_port
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             staging = tempfile.TemporaryDirectory(prefix='firmware-update-', dir=DATA_DIR)

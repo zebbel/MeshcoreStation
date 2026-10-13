@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.7.4**.
+Current application version: **2.7.5**.
 
 ## Latest dashboard additions
 
@@ -497,3 +497,18 @@ by the details API. Reconnects can resume matching within the five-minute window
 when the same channel/scope configuration is available. USB downtime and
 unheard retransmissions reduce coverage; historical replies cannot be recovered
 retrospectively.
+
+## Custom companion firmware builds
+
+Use the `meshcoreStation` branch of `zebbel/MeshCore` and run
+`bash build-station.sh` inside that checkout. Outputs are staged in `release/`.
+Upload the versioned Heltec application `.bin` and matching
+`-meshcoreStation.json` manifest together to a GitHub release. The dashboard
+also accepts the earlier fixed manifest filename. Merged/full-flash images
+and T1000-E UF2/DFU files are not application updates for the Heltec.
+
+The updater offers releases only while a supported Heltec V4 OLED USB companion
+is connected. A changed connection requires checking releases again. Target,
+application checksum, ESP32-S3 image, partition layout and boot-selection checks
+remain enforced. T1000-E configuration and UF2/DFU installation use the firmware
+repository's documented tools; they are not supported by this dashboard updater.

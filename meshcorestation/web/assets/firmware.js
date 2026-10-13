@@ -12,8 +12,8 @@
     }
     function controls() {
         const busy = pending || state.status?.busy;
-        panel.querySelector('.firmware-check').disabled = busy;
-        panel.querySelector('select').disabled = busy;
+        panel.querySelector('.firmware-check').disabled = busy || !state.supported;
+        panel.querySelector('select').disabled = busy || !state.supported;
         panel.querySelector('.firmware-install').disabled = busy || !state.ready || !panel.querySelector('select').value;
     }
     function render(result) {
@@ -26,7 +26,7 @@
         }
         if ([...select.options].some(option => option.value === previous)) select.value = previous;
         panel.querySelector('.firmware-current').textContent = `Companion: ${result.device?.ver || 'version unavailable'} · ${result.device?.model || 'model unavailable'} ${result.device?.fw_build || ''}`;
-        panel.querySelector('.firmware-message').textContent = result.status?.message || (!result.ready ? 'Update MeshcoreStation dependencies to install esptool before flashing.' : result.releases.length ? 'Select a release to install.' : 'Check for published Heltec V4 OLED USB releases.');
+        panel.querySelector('.firmware-message').textContent = result.compatibility_message || result.status?.message || (!result.ready ? 'Update MeshcoreStation dependencies to install esptool before flashing.' : result.releases.length ? 'Select a release to install.' : 'Check for published Heltec V4 OLED USB releases.');
         panel.querySelector('pre').textContent = result.status?.log || '';
         controls();
     }
@@ -36,7 +36,7 @@
         if (body?.action === 'check') panel.querySelector('.firmware-message').textContent = 'Checking GitHub firmware releases…';
         try {
             render(await api(body));
-            if (body?.action === 'check' && !state.releases.length) panel.querySelector('.firmware-message').textContent = 'No compatible releases published in zebbel/MeshCore yet. A release needs the Heltec V4 USB manifest and application binary.';
+            if (body?.action === 'check' && state.supported && !state.releases.length) panel.querySelector('.firmware-message').textContent = 'No compatible releases published in zebbel/MeshCore yet. A release needs the Heltec V4 USB manifest and application binary.';
         } catch (error) { if (body?.action === 'install') state.status = {...state.status, busy: true}; panel.querySelector('.firmware-message').textContent = ['TimeoutError', 'AbortError'].includes(error.name) ? 'Firmware request timed out. Try again; check the flashing status before retrying an installation.' : error.message; }
         finally { pending = false; controls(); }
     }
@@ -57,7 +57,7 @@
         });
         request();
         new MutationObserver(() => { if (dialog.open && !pending) request(); }).observe(dialog, {attributes: true, attributeFilter: ['open']});
-        timer = setInterval(() => { if (!pending && state.status?.busy) request(); }, 2500);
+        timer = setInterval(() => { if (!pending && (dialog.open || state.status?.busy)) request(); }, 2500);
     }
     new MutationObserver(attach).observe(document.documentElement, {childList: true, subtree: true});
     attach();

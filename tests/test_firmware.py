@@ -81,8 +81,8 @@ def test_no_external_asset():
 def manager(monkeypatch, tmp_path):
     monkeypatch.setattr(fw.updater, 'STATE', tmp_path / 'state')
     monkeypatch.setattr(fw, 'DATA_DIR', tmp_path / 'data')
-    runtime = SimpleNamespace(companion=SimpleNamespace(serial_port='/dev/test'), control=object(),
-                              device_info={}, pause_for_firmware=AsyncMock(), resume_after_firmware=lambda: None)
+    runtime = SimpleNamespace(companion=SimpleNamespace(serial_port='/dev/test', mc=SimpleNamespace(connection_manager=SimpleNamespace(is_connected=True), self_info={'public_key':'ab'*32})), control=object(),
+                              device_info={'model':'Heltec V4.3 OLED'}, pause_for_firmware=AsyncMock(), resume_after_firmware=lambda: None)
     return fw.FirmwareUpdater(runtime)
 
 
@@ -245,3 +245,49 @@ def test_short_metadata_reads_are_rejected():
         fw.validate_layout(b'', {}, 256)
     with pytest.raises(ValueError, match='Incomplete boot'):
         fw.validate_boot_selection(b'\xff' * 4096)
+
+
+def test_versioned_discovery_filters_assets(monkeypatch):
+    import json
+    name = fw.TARGET + '-v1.17.1-abcdef12-meshcoreStation.json'
+    binary = name[:-5] + '.bin'
+    valid = manifest(fixture_flash()); valid['image'] = binary
+    def release(number, names):
+        return dict(id=number,tag_name=str(number),name=str(number),prerelease=False,
+                    assets=[dict(name=n,browser_download_url=f'https://github.com/{fw.REPO}/releases/download/test/{n}') for n in names])
+    items = [release(1,[name,binary,'t1000e-meshcoreStation.uf2']),
+             release(2,['t1000e-meshcoreStation.uf2']),release(3,[name])]
+    monkeypatch.setattr(fw,'download',lambda url,limit: json.dumps(items if 'api.github.com' in url else valid).encode())
+    assert [r['id'] for r in fw.releases()] == [1]
+    valid['target']='t1000e_companion_radio_ble'
+    assert fw.releases() == []
+    valid['target']=fw.TARGET;valid['image']='heltec-merged-meshcoreStation.bin'
+    assert fw.releases() == []
+
+
+def test_connected_device_filters_catalog_and_install(manager, monkeypatch):
+    release=dict(id=7,tag='test',name='test',prerelease=False,assets={})
+    monkeypatch.setattr(fw,'releases',lambda:[release])
+    assert manager.check_releases()['releases']
+    manager.runtime.device_info['model']='T1000-E'
+    assert manager.snapshot()['releases']==[]
+    assert not manager.snapshot()['ready']
+    with pytest.raises(ValueError):
+        asyncio.run(manager.request(dict(action='install',release_id=7,confirm_heltec_v4=True)))
+    manager.runtime.device_info['model']='Heltec V4.3 OLED'
+    manager.runtime.companion.mc.self_info['public_key']='cd'*32
+    assert manager.snapshot()['releases']==[]
+    manager.runtime.companion.mc.connection_manager.is_connected=False
+    assert manager.check_releases()['releases']==[]
+
+
+def test_device_change_during_download_never_flashes(manager,monkeypatch):
+    def prepare(_):
+        manager.runtime.device_info['model']='Other ESP32'
+        return manifest(fixture_flash()),fixture_image()
+    monkeypatch.setattr(fw,'prepare',prepare)
+    manager.tool=AsyncMock()
+    asyncio.run(manager.install({'tag':'test'}))
+    manager.tool.assert_not_called()
+    manager.runtime.pause_for_firmware.assert_not_called()
+    assert manager.state['phase']=='failed'
