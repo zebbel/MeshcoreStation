@@ -120,7 +120,10 @@
         message('Reading repeater status…');
         const result = await request({action: 'status'}), data = result.data, cards = $('repeater-status-cards');
         identity(result.contact);
-        cards.replaceChildren(card('System', [['Battery', Number.isFinite(data.bat) ? window.MeshcoreStationBattery.reading(data.bat / 1000) : 'Not available'], ['Uptime', duration(data.uptime)], ['Queue', unit(data.tx_queue_len)], ['Firmware level', unit(result.firmware_level)], ['Debug events', unit(data.full_evts)]]),
+        const clock = Number.isInteger(result.repeater_time) && result.repeater_time >= 0
+            ? new Date(result.repeater_time * 1000).toLocaleString(undefined, {timeZone:'Europe/Berlin', hour12:false}) + ' · Europe/Berlin (' + new Date(result.repeater_time * 1000).toISOString().replace('T',' ').replace('.000Z',' UTC') + ')'
+            : 'Not reported by repeater firmware';
+        cards.replaceChildren(card('System', [['Repeater clock (last read)', clock], ['Battery', Number.isFinite(data.bat) ? window.MeshcoreStationBattery.reading(data.bat / 1000) : 'Not available'], ['Uptime', duration(data.uptime)], ['Queue', unit(data.tx_queue_len)], ['Firmware level', unit(result.firmware_level)], ['Debug events', unit(data.full_evts)]]),
             card('Radio', [['Last RSSI', unit(data.last_rssi, ' dBm')], ['Last SNR', unit(data.last_snr, ' dB')], ['Noise floor', unit(data.noise_floor, ' dBm')], ['TX airtime', duration(data.airtime)], ['RX airtime', duration(data.rx_airtime)], ['Receive errors', unit(data.recv_errors)]]));
         const packet = node('section', undefined, 'repeater-section'); packet.append(node('h3', 'Packets'));
         packet.append(table(['Type', 'Sent', 'Received'], [['Flood', unit(data.sent_flood), unit(data.recv_flood)], ['Direct', unit(data.sent_direct), unit(data.recv_direct)], ['Total', unit(data.nb_sent), unit(data.nb_recv)]]));

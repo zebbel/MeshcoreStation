@@ -14,6 +14,12 @@ class RepeaterControl:
         self.transport = RepeaterTransport(companion)
         self.sessions = {}
 
+    @staticmethod
+    def clock_timestamp(login):
+        stamp = login.get('server_timestamp')
+        # Do not substitute the Pi's clock when older firmware omits this field.
+        return stamp if type(stamp) is int and 0 <= stamp <= 0xFFFFFFFF else None
+
     async def execute(self, request):
         # Session tokens never go into the database or application logs.
         now = time.monotonic()
@@ -63,7 +69,8 @@ class RepeaterControl:
                     raise ValueError('No response. The repeater may be unreachable or this feature may be unsupported.')
                 if action == 'neighbors':
                     data = with_neighbor_names(self.companion.database.db, data)
-                return {'ok': True, 'data': data, 'sampled_at': time.time(), 'admin': admin, 'contact': self.identity(contact), 'firmware_level': login.get('fw_ver_level')}
+                return {'ok': True, 'data': data, 'sampled_at': time.time(), 'admin': admin, 'contact': self.identity(contact), 'firmware_level': login.get('fw_ver_level'),
+                        'repeater_time': self.clock_timestamp(login)}
             if not admin:
                 raise ValueError('Administrator access is required to read or change configurations.')
             if action == 'read':
