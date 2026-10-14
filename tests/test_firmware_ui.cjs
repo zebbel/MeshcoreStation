@@ -13,8 +13,8 @@ w.fetch = async (url, options) => {
     assert.equal(options.headers['X-Meshcore-Control'], '1');
     const body = options.body ? JSON.parse(options.body) : {};
     if (body.action === 'check') checked = true;
-    if (body.action === 'install') { installs++; assert.equal(body.release_id, 7); assert(body.confirm_heltec_v4); busy = true; }
-    return {ok:true,json:async()=>({ok:true,ready:true,device:{ver:'test'},status:{busy,message:busy?'Flashing':'Ready',log:'<script>unsafe</script>'},releases:checked?[{id:7,name:'OLED',prerelease:true}]:[]})};
+    if (body.action === 'install') { installs++; assert.equal(body.release_id, 7); assert(body.confirm_device); assert.equal(body.target,'heltec_v4_companion_radio_usb'); busy = true; }
+    return {ok:true,json:async()=>({ok:true,ready:true,supported:true,target:'heltec_v4_companion_radio_usb',target_label:'Heltec V4 OLED USB',device:{ver:'test'},status:{busy,message:busy?'Flashing':'Ready',log:'<script>unsafe</script>'},releases:checked?[{id:7,name:'OLED',prerelease:true}]:[]})};
 };
 const settle = () => new Promise(r => setImmediate(r));
 (async()=>{
@@ -22,7 +22,7 @@ const settle = () => new Promise(r => setImmediate(r));
     await settle();
     const panel = w.document.querySelector('#firmware-panel');
     assert(panel.querySelector('.firmware-install').disabled);
-    const idleRequests = requests; tick(); await settle(); assert.equal(requests, idleRequests);
+    const idleRequests = requests; tick(); await settle(); assert.equal(requests, idleRequests+1);
     panel.querySelector('.firmware-check').click(); await settle();
     assert(!panel.querySelector('.firmware-install').disabled);
     assert(panel.querySelector('option').textContent.includes('prerelease'));

@@ -205,7 +205,7 @@ def test_packaging_roundtrip(tmp_path):
 
 def test_release_check_and_status_never_use_radio_bridge(manager, monkeypatch):
     from meshcorestation.web import firmware_api
-    monkeypatch.setattr(fw, 'releases', lambda: [{'id': 7, 'tag': 'test', 'name': 'test', 'prerelease': False, 'assets': {}}])
+    monkeypatch.setattr(fw, 'releases', lambda target=fw.TARGET: [{'id': 7, 'tag': 'test', 'name': 'test', 'prerelease': False, 'assets': {}}])
     monkeypatch.setattr(firmware_api.bridge, 'runtime', SimpleNamespace(firmware=manager))
     def forbidden(*a, **kw):
         raise AssertionError('Radio runtime must not be called')
@@ -267,7 +267,7 @@ def test_versioned_discovery_filters_assets(monkeypatch):
 
 def test_connected_device_filters_catalog_and_install(manager, monkeypatch):
     release=dict(id=7,tag='test',name='test',prerelease=False,assets={})
-    monkeypatch.setattr(fw,'releases',lambda:[release])
+    monkeypatch.setattr(fw,'releases',lambda target=fw.TARGET:[release])
     assert manager.check_releases()['releases']
     manager.runtime.device_info['model']='T1000-E'
     assert manager.snapshot()['releases']==[]
@@ -291,3 +291,35 @@ def test_device_change_during_download_never_flashes(manager,monkeypatch):
     manager.tool.assert_not_called()
     manager.runtime.pause_for_firmware.assert_not_called()
     assert manager.state['phase']=='failed'
+
+
+@pytest.mark.parametrize('suffix', ['', '-v1.0.3', '-v1.2.3-rc.1'])
+def test_custom_versions_discovered(monkeypatch, suffix):
+    import json
+    name=fw.TARGET+'-v1.17.1-035190f7-meshcoreStation'+suffix+'.json'
+    binary=name[:-5]+'.bin'
+    doc=manifest(fixture_flash());doc['image']=binary
+    item=dict(id=1,tag_name='test',name='test',prerelease=False,assets=[
+        dict(name=n,browser_download_url=f'https://github.com/{fw.REPO}/releases/download/test/{n}') for n in (name,binary)])
+    monkeypatch.setattr(fw,'download',lambda url,limit:json.dumps([item] if 'api.github.com' in url else doc).encode())
+    assert fw.releases()[0]['target']==fw.TARGET
+    assert not fw.manifest_name(name,'t1000e_companion_radio_ble')
+
+
+def test_profile_selects_target_and_rejects_cross_target(manager,monkeypatch):
+    target='test_board_usb'
+    monkeypatch.setitem(fw.PROFILES,target,{**fw.PROFILES[fw.TARGET],'models':('Test Board',),'label':'Test Board USB'})
+    manager.runtime.device_info['model']='Test Board'
+    seen=[]
+    def releases(selected):
+        seen.append(selected)
+        return [dict(id=1,name='test',tag='test',prerelease=False,target=fw.TARGET)]
+    monkeypatch.setattr(fw,'releases',releases)
+    monkeypatch.setattr(fw.importlib.util,'find_spec',lambda name:object())
+    manager.check_releases()
+    assert seen==[target]
+    assert manager.snapshot()['target']==target
+    assert manager.snapshot()['releases']==[]
+    with pytest.raises(ValueError,match='does not match'):
+        asyncio.run(manager.request(dict(action='install',release_id=1,confirm_device=True,target=target)))
+    assert manager.task is None

@@ -1,4 +1,4 @@
-"""Release-based, app-only Heltec V4 USB updates. Never erase the whole flash."""
+"""Device-selected firmware updates with explicit, validated flashing profiles."""
 import asyncio
 import concurrent.futures
 import threading
@@ -19,6 +19,26 @@ TARGET = 'heltec_v4_companion_radio_usb'
 MANIFEST = TARGET + '.json'
 MAX_IMAGE = 8 * 1024 * 1024
 
+# Add a profile only after its image format and flashing procedure are tested.
+# Model aliases come from DEVICE_QUERY, never from a release filename.
+PROFILES = {
+    TARGET: dict(label='Heltec V4 OLED USB',
+                 models=('Heltec V4 OLED', 'Heltec V4.3 OLED'),
+                 chip='esp32s3', image_chip_id=9, offset=0x10000,
+                 installer='esptool_app'),
+}
+
+
+def profile_for_model(model):
+    matches = [(target, profile) for target, profile in PROFILES.items() if model in profile['models']]
+    return matches[0] if len(matches) == 1 else (None, None)
+
+
+def manifest_name(name, target):
+    return name == target + '.json' or bool(re.fullmatch(
+        re.escape(target) + r'-[A-Za-z0-9_.-]+-meshcoreStation(?:-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)?\.json', name))
+
+
 
 def download(url, limit):
     request = urllib.request.Request(url, headers={'User-Agent': 'MeshcoreStation', 'Accept': 'application/vnd.github+json' if 'api.github.com' in url else 'application/octet-stream'})
@@ -29,22 +49,24 @@ def download(url, limit):
     return data
 
 
-def releases():
+def releases(target=TARGET):
+    if target not in PROFILES:
+        return []
     items = json.loads(download(f'https://api.github.com/repos/{REPO}/releases?per_page=50', 2_000_000))
     result = []
     for item in items:
         if item.get('draft'):
             continue
         assets = {a['name']: a for a in item.get('assets', [])}
-        names = [n for n in assets if n == MANIFEST or re.fullmatch(re.escape(TARGET) + r'-[A-Za-z0-9_.-]+-meshcoreStation\.json', n)]
+        names = [n for n in assets if manifest_name(n, target)]
         if len(names) == 1:
-            candidate = dict(assets=assets, manifest=names[0])
+            candidate = dict(assets=assets, manifest=names[0], target=target)
             try:
                 read_manifest(candidate)
             except (ValueError, TypeError, KeyError):
                 continue
             result.append({'id': item['id'], 'tag': item['tag_name'], 'name': item['name'] or item['tag_name'],
-                           'prerelease': item['prerelease'], 'assets': assets, 'manifest': names[0]})
+                           'prerelease': item['prerelease'], 'assets': assets, 'manifest': names[0], 'target': target})
     return result
 
 
@@ -57,12 +79,16 @@ def asset(release, name, limit):
 
 
 def read_manifest(release):
-    manifest = json.loads(asset(release, release.get('manifest', MANIFEST), 16384))
+    target = release.get('target', TARGET)
+    if target not in PROFILES:
+        raise ValueError('Unsupported firmware target')
+    profile = PROFILES[target]
+    manifest = json.loads(asset(release, release.get('manifest', target + '.json'), 16384))
     if not isinstance(manifest, dict):
         raise ValueError('Invalid firmware manifest')
-    if (manifest.get('schema') != 1 or manifest.get('target') != TARGET
-            or manifest.get('chip') != 'esp32s3' or manifest.get('offset') != 0x10000):
-        raise ValueError('Release is not a supported Heltec V4 OLED USB application')
+    if (manifest.get('schema') != 1 or manifest.get('target') != target
+            or manifest.get('chip') != profile['chip'] or manifest.get('offset') != profile['offset']):
+        raise ValueError('Release is not a supported application for the connected device')
     for key in ('sha256', 'partition_sha256'):
         if not re.fullmatch('[0-9a-f]{64}', str(manifest.get(key, ''))):
             raise ValueError('Release checksum missing')
@@ -77,7 +103,7 @@ def read_manifest(release):
 def prepare(release):
     manifest = read_manifest(release)
     image = asset(release, manifest['image'], MAX_IMAGE)
-    if (len(image) < 64 or image[0] != 0xE9 or struct.unpack_from('<H', image, 12)[0] != 9
+    if (len(image) < 64 or image[0] != 0xE9 or struct.unpack_from('<H', image, 12)[0] != PROFILES[manifest['target']]['image_chip_id']
             or image[32:36] != b'\x32\x54\xcd\xab'):
         raise ValueError('Expected an ESP32-S3 application image, not a merged/factory image')
     if hashlib.sha256(image).hexdigest() != manifest['sha256']:
@@ -144,7 +170,7 @@ class FirmwareUpdater:
         mc = getattr(companion, 'mc', None)
         connected = bool(mc and getattr(getattr(mc, 'connection_manager', None), 'is_connected', False))
         model = self.runtime.device_info.get('model')
-        if not connected or self.runtime.control is None or model not in ('Heltec V4 OLED', 'Heltec V4.3 OLED'):
+        if not connected or self.runtime.control is None or profile_for_model(model)[0] is None:
             return None
         return (id(companion), companion.serial_port, model, (getattr(mc, 'self_info', None) or {}).get('public_key'))
 
@@ -152,12 +178,18 @@ class FirmwareUpdater:
         # Immutable-by-replacement snapshots; no radio-loop handoff for HTTP reads.
         identity = self.device_identity()
         supported = identity is not None
+        target, profile = profile_for_model(self.runtime.device_info.get('model'))
+        mc = getattr(self.runtime.companion, 'mc', None)
+        connected = bool(mc and getattr(getattr(mc, 'connection_manager', None), 'is_connected', False))
+        reason = 'Connect a companion to check firmware updates.' if not connected else 'No automatic firmware update profile is available for ' + str(self.runtime.device_info.get('model') or 'this unrecognized device') + '.'
         return {'ok': True, 'status': dict(self.state),
-                'supported': supported,
-                'compatibility_message': '' if supported else 'No supported connected device. Automatic firmware updates support Heltec V4 OLED USB only; other devices require their own update method.',
+                'supported': supported, 'connected': connected,
+                'target': target if supported else None,
+                'target_label': profile['label'] if supported else None,
+                'compatibility_message': '' if supported else reason,
                 'ready': supported and importlib.util.find_spec('esptool') is not None,
                 'device': dict(self.runtime.device_info),
-                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog if identity is not None and identity == self.catalog_device]}
+                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog if identity is not None and identity == self.catalog_device and r.get('target', TARGET) == target]}
 
     def check_releases(self):
         """Runs on an HTTP worker, independent of radio connectivity/activity."""
@@ -173,7 +205,7 @@ class FirmwareUpdater:
             self.catalog_device = None
             if identity is None:
                 return self.snapshot()
-            self.check_future = self.check_pool.submit(releases)
+            self.check_future = self.check_pool.submit(releases, profile_for_model(identity[2])[0])
             try:
                 catalog = self.check_future.result(timeout=25)
             except concurrent.futures.TimeoutError:
@@ -192,21 +224,24 @@ class FirmwareUpdater:
             if self.task and not self.task.done():
                 raise ValueError('Firmware update already running')
             release = next((r for r in self.catalog if r['id'] == payload.get('release_id')), None)
-            if not release or self.device_identity() is None or self.device_identity() != self.catalog_device or payload.get('confirm_heltec_v4') is not True:
-                raise ValueError('Check releases and confirm the Heltec V4 OLED USB device first')
+            if not release or self.device_identity() is None or self.device_identity() != self.catalog_device or not (payload.get('confirm_device') is True and payload.get('target') == profile_for_model(self.runtime.device_info.get('model'))[0] or payload.get('confirm_heltec_v4') is True and profile_for_model(self.runtime.device_info.get('model'))[0] == TARGET):
+                raise ValueError('Check releases and confirm the currently connected device first')
             if not importlib.util.find_spec('esptool'):
                 raise ValueError('Install updated MeshcoreStation dependencies first (esptool missing)')
             if self.runtime.companion is None or self.runtime.control is None:
                 raise ValueError('Connect the companion before starting a firmware update')
+            target = profile_for_model(self.runtime.device_info.get('model'))[0]
+            if release.get('target', TARGET) != target:
+                raise ValueError('Release target does not match the connected device')
             self.set_state('queued', 'Preparing firmware update…', busy=True, release=release['tag'], log='', backup=None)
             self.task = asyncio.create_task(self.install({**release, '_device': self.device_identity()}))
         elif action != 'status':
             raise ValueError('Unknown firmware operation')
         return self.snapshot()
 
-    async def tool(self, port, *args, timeout=600):
+    async def tool(self, port, *args, timeout=600, chip='esp32s3'):
         process = await asyncio.create_subprocess_exec(
-            sys.executable, '-u', '-m', 'esptool', '--chip', 'esp32s3', '--port', port,
+            sys.executable, '-u', '-m', 'esptool', '--chip', chip, '--port', port,
             '--baud', '460800', *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
         async def consume():
             while True:
@@ -241,6 +276,9 @@ class FirmwareUpdater:
             identity = self.device_identity()
             if identity is None or release.get('_device', identity) != identity:
                 raise ValueError('Connected device is unsupported or changed; check releases again')
+            target, profile = profile_for_model(identity[2])
+            if release.get('target', TARGET) != target or profile['installer'] != 'esptool_app':
+                raise ValueError('Release or installer does not match the connected device')
             self.set_state('downloading', 'Downloading and verifying release…')
             manifest, image = await asyncio.to_thread(prepare, release)
             companion = self.runtime.companion
@@ -258,14 +296,14 @@ class FirmwareUpdater:
             self.set_state('validating', 'Checking partition layout and boot selection…')
             table_path = directory / 'partitions.bin'
             bootloader = True
-            await self.tool(port, '--after', 'no_reset', 'read_flash', '0x8000', '0xc00', str(table_path))
+            await self.tool(port, '--after', 'no_reset', 'read_flash', '0x8000', '0xc00', str(table_path), chip=profile['chip'])
             ota = validate_layout(table_path.read_bytes(), manifest, len(image))
             if ota:
                 ota_path = directory / 'boot-selection.bin'
-                await self.tool(port, '--after', 'no_reset', 'read_flash', hex(ota[0]), '0x2000', str(ota_path))
+                await self.tool(port, '--after', 'no_reset', 'read_flash', hex(ota[0]), '0x2000', str(ota_path), chip=profile['chip'])
                 validate_boot_selection(ota_path.read_bytes())
             self.set_state('flashing', 'Writing application firmware; configuration partitions are preserved…')
-            await self.tool(port, 'write_flash', '0x10000', str(firmware))
+            await self.tool(port, 'write_flash', hex(profile['offset']), str(firmware), chip=profile['chip'])
             bootloader = False
             self.set_state('reconnecting', 'Flash verified. Waiting for the companion to reconnect…')
             self.runtime.resume_after_firmware()
@@ -283,7 +321,7 @@ class FirmwareUpdater:
             if paused:
                 if bootloader:
                     try:
-                        await self.tool(port, 'run', timeout=20)
+                        await self.tool(port, 'run', timeout=20, chip=profile['chip'])
                     except Exception:
                         pass
                 self.runtime.resume_after_firmware()

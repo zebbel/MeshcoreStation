@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.7.6**.
+Current application version: **2.7.7**.
 
 ## Latest dashboard additions
 
@@ -514,3 +514,19 @@ is connected. A changed connection requires checking releases again. Target,
 application checksum, ESP32-S3 image, partition layout and boot-selection checks
 remain enforced. T1000-E configuration and UF2/DFU installation use the firmware
 repository's documented tools; they are not supported by this dashboard updater.
+
+### Device-selected companion updates
+
+The updater maps the connected companion's reported model to a tested firmware
+profile, then discovers only manifests for that target. The confirmation shows
+the detected device. A connection change invalidates the previous selection.
+Currently Heltec V4 OLED and Heltec V4.3 OLED use the Heltec USB application
+profile. Other companions remain usable as supported by the bot, but their
+firmware installation is unavailable until a tested update profile is added.
+A profile defines model aliases, release target, chip, application offset and
+installer; a matching filename alone never authorizes flashing.
+
+Discovery accepts legacy fixed filenames, `…-meshcoreStation.json`, and
+`…-meshcoreStation-v1.0.3.json` (including versioned prereleases). Releases must
+contain a valid target-specific manifest and its application binary. Merged
+images and UF2/DFU files are not offered through the ESP application installer.

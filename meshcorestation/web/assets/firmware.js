@@ -26,7 +26,7 @@
         }
         if ([...select.options].some(option => option.value === previous)) select.value = previous;
         panel.querySelector('.firmware-current').textContent = `Companion: ${result.device?.ver || 'version unavailable'} · ${result.device?.model || 'model unavailable'} ${result.device?.fw_build || ''}`;
-        panel.querySelector('.firmware-message').textContent = result.compatibility_message || result.status?.message || (!result.ready ? 'Update MeshcoreStation dependencies to install esptool before flashing.' : result.releases.length ? 'Select a release to install.' : 'Check for published Heltec V4 OLED USB releases.');
+        panel.querySelector('.firmware-message').textContent = result.compatibility_message || result.status?.message || (!result.ready ? 'Update MeshcoreStation dependencies to install esptool before flashing.' : result.releases.length ? 'Select a release to install.' : 'Check for published firmware for ' + (result.target_label || result.device?.model || 'this device') + '.');
         panel.querySelector('pre').textContent = result.status?.log || '';
         controls();
     }
@@ -36,7 +36,7 @@
         if (body?.action === 'check') panel.querySelector('.firmware-message').textContent = 'Checking GitHub firmware releases…';
         try {
             render(await api(body));
-            if (body?.action === 'check' && state.supported && !state.releases.length) panel.querySelector('.firmware-message').textContent = 'No compatible releases published in zebbel/MeshCore yet. A release needs the Heltec V4 USB manifest and application binary.';
+            if (body?.action === 'check' && state.supported && !state.releases.length) panel.querySelector('.firmware-message').textContent = 'No compatible releases found for ' + state.target_label + '. A release needs a matching manifest and application binary.';
         } catch (error) { if (body?.action === 'install') state.status = {...state.status, busy: true}; panel.querySelector('.firmware-message').textContent = ['TimeoutError', 'AbortError'].includes(error.name) ? 'Firmware request timed out. Try again; check the flashing status before retrying an installation.' : error.message; }
         finally { pending = false; controls(); }
     }
@@ -45,14 +45,14 @@
         if (!dialog || panel) return;
         panel = document.createElement('section'); panel.id = 'firmware-panel'; panel.className = 'companion-section';
         panel.style.gridColumn = '1 / -1';
-        panel.innerHTML = '<h3>Companion firmware</h3><p class="firmware-current muted"></p><p>Heltec V4 OLED · USB companion · releases from zebbel/MeshCore. Radio commands pause during installation. Keep USB and power connected.</p><label for="firmware-release">Firmware release</label><select id="firmware-release"></select><div class="companion-toolbar"><button type="button" class="firmware-check">Check firmware releases</button><button type="button" class="firmware-install" disabled>Install firmware</button></div><p class="firmware-message" role="status" aria-live="polite"></p><details><summary>Flashing log</summary><pre style="white-space:pre-wrap;max-height:240px;overflow:auto"></pre></details>';
+        panel.innerHTML = '<h3>Companion firmware</h3><p class="firmware-current muted"></p><p>Firmware is selected for the connected device from zebbel/MeshCore releases. Radio commands pause during installation. Keep USB and power connected.</p><label for="firmware-release">Firmware release</label><select id="firmware-release"></select><div class="companion-toolbar"><button type="button" class="firmware-check">Check firmware releases</button><button type="button" class="firmware-install" disabled>Install firmware</button></div><p class="firmware-message" role="status" aria-live="polite"></p><details><summary>Flashing log</summary><pre style="white-space:pre-wrap;max-height:240px;overflow:auto"></pre></details>';
         dialog.querySelector('.companion-grid').append(panel);
         panel.querySelector('select').addEventListener('change', controls);
         panel.querySelector('.firmware-check').addEventListener('click', () => request({action: 'check'}));
         panel.querySelector('.firmware-install').addEventListener('click', () => {
             const select = panel.querySelector('select');
-            if (window.confirm(`Install ${select.selectedOptions[0]?.textContent} on the USB-connected Heltec V4 OLED companion?\n\nConfirm this is the Heltec V4 OLED, not another ESP32 device. Only the application partition is written. No full flash backup is made. Radio service pauses during installation. Keep power connected.`)) {
-                request({action: 'install', release_id: Number(select.value), confirm_heltec_v4: true});
+            if (window.confirm(`Install ${select.selectedOptions[0]?.textContent} on ${state.device?.model || state.target_label}?\n\nTarget: ${state.target_label}. Confirm this is the connected device. Only the application partition is written. No full flash backup is made. Radio service pauses during installation. Keep power connected.`)) {
+                request({action: 'install', release_id: Number(select.value), confirm_device: true, target: state.target});
             }
         });
         request();
