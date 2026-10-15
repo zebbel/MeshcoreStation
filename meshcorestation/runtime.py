@@ -78,6 +78,8 @@ class Runtime:
         if self.rooms is not None:
             await self.rooms.close()
             self.rooms = None
+            if self.companion is not None:
+                self.companion.room_worker = None
         if self.voltage is not None:
             await self.voltage.close()
             self.voltage = None
@@ -119,6 +121,7 @@ class Runtime:
             self.companion.room_bot_id = selected
             self.companion.room_bot_name = service.config(selected)['name'] if selected is not None else None
             self.rooms = RoomWorker(self.companion, service, self.handle_room_post)
+            self.companion.room_worker = self.rooms
             self.rooms.start()
             return True
         except Exception as exc:
