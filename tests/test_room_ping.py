@@ -50,16 +50,16 @@ def ping(rx, path_len):
 
 
 def test_scoped_room_flood_ping_reports_full_metadata():
-    rx = dict(path_len=1, path_hash_size=1, path='ab', snr=6.25,
+    rx = dict(path_len=1, path_hash_size=1, path='ab', snr=6.5,
               rssi=-94, room_scope_name='Europe', route_type=0)
     values, reply = ping(rx, 1)
     assert values['sender_public_key'] == KEY
     assert values['channel_name'] == 'Bot room'
     assert values['hop_count'] == 1
     assert values['direct_distance'] > 0
-    assert values['route_distance'].value > values['direct_distance'].value if hasattr(values['direct_distance'], 'value') else values['route_distance'].value > 0
+    assert values['route_distance'].value > 0
     assert '1 hops' in reply
-    assert 'SNR 6.25' in reply and 'RSSI -94' in reply
+    assert 'SNR 6.5' in reply and 'RSSI -94' in reply
     assert 'route unknown' not in reply and 'scope Europe' in reply
 
 
