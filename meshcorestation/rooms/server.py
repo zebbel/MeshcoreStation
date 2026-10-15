@@ -8,7 +8,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import os
 import time
-from .wire import Packet, ack, datagram, decrypt, path_length, stamp, u32
+from .wire import Packet, ack, datagram, decrypt, path_length, stamp, transport_code, u32
 
 
 @dataclass
@@ -194,6 +194,38 @@ class RoomEndpoint:
         return None
 
 
+def room_rx_metadata(raw, snr, rssi, scopes=()):
+    """Describe only the RF packet that authenticated the room post.
+
+    Direct-route packets have already consumed their forward path, so neither
+    their original hop count nor their travelled route may be reconstructed.
+    """
+    packet = Packet.parse(raw)
+    flooded = packet.route in (0, 1)
+    hops = packet.path_code & 63 if flooded else None
+    scope = 'unscoped' if packet.route == 1 else 'none (direct)' if packet.route == 2 else 'unrecognized scoped packet'
+    if packet.route in (0, 3) and len(packet.codes) == 4:
+        code = int.from_bytes(packet.codes[:2], 'little')
+        matched = set()
+        for entry in scopes:
+            try:
+                key = bytes.fromhex(entry['scope_key'])
+                if len(key) == 16 and key != bytes(16) and transport_code(key, packet.kind, packet.payload) == code:
+                    matched.add(entry['name'])
+            except (KeyError, TypeError, ValueError):
+                continue
+        if len(matched) == 1:
+            scope = next(iter(matched))
+        elif len(matched) > 1:
+            scope = 'ambiguous scoped packet'
+    return {
+        'route_type': packet.route, 'payload_type': packet.kind,
+        'path_len': hops, 'path_hash_size': (packet.path_code >> 6) + 1 if flooded else None,
+        'path': packet.path.hex() if flooded else '',
+        'snr': snr, 'rssi': rssi, 'room_scope_name': scope,
+    }
+
+
 class RoomWorker:
     def __init__(self, companion, service, on_post=None):
         self.companion, self.service = companion, service
@@ -215,10 +247,16 @@ class RoomWorker:
         if not self.endpoints or self.error:
             return
         try:
-            data = event.payload.get('raw_hex', '')
-            raw = bytes.fromhex(data)[2:]
-            if raw and ((raw[0] >> 2) & 15) in (0, 2, 3, 7, 8):
-                self.queue.put_nowait(raw)
+            data = bytes.fromhex(event.payload.get('raw_hex', ''))
+            # Companion RX_LOG_DATA is SNR*4 (int8), RSSI dBm (int8),
+            # followed by the exact on-air frame; no global last-RX lookup.
+            if len(data) < 4:
+                return
+            raw = data[2:]
+            if ((raw[0] >> 2) & 15) in (0, 2, 3, 7, 8):
+                snr = int.from_bytes(data[:1], 'little', signed=True) / 4.0
+                rssi = int.from_bytes(data[1:2], 'little', signed=True)
+                self.queue.put_nowait((raw, snr, rssi))
         except (ValueError, TypeError, asyncio.QueueFull):
             self.dropped += 1
 
@@ -250,22 +288,31 @@ class RoomWorker:
                 for rid in sorted(enabled - set(self.endpoints)):
                     self.endpoints[rid] = RoomEndpoint(self.service, rid)
                 try:
-                    raw = await asyncio.wait_for(self.queue.get(), .25)
+                    received = await asyncio.wait_for(self.queue.get(), .25)
                 except asyncio.TimeoutError:
-                    raw = None
+                    received = None
                 for endpoint in list(self.endpoints.values()):
-                    if raw:
+                    if received:
+                        raw, snr, rssi = received
                         try:
                             responses = endpoint.receive(raw)
                         except (ValueError, PermissionError, UnicodeError):
                             responses = []
                         for response in responses:
                             await self.transmit(response, endpoint)
-                        if self.on_post and endpoint.new_posts:
-                            posts, endpoint.new_posts = endpoint.new_posts, []
+                        # A post is emitted only after authenticated decryption
+                        # and replay checks in RoomEndpoint.receive(). Bind RX
+                        # metadata to exactly that input frame.
+                        posts, endpoint.new_posts = endpoint.new_posts, []
+                        if self.on_post and posts:
+                            try:
+                                scopes = self.companion.database.get_scopes()
+                            except Exception:
+                                scopes = ()
+                            rx = room_rx_metadata(raw, snr, rssi, scopes)
                             for post in posts:
                                 try:
-                                    await self.on_post(endpoint.room, post)
+                                    await self.on_post(endpoint.room, post, rx)
                                 except Exception as exc:
                                     self.companion.logger.warning('Room bot command failed; room continues: %s', exc)
                     if time.time() - endpoint.last_advert >= 3600:
