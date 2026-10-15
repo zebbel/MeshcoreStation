@@ -29,7 +29,7 @@ async def collect(bot, needed, message, rx, commands, result=None):
     room = message.get('room_id') is not None
     hops = companion._get_message_hops(message)
     values = dict(sender_name=message.get('name'), command=parts[0].casefold() if parts else '', arguments=parts[1] if len(parts) > 1 else '',
-                  hop_count=UnavailableMeasurement('not reported (direct)') if room and hops is None else hops,
+                  hop_count=UnavailableMeasurement('direct') if room and hops is None else hops,
                   path=(bot._format_rx_path(rx) if rx and rx.get('path_len') is not None else message.get('path')),
                   rssi=finite(rx.get('rssi')) if rx else None, snr=finite(rx.get('snr')) if rx else None,
                   channel_name=message.get('room_name') if room else companion.channel_name,
@@ -79,14 +79,13 @@ async def collect(bot, needed, message, rx, commands, result=None):
             start, end = bot._valid_position(sender['latitude'], sender['longitude']), bot._valid_position(own.get('adv_lat'), own.get('adv_lon'))
             if start and end:
                 values['direct_distance'] = bot._distance_km(*start, *end)
-                # A direct-routed frame has no complete forward path to measure.
+                # Treat direct room messages as straight-line routes when both
+                # endpoint coordinates are known. Do not invent missing positions.
                 if room and hops is None:
-                    values['route_distance'] = UnavailableMeasurement('not reported (direct)')
+                    values['route_distance'] = Distance(values['direct_distance'])
                 else:
                     route = bot._get_route_distance_text(start, end, message, rx)
                     parsed = re.match(r'Route (~|>=)?(\d+(?:\.\d+)?) km', route)
                     if parsed:
                         values['route_distance'] = Distance(float(parsed[2]), parsed[1] or '')
-        if room and hops is None and 'route_distance' in needed:
-            values['route_distance'] = UnavailableMeasurement('not reported (direct)')
     return values
