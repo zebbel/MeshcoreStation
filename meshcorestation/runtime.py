@@ -138,7 +138,7 @@ class Runtime:
                    'sender_public_key': post.get('author'),
                    'sender_timestamp': post.get('sender_timestamp'),
                    'path_len': rx.get('path_len'),
-                   'path': 'direct (forward path unavailable)' if direct else
+                   'path': 'direct' if direct else
                            f"{rx['path_len']} hops",
                    'room_id': room, 'room_name': self.companion.room_bot_name}
         self.logger.info("%s | room=%r | sender=%r", command['trigger'], self.companion.room_bot_name, name)
