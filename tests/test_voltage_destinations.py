@@ -61,14 +61,24 @@ def report(db):
     return dict(db.execute("SELECT * FROM voltage_reports WHERE slot='morning'").fetchone())
 
 def test_migration_retains_bot_destination():
-    db=database()
-    db.execute('ALTER TABLE voltage_config RENAME TO old_voltage_config')
-    db.execute("CREATE TABLE voltage_config AS SELECT id,enabled,public_key,interval_minutes,reports_enabled,report_time_1,report_time_2,timezone,voltage_channel,revision,updated_at,request_seq,handled_seq FROM old_voltage_config")
-    db.execute('DROP TABLE old_voltage_config')
+    db=sqlite3.connect(':memory:')
+    db.row_factory=sqlite3.Row
+    db.executescript("""
+      CREATE TABLE voltage_config(
+        id INTEGER PRIMARY KEY, enabled INTEGER DEFAULT 0,
+        public_key TEXT DEFAULT '', interval_minutes INTEGER DEFAULT 30,
+        reports_enabled INTEGER DEFAULT 1, report_time_1 TEXT DEFAULT '08:00',
+        report_time_2 TEXT DEFAULT '20:00', timezone TEXT DEFAULT 'Europe/Berlin',
+        voltage_channel INTEGER DEFAULT 1, revision INTEGER DEFAULT 0,
+        updated_at REAL DEFAULT 0, request_seq INTEGER DEFAULT 0,
+        handled_seq INTEGER DEFAULT 0);
+      INSERT INTO voltage_config(id) VALUES(1);
+    """)
     initialize(db)
     assert config(db)['report_target']=='bot'
     initialize(db)
     assert sum(r['name']=='report_target' for r in db.execute('PRAGMA table_info(voltage_config)'))==1
+    assert db.execute('SELECT COUNT(*) FROM voltage_config').fetchone()[0]==1
     db.close()
 
 def test_destination_validation():
