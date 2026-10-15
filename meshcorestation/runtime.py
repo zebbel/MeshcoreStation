@@ -125,7 +125,7 @@ class Runtime:
             self.logger.warning('Room server unavailable; bot continues: %s', exc)
             return False
 
-    async def handle_room_post(self, room, post):
+    async def handle_room_post(self, room, post, rx):
         if self.companion is None or self.companion.room_bot_id != room:
             return
         text = post.get('text', '')
@@ -133,11 +133,16 @@ class Runtime:
         if command is None:
             return
         name = await self.companion.room_sender_name(post.get('author'))
+        direct = rx.get('path_len') is None
         message = {'message': text, 'raw_text': text, 'name': name,
-                   'sender_timestamp': post.get('sender_timestamp'), 'path': 'room',
-                   'room_id': room}
+                   'sender_public_key': post.get('author'),
+                   'sender_timestamp': post.get('sender_timestamp'),
+                   'path_len': rx.get('path_len'),
+                   'path': 'direct (forward path unavailable)' if direct else
+                           f"{rx['path_len']} hops",
+                   'room_id': room, 'room_name': self.companion.room_bot_name}
         self.logger.info("%s | room=%r | sender=%r", command['trigger'], self.companion.room_bot_name, name)
-        reply = await self.companion.bot.handle_message(message, None, command)
+        reply = await self.companion.bot.handle_message(message, rx, command)
         if not reply:
             return
         from meshcorestation.commands.templates import split_reply
