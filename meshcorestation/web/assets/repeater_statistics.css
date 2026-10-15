@@ -18,3 +18,14 @@
 .stats-map-fallback { margin-top: 16px; }
 .stats-picker-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .stats-picker-row .map-key { max-width: 100%; flex-basis: 100%; }
+
+.stats-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:18px; align-items:start; }
+.stats-detailed,.stats-usefulness { min-width:0; border:1px solid #30465d; border-radius:12px; padding:18px; }
+.stats-detailed>summary,.stats-usefulness>summary { font-size:1.3rem; font-weight:600; cursor:pointer; }
+.stats-usefulness .stats-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.stats-usefulness .stats-metric strong { font-size:1.5rem; overflow-wrap:anywhere; }
+.stats-activity { display:flex; gap:4px; flex-wrap:wrap; }
+.stats-activity span { width:16px; height:16px; background:#334155; border-radius:3px; }
+.stats-activity .active { background:#30b8ac; }
+@media(max-width:1000px){.stats-columns{grid-template-columns:1fr;}}
+@media(max-width:550px){.stats-usefulness .stats-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}}

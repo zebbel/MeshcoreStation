@@ -145,3 +145,37 @@ def test_distinct_neighbors_with_same_name_remain_separate(db):
     data=s.snapshot(1)
     assert len(data['previous'])==2
     assert {r['key'] for r in data['previous']}=={BEFORE,AFTER}
+
+
+def test_usefulness_counts_and_comparison(db,monkeypatch):
+    now=time.time();monkeypatch.setattr(s.time,'time',lambda:now)
+    s.select(TARGET)
+    with s.connect() as connection:
+        connection.execute('UPDATE selection SET since=?',(now-3*86400,))
+    known=s.known_repeaters();p=s.normalize(packet())
+    insert(TARGET,p,known,now-90000)
+    insert(TARGET,p,known,now-7200)
+    insert(TARGET,p,known,now-7100)
+    insert(TARGET,s.normalize(packet(pkt_payload=b'other')),known,now-100)
+    u=s.snapshot(1)['usefulness']
+    assert u['unique']==2 and u['active_hours']==2
+    assert u['routes']==1 and u['neighbors']==2
+    assert u['trend']==100 and u['previous_unique']==1
+    assert not u['partial'] and sum(u['activity'])==2
+    assert u['replies'] is None
+    assert s.snapshot(30)['usefulness']['trend'] is None
+
+
+def test_usefulness_bot_replies_unique_and_completed(db):
+    from meshcorestation.storage import reply_store
+    s.select(TARGET);now=time.time()
+    with sqlite3.connect(db) as connection:
+        connection.execute('CREATE TABLE logger(id INTEGER PRIMARY KEY)')
+        connection.execute('INSERT INTO logger VALUES(1)')
+        reply_store.initialize(connection)
+        for offset in (600,50):
+            rid=reply_store.begin(connection,1,'hello','Station',b'1234567890123456',1,'unscoped',None,now=now-offset)
+            reply_store.finish(connection,rid,'accepted')
+            for i in range(2):
+                connection.execute('INSERT INTO reply_observations(reply_id,seen_at,latency,digest,path,route) VALUES(?,?,?,?,?,?)',(rid,now-offset+1,1,str(i),str(i),json.dumps([{'public_key':TARGET}])))
+    assert s.snapshot(1)['usefulness']['replies']==dict(forwarded=1,total=1)

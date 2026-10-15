@@ -194,6 +194,8 @@ def snapshot(days):
             query="SELECT json_extract(j.value,'$.key') AS key,json_extract(j.value,'$.name') AS name,json_extract(j.value,'$.status') AS status,COUNT(*) AS count FROM observations,json_each(observations."+column+") AS j WHERE "+where+" GROUP BY 1,2,3 ORDER BY count DESC LIMIT 30"
             return [dict(row) for row in db.execute(query,params)]
         previous,following=neighbors('previous'),neighbors('following')
+        from meshcorestation.storage.repeater_usefulness import summarize
+        usefulness=summarize(db,key,selected['since'] if selected else None,days,now,health,DB_PATH)
     unique=totals['unique_count']; repeats=totals['identified']-unique
     timeline=[]
     for at in range(int(cutoff//step)*step,int(now//step)*step+1,step):
@@ -205,4 +207,4 @@ def snapshot(days):
             'unidentified':totals['copies']-totals['identified'],'ambiguous':ambiguous,'earliest':earliest,
             'health':{**health,'running':bool(collector.thread and collector.thread.is_alive()),'error':collector.error,'radio':bridge.status[0]},
             'timeline':timeline,'types':types,'roles':{'First':totals['first'],'Middle':totals['middle'],'Final':totals['final']},
-            'scoped':totals['scoped'],'routes':routes,'previous':previous,'following':following}
+            'usefulness':usefulness,'scoped':totals['scoped'],'routes':routes,'previous':previous,'following':following}

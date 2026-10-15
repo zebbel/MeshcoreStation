@@ -26,6 +26,27 @@
         section.append(svg);
         const details=el('details');details.append(el('summary','Show chart values'));details.append(table('Traffic values',['Bucket start','Copies','Unique payloads'],points.map(p=>[date(p.at),p.copies,p.unique])));section.append(details);return section;
     }
+    function usefulness(data){
+        const u=data.usefulness, panel=el('details',null,'stats-usefulness');panel.open=true;
+        panel.append(el('summary','Repeater usefulness'),el('p','As observed by this station','muted'));
+        if(!u){panel.append(el('p','Summary unavailable.'));return panel;}
+        panel.append(el('h3',u.summary));
+        const cards=el('div',null,'stats-metrics');
+        const replies=u.replies ? `${u.replies.forwarded} / ${u.replies.total}` : 'Unavailable';
+        for(const [label,value] of [['Unique packets forwarded',u.unique],['Active hours',`${u.active_hours} / ${u.hours}`],['Different routes',u.routes],['Adjacent repeaters identified',u.neighbors],['Bot replies seen forwarded',replies],['Unique packets vs previous period',u.trend===null?'Not enough comparable data':`${u.trend>0?'+':''}${u.trend}%`]]){
+            const card=el('div',null,'stats-metric');card.append(el('strong',value),el('p',label,'muted'));cards.append(card);
+        }
+        panel.append(cards,el('p',`Observed ${u.unique} unique forwarded packets over ${u.active_hours} hours, with ${u.neighbors} identified adjacent repeaters.`));
+        const activity=el('div',null,'stats-activity');
+        // One square per hour for 24h; one per day for longer periods.
+        const step=data.days===1?1:24;
+        for(let i=0;i<u.activity.length;i+=step){const count=u.activity.slice(i,i+step).filter(Boolean).length;
+            const square=el('span',null,count?'active':'');square.title=`${data.days===1?'Hour':'Day'} ${i/step+1}: ${count} active hour(s)`;square.setAttribute('aria-label',square.title);activity.append(square);}
+        panel.append(el('p',data.days===1?'Hours with observed forwarding':'Days with observed forwarding'),activity);
+        if(u.partial)panel.append(el('p','Partial observation history: collection started during this period or records were dropped/trimmed.','muted'));
+        panel.append(el('p','Bot replies include completed five-minute observation windows. Activity is based on packets heard, not uptime. Unheard traffic and silent receivers cannot be measured. Trend is unavailable without retained comparison history; 30-day comparisons exceed retention.','muted'));
+        return panel;
+    }
     const nodeLabel=n=>`${n.name}${n.status==='matched'?'':` (${n.status})`}`;
     function render(data){
         knownRepeaters=data.repeaters;
@@ -36,8 +57,13 @@
         if(selected && !data.repeaters.some(r=>r.public_key===selected)){const option=el('option',selected+' (no longer in Known repeaters)');option.value=selected;select.append(option);}
         select.value=selected;
         dialog.querySelector('.stats-selected').textContent=selected ? `Selected: ${data.repeaters.find(r=>r.public_key===selected)?.name || selected}` : 'No repeater selected';
-        const content=dialog.querySelector('.stats-content');content.replaceChildren();
-        if(!selected){content.append(el('p','Choose your repeater on the map to start passive collection. Earlier traffic cannot be reconstructed.'));return;}
+        const host=dialog.querySelector('.stats-content');
+        const oldDetails=host.querySelector('.stats-detailed'),oldSimple=host.querySelector('.stats-usefulness');
+        const detailOpen=oldDetails?.open??true,simpleOpen=oldSimple?.open??true;host.replaceChildren();
+        const content=el('details',null,'stats-detailed');content.open=detailOpen;content.append(el('summary','Detailed statistics'));
+        const simple=usefulness(data);simple.open=simpleOpen;
+        const columns=el('div',null,'stats-columns');columns.append(content,simple);host.append(columns);
+        if(!selected){host.replaceChildren(el('p','Choose your repeater on the map to start passive collection. Earlier traffic cannot be reconstructed.'));return;}
         const cards=el('div',null,'stats-metrics');
         for(const [label,value] of [['Observed RF copies',data.copies],['Unique payloads',data.unique],['Repeated copies',data.repeated],['Repeated-copy ratio',data.ratio===null?'—':`${(data.ratio*100).toFixed(1)}%`],['Ambiguous matches',data.ambiguous]]){const card=el('div',null,'stats-metric');card.append(el('p',label,'muted'),el('strong',value));cards.append(card);}content.append(cards);
         content.append(el('p',`Selection active since ${date(data.selection.since)} · Earliest retained observation: ${date(data.earliest)}. Unique/repeated counts use payload fingerprints; ${data.unidentified} copies lack a usable fingerprint and are excluded from those counts.`,'muted'));

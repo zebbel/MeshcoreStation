@@ -8,7 +8,7 @@ Commands are not hard-coded. Their trigger, help text, action, and reply templat
 
 ![How MeshcoreStation works](docs/images/how-it-works.svg)
 
-Current application version: **2.7.7**.
+Current application version: **2.7.8**.
 
 ## Latest dashboard additions
 
@@ -530,3 +530,17 @@ Discovery accepts legacy fixed filenames, `…-meshcoreStation.json`, and
 `…-meshcoreStation-v1.0.3.json` (including versioned prereleases). Releases must
 contain a valid target-specific manifest and its application binary. Merged
 images and UF2/DFU files are not offered through the ESP application installer.
+
+### Repeater usefulness
+
+Beside the detailed passive statistics, an expandable summary shows unique
+forwarded packets, active hours, distinct routes, identified adjacent repeaters,
+and bot replies observed via the selected repeater. The shared 24-hour/7-day/30-day
+selector applies to both panels. On small screens the panels stack vertically.
+
+These are local observations, not a network-wide score or verified uptime.
+Ambiguous target matches are excluded. Bot-reply counts use accepted/uncertain
+sends with completed five-minute observation windows and count each reply once.
+Partial history is marked. Trends require retained prior-period data; 30-day
+comparisons are unavailable because retention is 30 days. No additional radio
+requests are made.
