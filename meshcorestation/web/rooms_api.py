@@ -62,6 +62,10 @@ def register_room_routes(server):
                     service.revoke(rid, body.get('key'))
                 elif action == 'post':
                     service.local_post(rid, body.get('text'))
+                elif action == 'bot':
+                    result = bridge.request({'operation':'room_bot','room':rid}, timeout=20)
+                    if not result.get('ok'):
+                        raise ValueError(result.get('error','Could not select room as bot channel.'))
                 elif action == 'restart':
                     result = bridge.request({'operation':'room_restart'}, timeout=20)
                     if not result.get('ok'):
