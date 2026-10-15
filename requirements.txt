@@ -7,6 +7,3 @@ esptool==4.8.1
 
 # Pure-Python QR generation; no image or native build dependency.
 qrcode==8.2
-
-# Already required by esptool; room identities use its Ed25519/X25519 APIs.
-cryptography>=3.4

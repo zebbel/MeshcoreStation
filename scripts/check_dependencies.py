@@ -23,13 +23,17 @@ def pip(*args):
     return result
 
 
-# Narrow exception for the versions observed on Raspberry Pi OS Trixie.
+# Narrow exceptions for reported versions on Raspberry Pi OS Trixie.
+# Acceptance still requires matching Python/ABI tags and a successful subprocess probe.
 # piwheels documents ARMv6 wheels renamed from ARMv7 builds:
 # https://www.piwheels.org/faq.html#why-are-the-wheel-files-are-tagged-with-armv6-and-armv7
 PIWHEELS_CHECKS = {
+    'pycryptodome': ('4.0.0', "from Crypto.Cipher import AES; from Crypto.Hash import SHA256; k=bytes.fromhex('000102030405060708090a0b0c0d0e0f'); p=bytes.fromhex('00112233445566778899aabbccddeeff'); c=AES.new(k,AES.MODE_ECB); e=c.encrypt(p); assert e.hex()=='69c4e0d86a7b0430d8cdb78070b4c55a'; assert c.decrypt(e)==p; assert SHA256.new(b'abc').hexdigest()=='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'"),
+    'markupsafe': ('3.0.4', "from markupsafe import escape; from markupsafe._speedups import _escape_inner; assert str(escape('<test>&'))=='&lt;test&gt;&amp;'; assert _escape_inner('<test>&')=='&lt;test&gt;&amp;'"),
+    'dbus-fast': ('5.2.0', "from dbus_fast import Message, SignatureTree; body=['probe',42]; assert SignatureTree('su').verify(body); m=Message(path='/test',interface='org.meshcore.Test',member='Probe',signature='su',body=body,serial=1); wire=m._marshall(False); assert len(wire)>16 and b'probe' in wire"),
     'pyyaml': ('6.0.3', "import yaml; assert yaml.safe_load('test: true') == {'test': True}; loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader); assert yaml.load('test: true', Loader=loader) == {'test': True}"),
     'cffi': ('2.1.1', "from cffi import FFI; f=FFI(); p=f.new('int *', 42); assert p[0] == 42"),
-    'tibs': ('0.5.7', "from tibs import Tibs; assert len(Tibs('0b101')) == 3"),
+    'tibs': (('0.5.7', '2.0.2'), "from tibs import Tibs; assert len(Tibs('0b101')) == 3"),
     'bitarray': ('3.11.0', "from bitarray import bitarray; assert bitarray('101').count() == 2"),
     'cryptography': ('50.0.2', "from cryptography.hazmat.primitives.ciphers.aead import AESGCM; c=AESGCM(bytes(32)); n=bytes(12); assert c.decrypt(n,c.encrypt(n,b'test',None),None)==b'test'"),
 }
@@ -50,8 +54,9 @@ def supported_tags():
 
 
 def verified_piwheels(name, version):
-    rule = PIWHEELS_CHECKS.get(name.lower())
-    if not rule or version != rule[0] or not is_pi_zero():
+    rule = PIWHEELS_CHECKS.get(re.sub(r'[-_.]+', '-', name.lower()))
+    versions = (rule[0],) if rule and isinstance(rule[0], str) else (rule[0] if rule else ())
+    if not rule or version not in versions or not is_pi_zero():
         return False
     installed = distribution(name)
     if installed.version != version:

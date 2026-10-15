@@ -1,7 +1,7 @@
 # Independent room server (experimental)
 
 Development branch: `feature/room-server`. Stable baseline: v2.7.8 on `main`.
-Published as the experimental 2.8.0rc1 release. No companion flash is performed.
+Published as the experimental 2.8.0rc2 release. No companion flash is performed.
 
 ## What runs
 

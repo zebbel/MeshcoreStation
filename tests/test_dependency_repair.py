@@ -147,3 +147,39 @@ def test_yaml_probe_still_rejects_wrong_result(monkeypatch):
     monkeypatch.setitem(sys.modules, 'yaml', SimpleNamespace(safe_load=lambda text: None))
     with pytest.raises(AssertionError):
         exec(deps.PIWHEELS_CHECKS['pyyaml'][1], {})
+
+
+@pytest.mark.parametrize('name,version',[
+    ('pycryptodome','4.0.0'),('MarkupSafe','3.0.4'),
+    ('tibs','2.0.2'),('dbus-fast','5.2.0'),('dbus_fast','5.2.0'),
+])
+def test_new_reported_pi_versions_need_successful_probe(monkeypatch,name,version):
+    monkeypatch.setattr(deps,'is_pi_zero',lambda:True)
+    monkeypatch.setattr(deps,'supported_tags',lambda:{'cp313-cp313-linux_armv6l'})
+    monkeypatch.setattr(deps,'distribution',lambda _:SimpleNamespace(version=version,read_text=lambda _:'Tag: cp313-cp313-linux_armv7l\n'))
+    calls=[]
+    def run(args,**kwargs):
+        calls.append(args);return SimpleNamespace(returncode=0,stdout='')
+    monkeypatch.setattr(deps.subprocess,'run',run)
+    assert deps.verified_piwheels(name,version)
+    assert len(calls)==1 and calls[0][1]=='-c'
+    monkeypatch.setattr(deps.subprocess,'run',lambda *a,**k:SimpleNamespace(returncode=-4,stdout='Illegal instruction'))
+    with pytest.raises(RuntimeError,match='NOT accepted'):
+        deps.verified_piwheels(name,version)
+    monkeypatch.setattr(deps,'supported_tags',lambda:{'cp312-cp312-linux_armv6l'})
+    assert not deps.verified_piwheels(name,version)
+
+
+def test_eight_reported_labels_are_checked_without_installing(monkeypatch):
+    packages=[('PyYAML','6.0.3'),('pycryptodome','4.0.0'),('MarkupSafe','3.0.4'),
+              ('cffi','2.1.1'),('tibs','2.0.2'),('dbus-fast','5.2.0'),
+              ('bitarray','3.11.0'),('cryptography','50.0.2')]
+    versions={name:version for name,version in packages}
+    monkeypatch.setattr(deps,'is_pi_zero',lambda:True)
+    monkeypatch.setattr(deps,'supported_tags',lambda:{'cp313-cp313-linux_armv6l'})
+    monkeypatch.setattr(deps,'distribution',lambda name:SimpleNamespace(version=versions[name],read_text=lambda _:'Tag: cp313-cp313-linux_armv7l\n'))
+    monkeypatch.setattr(deps.subprocess,'run',lambda *a,**k:SimpleNamespace(returncode=0,stdout=''))
+    output='\n'.join(f'{name} {version} is not supported on this platform' for name,version in packages)
+    calls=fake(monkeypatch,[(1,output)])
+    deps.check()
+    assert calls==[('check',)]
