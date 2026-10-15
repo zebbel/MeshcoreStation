@@ -3,7 +3,7 @@ import asyncio
 from types import SimpleNamespace
 import pytest
 from meshcorestation.rooms.service import RoomService
-from meshcorestation.rooms.server import RoomEndpoint, RoomWorker
+from meshcorestation.rooms.server import RoomEndpoint, RoomWorker, room_rx_metadata
 from meshcorestation.rooms.wire import Identity, Packet, ack, datagram, decrypt, encrypt, u32
 
 
@@ -178,3 +178,41 @@ def test_scoped_login_returns_direct_without_scope_key(mesh,path_code,path,rever
     clear=decrypt(secret,outgoing.payload[2:])
     assert clear[:1+len(path)]==bytes([path_code])+path
     assert 'scope_key' not in service.config(rid)
+
+
+def test_room_ping_uses_exact_rx_packet_metadata_and_signed_signal(tmp_path):
+    service = RoomService(tmp_path/'rx.db')
+    rid = service.create('Ping')
+    packet = Packet(2, b'room message', 1, 0x42, b'\x11\x22\x33\x44')
+    scope = bytes(range(16))
+    scoped = packet.encode(scope)
+    rx = room_rx_metadata(scoped, -4.25, -98, [{'name':'Europe', 'scope_key':scope.hex()}])
+    assert rx == {
+        'route_type': 0, 'payload_type':2, 'path_len':2, 'path_hash_size':2,
+        'path':'11223344', 'snr':-4.25, 'rssi':-98, 'room_scope_name':'Europe'
+    }
+    unknown = room_rx_metadata(scoped, -4.25, -98, [])
+    assert unknown['room_scope_name'] == 'unrecognized scoped packet'
+    unscoped = room_rx_metadata(packet.encode(), 6.5, -80)
+    assert unscoped['room_scope_name'] == 'unscoped'
+    assert unscoped['path_len'] == 2
+    # A consumed direct path must not be confused with a proven zero-hop flood.
+    direct = Packet(2, b'room message', 2).encode()
+    direct_rx = room_rx_metadata(direct, 7.0, -91)
+    assert direct_rx['route_type'] == 2
+    assert direct_rx['path_len'] is None and direct_rx['path'] == ''
+    assert direct_rx['room_scope_name'] == 'none (direct)'
+
+    mc = SimpleNamespace()
+    companion = SimpleNamespace(mc=mc, logger=SimpleNamespace(warning=lambda *a:None))
+    worker = RoomWorker(companion, service)
+    worker.endpoints[rid] = object()
+    # Raw RX log has signed SNR*4 and signed RSSI, not native unsigned bytes.
+    worker.on_rx(SimpleNamespace(payload={
+        'raw_hex': (int(-4.25*4).to_bytes(1,'little',signed=True)
+                    + int(-98).to_bytes(1,'little',signed=True)
+                    + scoped).hex()}))
+    assert worker.queue.get_nowait() == (scoped, -4.25, -98)
+    assert worker.queue.empty()
+    worker.on_rx(SimpleNamespace(payload={'raw_hex':'01'}))
+    assert worker.queue.empty()
