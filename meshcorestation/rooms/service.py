@@ -7,6 +7,8 @@ or synchronize(). It deliberately has no hooks into the existing channel bot.
 from contextlib import contextmanager
 from pathlib import Path
 import re
+import hashlib
+import hmac
 import os
 import sqlite3
 import time
@@ -21,6 +23,9 @@ class RoomService:
         os.close(descriptor)
         with self.connect() as db:
             db.executescript('''
+                CREATE TABLE IF NOT EXISTS room_auth(
+                    room_id INTEGER PRIMARY KEY REFERENCES rooms(id),
+                    salt BLOB NOT NULL, password_hash BLOB NOT NULL, revision INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS identities(
                     room_id INTEGER PRIMARY KEY REFERENCES rooms(id), seed BLOB NOT NULL,
                     public_key TEXT NOT NULL, scope_key TEXT NOT NULL DEFAULT '');
@@ -46,6 +51,8 @@ class RoomService:
                     room_id INTEGER NOT NULL REFERENCES rooms(id), public_key TEXT NOT NULL,
                     timestamp INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(room_id,public_key));
             ''')
+            # Never turn an existing private ACL room into an open/passwordless room.
+            db.execute('UPDATE rooms SET enabled=0 WHERE id NOT IN (SELECT room_id FROM room_auth)')
 
         os.chmod(self.path, 0o600)
 
@@ -94,6 +101,8 @@ class RoomService:
         if type(enabled) is not bool:
             raise ValueError('Enabled must be a boolean.')
         with self.connect() as db:
+            if enabled and not db.execute('SELECT 1 FROM room_auth WHERE room_id=?',(room,)).fetchone():
+                raise ValueError('Set a room password before enabling it.')
             if db.execute('UPDATE rooms SET enabled=? WHERE id=?',(int(enabled),room)).rowcount!=1:
                 raise ValueError('Unknown room.')
 
@@ -165,14 +174,14 @@ class RoomService:
 
     def config(self, room):
         with self.connect() as db:
-            row = db.execute('SELECT r.*,i.public_key,i.scope_key FROM rooms r JOIN identities i ON r.id=i.room_id WHERE r.id=?',(room,)).fetchone()
+            row = db.execute('SELECT r.*,i.public_key,COALESCE(a.revision,0) AS auth_revision FROM rooms r JOIN identities i ON r.id=i.room_id LEFT JOIN room_auth a ON a.room_id=r.id WHERE r.id=?',(room,)).fetchone()
             if row is None:
                 raise ValueError('Unknown room.')
             return dict(row)
 
     def details(self, room):
         with self.connect() as db:
-            row = db.execute('SELECT r.*,i.public_key,i.scope_key FROM rooms r JOIN identities i ON r.id=i.room_id WHERE r.id=?',(room,)).fetchone()
+            row = db.execute('SELECT r.*,i.public_key,COALESCE(a.revision,0) AS auth_revision FROM rooms r JOIN identities i ON r.id=i.room_id LEFT JOIN room_auth a ON a.room_id=r.id WHERE r.id=?',(room,)).fetchone()
             if row is None:
                 raise ValueError('Unknown room.')
             result = dict(row)
@@ -188,12 +197,42 @@ class RoomService:
                 raise ValueError('Room has no identity; create a new room.')
             return Identity(bytes(row[0]))
 
-    def configure_scope(self, room, value):
-        if not isinstance(value,str) or (value and not re.fullmatch('[0-9a-fA-F]{32}',value)):
-            raise ValueError('Scope key must be empty (unscoped) or 32 hexadecimal characters.')
+    def set_password(self, room, password):
+        if not isinstance(password,str) or not 1 <= len(password.encode('utf-8')) <= 15 or any(ord(c)<32 or ord(c)==127 for c in password):
+            raise ValueError('Password must contain 1–15 UTF-8 bytes without control characters.')
+        salt = os.urandom(16)
+        digest = hashlib.pbkdf2_hmac('sha256',password.encode('utf-8'),salt,100000)
         with self.connect() as db:
-            if not db.execute('UPDATE identities SET scope_key=? WHERE room_id=?',(value.lower(),room)).rowcount:
-                raise ValueError('Unknown room.')
+            db.execute('INSERT INTO room_auth VALUES(?,?,?,1) ON CONFLICT(room_id) DO UPDATE SET salt=excluded.salt,password_hash=excluded.password_hash,revision=revision+1',(room,salt,digest))
+
+    def login(self, room, key, timestamp, password):
+        """Called only after decrypting/authenticating the sender's anonymous packet."""
+        key = self.public_key(key)
+        timestamp = self.timestamp(timestamp)
+        if not isinstance(password,bytes) or not 1 <= len(password) <= 15:
+            raise PermissionError('Incorrect room password.')
+        with self.connect() as db:
+            auth = db.execute('SELECT a.* FROM room_auth a JOIN rooms r ON r.id=a.room_id WHERE r.id=? AND r.enabled=1',(room,)).fetchone()
+        if auth is None:
+            raise PermissionError('Room disabled or password not set.')
+        digest = hashlib.pbkdf2_hmac('sha256',password,auth['salt'],100000)
+        if not hmac.compare_digest(digest,auth['password_hash']):
+            raise PermissionError('Incorrect room password.')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            current = db.execute('SELECT a.revision FROM room_auth a JOIN rooms r ON r.id=a.room_id WHERE r.id=? AND r.enabled=1',(room,)).fetchone()
+            if current is None or current[0] != auth['revision']:
+                raise PermissionError('Password changed; log in again.')
+            last = db.execute('SELECT timestamp FROM sessions_replay WHERE room_id=? AND public_key=?',(room,key)).fetchone()
+            if last and timestamp <= last[0]:
+                raise ValueError('Stale sender timestamp.')
+            member = db.execute('SELECT role FROM members WHERE room_id=? AND public_key=?',(room,key)).fetchone()
+            if member is None:
+                if db.execute('SELECT COUNT(*) FROM members WHERE room_id=?',(room,)).fetchone()[0] >= 64:
+                    raise PermissionError('Room participant limit reached.')
+                db.execute("INSERT INTO members VALUES(?,?,'writer')",(room,key))
+            db.execute('INSERT INTO sessions_replay VALUES(?,?,?) ON CONFLICT(room_id,public_key) DO UPDATE SET timestamp=excluded.timestamp',(room,key,timestamp))
+            return (member[0] if member else 'writer'), auth['revision']
 
     def access(self, room, key):
         with self.connect() as db:

@@ -38,14 +38,15 @@
     const room = current(); $('details').hidden = !room;
     if (shownRoom !== selected) {
       shownRoom=selected; qrRoom=null; $('room-qr').hidden=true; $('room-qr-image').removeAttribute('src');
-      $('show-qr').textContent='Show room QR code'; $('member-key').value='';
+      $('show-qr').textContent='Show room QR code'; $('member-key').value=''; $('room-password').value='';
     }
     if (full) renderContacts();
     if (!room) return;
     $('title').textContent = room.name; $('state').textContent = room.enabled ? 'Enabled' : 'Disabled · no room radio traffic';
     $('toggle').textContent = room.enabled ? 'Disable room' : 'Enable room'; $('send').disabled = !room.enabled;
     $('public-key').value = room.public_key; $('import').href = room.contact_uri;
-    if (full) $('scope').value = room.scope_key;
+    $('password-state').textContent=room.auth_revision ? 'Password is set. Enter a new password only to change it.' : 'Set a password, then enable this room. Existing history and identity are preserved.';
+    $('toggle').disabled=!room.auth_revision;
     $('members').replaceChildren(...room.members.filter(m=>m.public_key!==room.public_key).map(m => {
       const li=document.createElement('li'), span=document.createElement('span'), button=document.createElement('button');
       span.textContent=m.public_key+' · '+m.role;button.textContent='Remove';button.type='button';button.onclick=()=>change({action:'revoke',key:m.public_key});li.append(span,button);return li;
@@ -94,7 +95,7 @@
   $('create').onsubmit=e=>{e.preventDefault();change({action:'create',name:$('name').value},'name');};
   $('grant').onsubmit=e=>{e.preventDefault();change({action:'grant',key:$('member-key').value.trim(),role:$('role').value},'member-key');};
   $('post').onsubmit=e=>{e.preventDefault();change({action:'post',text:$('text').value},'text');};
-  $('scope-form').onsubmit=e=>{e.preventDefault();change({action:'scope',scope_key:$('scope').value.trim()});};
+  $('password-form').onsubmit=e=>{e.preventDefault();change({action:'password',password:$('room-password').value},'room-password');};
   $('toggle').onclick=()=>change({action:'enabled',enabled:!Boolean(current().enabled)});
   $('restart').onclick=()=>change({action:'restart'});
   $('copy').onclick=async()=>{try {await navigator.clipboard.writeText(current().contact_uri);}catch { $('error').textContent='Copy this link: '+current().contact_uri; }};

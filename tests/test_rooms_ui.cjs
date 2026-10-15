@@ -2,7 +2,7 @@ const fs=require('fs'),assert=require('assert'),{JSDOM}=require('jsdom');
 const html=fs.readFileSync('meshcorestation/web/rooms.html','utf8');
 const dom=new JSDOM(html,{url:'http://localhost/rooms',runScripts:'outside-only',pretendToBeVisual:true});
 const w=dom.window, requests=[];
-const room={id:1,name:'Community',enabled:1,scope_key:'',public_key:'aa'.repeat(32),contact_uri:'meshcore://contact/add?type=3',members:[{public_key:'bb'.repeat(32),role:'writer'}],posts:[{timestamp:1000,author:'bb'.repeat(32),text:'<img src=x onerror=alert(1)>'}]};
+const room={id:1,name:'Community',enabled:1,auth_revision:1,public_key:'aa'.repeat(32),contact_uri:'meshcore://contact/add?type=3',members:[{public_key:'bb'.repeat(32),role:'writer'}],posts:[{timestamp:1000,author:'bb'.repeat(32),text:'<img src=x onerror=alert(1)>'}]};
 w.fetch=async(url,options)=>{
  const body=options.body?JSON.parse(options.body):null; requests.push(body);
  if(url==='/api/companion/contacts')return {ok:true,json:async()=>({ok:true,contacts:[{name:'Alice',type:1,public_key:'bb'.repeat(32)},{name:'Bob',type:1,public_key:'cc'.repeat(32)},{name:'Repeater',type:2,public_key:'dd'.repeat(32)}]})};
@@ -14,6 +14,12 @@ w.eval(fs.readFileSync('meshcorestation/web/assets/rooms.js','utf8'));
 (async()=>{
  await new Promise(r=>setTimeout(r,10));
  assert(!w.document.getElementById('details').hidden);
+ assert.equal(w.document.getElementById('scope-form'),null);
+ w.document.getElementById('room-password').value='shared-pass';
+ w.document.getElementById('password-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
+ await new Promise(r=>setTimeout(r,10));
+ assert.deepEqual(requests.at(-1),{room:1,action:'password',password:'shared-pass'});
+ assert.equal(w.document.getElementById('room-password').value,'');
  assert.equal(w.document.querySelectorAll('#posts img').length,0);
  assert(w.document.getElementById('posts').textContent.includes('<img'));
  w.document.getElementById('show-qr').click();await new Promise(r=>setTimeout(r,10));

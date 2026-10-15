@@ -8,7 +8,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import os
 import time
-from .wire import Packet, ack, datagram, decrypt, path_length, stamp, transport_code, u32
+from .wire import Packet, ack, datagram, decrypt, path_length, stamp, u32
 
 
 @dataclass
@@ -30,13 +30,28 @@ class RoomEndpoint:
         self.sessions = OrderedDict()
         self.last_advert = 0
         self.received = self.sent = 0
+        self.auth_revision = service.config(room)['auth_revision']
 
-    def scope(self):
-        value = self.service.config(self.room)['scope_key']
-        return bytes.fromhex(value) if value else None
+    def refresh_auth(self):
+        config = self.service.config(self.room)
+        changed = config['auth_revision'] != self.auth_revision
+        if changed or not config['enabled']:
+            self.sessions.clear()
+        self.auth_revision = config['auth_revision']
+        return config, changed
 
     def encode(self, packet):
-        return packet.encode(self.scope())
+        return packet.encode()
+
+    @staticmethod
+    def return_path(packet):
+        # Flood paths are ordered sender -> receiver. Reverse complete hashes,
+        # not individual bytes, for a direct receiver -> sender reply.
+        if packet.route in (0, 1):
+            size = (packet.path_code >> 6) + 1
+            chunks = [packet.path[i:i+size] for i in range(0,len(packet.path),size)]
+            return packet.path_code, b''.join(reversed(chunks))
+        return None
 
     def advert(self):
         details = self.service.config(self.room)
@@ -66,17 +81,12 @@ class RoomEndpoint:
 
     def receive(self, raw):
         packet = Packet.parse(raw)
-        if not self.service.config(self.room)['enabled']:
+        config, _ = self.refresh_auth()
+        if not config['enabled']:
             self.sessions.clear()
             return []
         # A direct packet with remaining hops has not reached its destination.
         if packet.route in (2, 3) and packet.path:
-            return []
-        scope = self.scope()
-        if packet.route in (0, 3):
-            if scope is None or int.from_bytes(packet.codes[:2], 'little') != transport_code(scope, packet.kind, packet.payload):
-                return []
-        elif packet.route == 1 and scope is not None:
             return []
         if packet.kind == 3:
             self.acknowledge(packet.payload)
@@ -88,13 +98,16 @@ class RoomEndpoint:
             if len(payload) < 51:
                 return []
             key = payload[1:33].hex()
-            role = self.service.access(self.room, key)
             secret = self.identity.secret(payload[1:33])
             data = decrypt(secret, payload[33:])
-            if len(data) < 9 or data[8:].strip(b'\0'):
-                return []  # private ACL-only room: blank password
-            self.service.accept_timestamp(self.room, key, stamp(data), login=True)
-            client = Session(key, secret, stamp(data[4:]), self.clock(), ready=self.clock()+2)
+            if len(data) < 9:
+                return []
+            password = data[8:].split(b'\0',1)[0]
+            role, revision = self.service.login(self.room,key,stamp(data),password)
+            if revision != self.auth_revision:
+                self.sessions.clear()
+                self.auth_revision = revision
+            client = Session(key, secret, stamp(data[4:]), self.clock(), path=self.return_path(packet), ready=self.clock()+2)
             self.sessions[key] = client
             # Local administration only; do not advertise RF administrator access.
             permissions = 1 if role == 'reader' else 2
@@ -149,6 +162,7 @@ class RoomEndpoint:
         return []
 
     def next_push(self):
+        self.refresh_auth()
         now = self.clock()
         for key, client in list(self.sessions.items()):
             try:
@@ -210,7 +224,8 @@ class RoomWorker:
         if delay > 0:
             await asyncio.sleep(delay)
         # Re-check after waiting: disabling a room must stop queued RF output.
-        if not self.service.config(endpoint.room)['enabled']:
+        config, changed = endpoint.refresh_auth()
+        if not config['enabled'] or changed:
             return
         result = await asyncio.wait_for(self.companion.mc.commands.send_raw_packet(raw, priority=3), 15)
         if result is None or result.type != EventType.OK:

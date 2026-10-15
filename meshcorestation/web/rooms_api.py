@@ -51,8 +51,8 @@ def register_room_routes(server):
                     rid = service.create(body.get('name'))
                 elif action == 'enabled':
                     service.set_enabled(rid, body.get('enabled'))
-                elif action == 'scope':
-                    service.configure_scope(rid, body.get('scope_key'))
+                elif action == 'password':
+                    service.set_password(rid, body.get('password'))
                 elif action == 'grant':
                     # Administration is dashboard-local, not remote CLI access.
                     if body.get('role') not in ('reader', 'writer'):

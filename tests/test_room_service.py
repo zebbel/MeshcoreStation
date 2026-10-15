@@ -6,7 +6,7 @@ B='cd'*32
 @pytest.fixture
 def room(tmp_path):
     service=RoomService(tmp_path/'rooms.db',clock=lambda:1000)
-    rid=service.create('Discussion')
+    rid=service.create('Discussion');service.set_password(rid,'room-test')
     service.grant(rid,A,'writer');service.grant(rid,B,'reader')
     return service,rid
 
@@ -44,7 +44,7 @@ def test_idempotency_order_restart_and_disable(room):
 
 def test_room_isolation_and_ack(room):
     service,rid=room;service.set_enabled(rid,True)
-    other=service.create('Other');service.set_enabled(other,True)
+    other=service.create('Other');service.set_password(other,'room-test');service.set_enabled(other,True)
     service.grant(other,B,'writer')
     post=service.post(rid,A,1,'private')
     assert service.synchronize(other,B,0)==[]
@@ -53,3 +53,25 @@ def test_room_isolation_and_ack(room):
     with service.connect() as db:
         assert db.execute('SELECT timestamp FROM cursors').fetchone()[0]==post['timestamp']
     with pytest.raises(ValueError):service.post(rid,A,2,'x'*152)
+
+
+def test_password_validation_and_legacy_room_migration(tmp_path):
+    service=RoomService(tmp_path/'rooms.db')
+    rid=service.create('Legacy')
+    with pytest.raises(ValueError,match='password'):
+        service.set_enabled(rid,True)
+    for password in ('', 'a'*16, '\0hidden', 'é'*8):
+        with pytest.raises(ValueError):service.set_password(rid,password)
+    service.set_password(rid,'a'*15);service.set_enabled(rid,True)
+    public=service.identity(rid).public
+    service.grant(rid,A,'writer');service.post(rid,A,1,'Preserved history')
+    with service.connect() as db:
+        assert db.execute('SELECT password_hash FROM room_auth').fetchone()[0]!=b'a'*15
+        db.execute('DROP TABLE room_auth')  # old ACL-only release has no auth table
+    upgraded=RoomService(service.path)
+    assert not upgraded.config(rid)['enabled']
+    assert upgraded.config(rid)['auth_revision']==0
+    assert upgraded.identity(rid).public==public
+    assert len(upgraded.details(rid)['posts'])==1
+    upgraded.set_password(rid,'new');upgraded.set_enabled(rid,True)
+    assert upgraded.login(rid,B,1,b'new')[0]=='writer'

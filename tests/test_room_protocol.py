@@ -22,6 +22,7 @@ def mesh(tmp_path):
     now = [1000]
     service = RoomService(tmp_path/'rooms.db', clock=lambda:now[0])
     room = service.create('Community')
+    service.set_password(room,'room-test')
     service.set_enabled(room, True)
     writer, reader = Identity(bytes(range(32))), Identity(bytes(range(32,64)))
     service.grant(room, writer.public.hex(), 'writer')
@@ -30,9 +31,9 @@ def mesh(tmp_path):
     return service, room, endpoint, writer, reader, now
 
 
-def login(endpoint, peer, timestamp=1, since=0, scope=None):
+def login(endpoint, peer, timestamp=1, since=0, scope=None, password=b'room-test'):
     secret = peer.secret(endpoint.identity.public)
-    packet = Packet(7, endpoint.identity.public[:1]+peer.public+encrypt(secret,u32(timestamp)+u32(since)+b'\0'),1,0x41,b'\xaa\xbb')
+    packet = Packet(7, endpoint.identity.public[:1]+peer.public+encrypt(secret,u32(timestamp)+u32(since)+password),1,0x41,b'\xaa\xbb')
     responses = endpoint.receive(packet.encode(scope))
     response = Packet.parse(responses[0])
     assert response.kind == 8  # path return with embedded login result
@@ -73,7 +74,7 @@ def test_private_login_posts_push_ack_restart(mesh):
 def test_denial_tampering_disable_revocation(mesh):
     service,rid,endpoint,writer,reader,now = mesh
     stranger = Identity.generate()
-    with pytest.raises(PermissionError): login(endpoint,stranger)
+    with pytest.raises(PermissionError): login(endpoint,stranger,password=b'wrong')
     secret=login(endpoint,reader)
     clear=u32(2)+b'\0not allowed'
     raw=datagram(reader,endpoint.identity.public,secret,2,clear,(0,b'')).encode()
@@ -105,14 +106,14 @@ def test_retry_limit_and_keepalive(mesh):
 
 def test_scope_and_malformed_packets(mesh):
     service,rid,endpoint,writer,reader,now=mesh
-    scope=bytes(range(16));service.configure_scope(rid,scope.hex())
+    scope=bytes(range(16))
     secret=writer.secret(endpoint.identity.public)
     packet=Packet(7,endpoint.identity.public[:1]+writer.public+encrypt(secret,u32(1)+u32(0)+b'\0'))
-    assert endpoint.receive(packet.encode())==[]
-    assert endpoint.receive(packet.encode(bytes(16)))==[]
+    with pytest.raises(PermissionError): endpoint.receive(packet.encode())
+    with pytest.raises(PermissionError): endpoint.receive(packet.encode(bytes(16)))
     login(endpoint,writer,scope=scope)
     advert=Packet.parse(endpoint.advert())
-    assert advert.route==0 and advert.kind==4
+    assert advert.route==1 and advert.kind==4
     with pytest.raises(ValueError): Packet.parse(b'\x01\xc1x')
     with pytest.raises(ValueError): decrypt(secret,b'\0'*19)
     with pytest.raises(ValueError): Identity.generate().secret(b'\x01'+bytes(31))
@@ -121,7 +122,7 @@ def test_scope_and_malformed_packets(mesh):
 def test_worker_failure_isolated_and_stopped(tmp_path):
     from meshcore import EventType
     async def scenario():
-        service=RoomService(tmp_path/'rooms.db');rid=service.create('Test');service.set_enabled(rid,True)
+        service=RoomService(tmp_path/'rooms.db');rid=service.create('Test');service.set_password(rid,'room-test');service.set_enabled(rid,True)
         sent=[];unsub=[];logs=[]
         async def send(raw,priority):
             sent.append(raw)
@@ -140,3 +141,37 @@ def test_worker_failure_isolated_and_stopped(tmp_path):
         await asyncio.sleep(.3);await worker.close()
         assert not sent
     asyncio.run(scenario())
+
+
+def test_password_enrolls_unknown_peer_and_invalidates_sessions(mesh):
+    service,rid,endpoint,writer,reader,now=mesh
+    stranger=Identity.generate()
+    key=stranger.public.hex()
+    with pytest.raises(PermissionError): login(endpoint,stranger,password=b'wrong')
+    assert key not in {m['public_key'] for m in service.details(rid)['members']}
+    login(endpoint,stranger,password=b'room-test')
+    assert service.access(rid,key)=='writer'
+    assert key in endpoint.sessions
+    service.set_password(rid,'new-password')
+    assert endpoint.next_push() is None
+    assert not endpoint.sessions
+    with pytest.raises(PermissionError): login(endpoint,stranger,timestamp=2,password=b'room-test')
+    login(endpoint,stranger,timestamp=2,password=b'new-password')
+    # Being recorded as a participant never bypasses the password.
+    with pytest.raises(PermissionError): login(endpoint,stranger,timestamp=3,password=b'')
+
+
+@pytest.mark.parametrize('path_code,path,reverse',[(0,b'',b''),(0x42,b'\x11\x22\x33\x44',b'\x33\x44\x11\x22'),(0x82,b'abcdef',b'defabc')])
+def test_scoped_login_returns_direct_without_scope_key(mesh,path_code,path,reverse):
+    service,rid,endpoint,writer,reader,now=mesh
+    unknown=Identity.generate()
+    secret=unknown.secret(endpoint.identity.public)
+    payload=endpoint.identity.public[:1]+unknown.public+encrypt(secret,u32(1)+u32(0)+b'room-test')
+    incoming=Packet(7,payload,1,path_code,path).encode(bytes(range(16)))
+    outgoing=Packet.parse(endpoint.receive(incoming)[0])
+    assert outgoing.route==2 and outgoing.codes==b''
+    assert outgoing.path_code==path_code and outgoing.path==reverse
+    assert outgoing.kind==8
+    clear=decrypt(secret,outgoing.payload[2:])
+    assert clear[:1+len(path)]==bytes([path_code])+path
+    assert 'scope_key' not in service.config(rid)
