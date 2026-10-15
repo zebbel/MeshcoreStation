@@ -92,7 +92,7 @@
     }
     async function save(event) {
         event.preventDefault(); if(busy || !snapshot || !el('voltage-form').reportValidity()) return;
-        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value)};
+        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value),report_target:el('voltage-target').value};
         busy=true;controls();
         try { await request({operation:'save',expected_revision:snapshot.config.revision,value});wantedKey=value.public_key;dirty=false;message('Settings saved. The bot applies them automatically.'); }
         catch(error) { message(error.message+' Refresh before retrying.',true); return; }
@@ -117,7 +117,7 @@
         <label>Read every (minutes)<input id="voltage-interval" type="number" min="5" max="1440" required></label>
         <label>Voltage LPP channel<input id="voltage-lpp" type="number" min="1" max="255" required></label>
         <label>First report<input id="voltage-time1" type="time" required></label><label>Second report<input id="voltage-time2" type="time" required></label>
-        <label class="voltage-wide">Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label></div>
+        <label class="voltage-wide">Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label class="voltage-wide">Send battery reports to<select id="voltage-target" required></select></label></div>
         <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Previous history is kept.</p>
         <div class="voltage-actions"><button id="voltage-save" type="submit">Save settings</button><button id="voltage-read" type="button">Read now</button><button id="voltage-refresh" type="button">Refresh</button></div></form>
         <details><summary>Select from repeater list</summary><input id="voltage-search" type="search" aria-label="Search repeaters" placeholder="Search name or public key"><ul id="voltage-repeaters"></ul></details>
