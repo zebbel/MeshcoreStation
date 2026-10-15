@@ -1,7 +1,7 @@
 # Independent room server (experimental)
 
 Development branch: `feature/room-server`. Stable baseline: v2.7.8 on `main`.
-Development source is now 2.8.0rc5 with password-based enrollment and optional room bot-channel routing.
+Development source is now 2.8.0rc6 with room bot-channel RF metadata (not a published GitHub release).
 No companion flash is performed.
 
 ## What runs
@@ -39,6 +39,17 @@ Implemented protocol features:
 - Original author prefixes in room pushes, client synchronization cursors,
   keep-alive replies and pending-message counts.
 - Any room can be selected as the MeshcoreStation bot channel. Newly received room posts are matched against the existing configured bot commands and replies are posted back into the same room. Selecting a normal companion channel switches the bot back.
+- Room bot commands carry metadata from their **own** authenticated RF packet:
+  signed RSSI in dBm, signed quarter-dB SNR, flood repeater hash count/path,
+  and the matching scope name when its transport key is saved under Scopes.
+  Unscoped floods show `unscoped`. Direct packets have no recoverable full
+  forward route or original hop count and display `not reported (direct)`
+  instead of fabricating zero hops or a route distance; their scope is shown
+  as `none (direct)`. Unrecognized scoped floods are explicitly labeled
+  rather than guessed. Route distance on a flood still needs valid sender,
+  repeater and station coordinates. A room sender's authenticated public key
+  identifies its saved position even when its displayed nickname differs.
+  The RX log may omit oversized packets; no measurement is invented in that case.
 - Matching delivery ACKs, up to three delivery attempts, fair per-member polling
   and session expiry after one hour without authenticated activity. Logging in or
   sending a keep-alive resumes synchronization after failed attempts.
