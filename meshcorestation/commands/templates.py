@@ -48,6 +48,12 @@ class Distance:
     qualifier: str = ''
 
 
+@dataclass(frozen=True)
+class UnavailableMeasurement:
+    """Trusted explanation for a numeric value absent from the on-air protocol."""
+    reason: str
+
+
 def fields(template):
     if not isinstance(template, str) or not template.strip() or len(template.encode()) > MAX_TEMPLATE_BYTES:
         raise ValueError(f'Reply template must contain 1–{MAX_TEMPLATE_BYTES} UTF-8 bytes.')
@@ -79,6 +85,8 @@ def render(template, data):
         value, prefix = data.get(name), ''
         if isinstance(value, Distance):
             value, prefix = value.value, value.qualifier
+        if isinstance(value, UnavailableMeasurement):
+            pieces.append(value.reason); continue
         if value is None or (isinstance(value, float) and not math.isfinite(value)):
             pieces.append('unknown'); continue
         if name in NUMERIC:
