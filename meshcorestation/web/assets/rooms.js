@@ -44,6 +44,7 @@
     if (!room) return;
     $('title').textContent = room.name; $('state').textContent = room.enabled ? 'Enabled' : 'Disabled · no room radio traffic';
     $('toggle').textContent = room.enabled ? 'Disable room' : 'Enable room'; $('send').disabled = !room.enabled;
+    $('bot-channel').textContent = room.is_bot ? 'Bot channel ✓' : 'Use as bot channel';
     $('public-key').value = room.public_key; $('import').href = room.contact_uri;
     $('password-state').textContent=room.auth_revision ? 'Password is set. Enter a new password only to change it.' : 'Set a password, then enable this room. Existing history and identity are preserved.';
     $('toggle').disabled=!room.auth_revision;
@@ -97,6 +98,7 @@
   $('post').onsubmit=e=>{e.preventDefault();change({action:'post',text:$('text').value},'text');};
   $('password-form').onsubmit=e=>{e.preventDefault();change({action:'password',password:$('room-password').value},'room-password');};
   $('toggle').onclick=()=>change({action:'enabled',enabled:!Boolean(current().enabled)});
+  $('bot-channel').onclick=()=>change({action:'bot'});
   $('restart').onclick=()=>change({action:'restart'});
   $('copy').onclick=async()=>{try {await navigator.clipboard.writeText(current().contact_uri);}catch { $('error').textContent='Copy this link: '+current().contact_uri; }};
   $('room').onchange=()=>{selected=Number($('room').value);render({rooms,status:lastStatus},true);};
