@@ -32,6 +32,8 @@ class Companion:
         self.tracking_key = None
         self.reply_lock = asyncio.Lock()
         self.control_lock = asyncio.Lock()
+        self.room_bot_id = None
+        self.room_bot_name = None
 
 ################################################
 # CONNECTION FUNCTIONS
@@ -255,6 +257,8 @@ class Companion:
             await self._process_channel_message(event)
 
     async def _process_channel_message(self, event):
+        if self.room_bot_id is not None:
+            return
         if self.channel_idx is None:
             return
         message_data = dict(event.payload or {})
@@ -391,6 +395,18 @@ class Companion:
 ################################################
 # TELEMETRY FUNCTIONS
 ################################################
+
+    async def room_sender_name(self, public_key):
+        if not isinstance(public_key, str):
+            return 'room-user'
+        result = await self.mc.commands.get_contacts()
+        if result.type == EventType.CONTACTS:
+            key = public_key.lower()
+            matches = [contact for contact in (result.payload or {}).values()
+                       if str(contact.get('public_key', '')).lower() == key]
+            if len(matches) == 1:
+                return matches[0].get('adv_name') or key[:12]
+        return public_key[:12]
 
     async def get_sender_contact(self, contact_name):
         result = await self.mc.commands.get_contacts()
