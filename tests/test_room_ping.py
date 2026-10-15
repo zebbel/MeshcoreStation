@@ -1,4 +1,4 @@
-"""Room bot ping should render RX metrics without inventing direct-route hops."""
+"""Room bot ping should render direct-path labels and measured distances."""
 import asyncio
 from types import SimpleNamespace
 
@@ -36,13 +36,15 @@ class FakeCompanion:
         return dict(adv_lat=50.0, adv_lon=8.5)
 
 
-def ping(rx, path_len):
+def ping(rx, path_len, *, missing_position=False):
     db = FakeDB()
+    if missing_position:
+        db.get_companion_position = lambda key: None
     companion = FakeCompanion()
     bot = Bot(SimpleNamespace(warning=lambda *args: None), companion, db)
     message = dict(name='Alex', message='ping', room_id=7, room_name='Bot room',
                    sender_public_key=KEY, path_len=path_len,
-                   path='direct (forward path unavailable)' if path_len is None else f'{path_len} hops')
+                   path='direct' if path_len is None else f'{path_len} hops')
     needed = {'hop_count', 'snr', 'rssi', 'route_distance', 'scope_name',
               'sender_public_key', 'channel_name', 'path', 'direct_distance'}
     values = asyncio.run(collect(bot, needed, message, rx, []))
@@ -63,18 +65,31 @@ def test_scoped_room_flood_ping_reports_full_metadata():
     assert 'route unknown' not in reply and 'scope Europe' in reply
 
 
-def test_direct_room_ping_explains_unreported_hop_and_route_data():
+def test_direct_room_ping_reports_direct_hops_scope_and_straight_line_route():
     rx = dict(path_len=None, path_hash_size=None, path='', route_type=2,
-              snr=-3.5, rssi=-112, room_scope_name='none (direct)')
+              snr=-3.5, rssi=-112, room_scope_name='direct')
     values, reply = ping(rx, None)
     assert values['sender_public_key'] == KEY
-    assert values['hop_count'].reason == 'not reported (direct)'
-    assert values['route_distance'].reason == 'not reported (direct)'
-    assert 'not reported (direct) hops' not in reply
-    assert 'not reported (direct)km' not in reply
+    assert values['hop_count'].reason == 'direct'
+    assert values['path'] == 'direct'
+    assert values['route_distance'].value == values['direct_distance']
+    assert f'route {values["direct_distance"]:.2f}km' in reply
+    assert ' | direct | ' in reply
+    assert 'direct hops' not in reply
+    assert '(direct)' not in reply
     assert 'SNR -3.5' in reply and 'RSSI -112' in reply
-    assert 'scope none (direct)' in reply
-    assert 'route not reported (direct)' in reply
+    assert 'scope direct' in reply
+
+
+def test_direct_room_route_without_coordinates_remains_unknown():
+    rx = dict(path_len=None, path_hash_size=None, path='', route_type=2,
+              snr=1.5, rssi=-80, room_scope_name='direct')
+    values, reply = ping(rx, None, missing_position=True)
+    assert values['hop_count'].reason == 'direct'
+    assert values.get('direct_distance') is None
+    assert values.get('route_distance') is None
+    assert 'route unknown' in reply
+    assert 'scope direct' in reply
 
 
 def test_numeric_invalid_values_still_render_unknown():
