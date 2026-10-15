@@ -25,6 +25,18 @@ class Runtime:
 
     async def dispatch(self, payload):
         """Serialize control changes with bot replies and telemetry requests."""
+        if payload.get('operation') == 'room_bot':
+            from meshcorestation.config import DATA_DIR
+            from meshcorestation.rooms.service import RoomService
+            service = RoomService(DATA_DIR / 'rooms.db')
+            room = payload.get('room')
+            if type(room) is not int or room < 1:
+                raise ValueError('Select a room.')
+            service.set_bot(room)
+            if self.companion is not None:
+                self.companion.room_bot_id = room
+                self.companion.room_bot_name = service.config(room)['name']
+            return {'ok': True}
         if payload.get('operation') == 'firmware':
             return await self.firmware.request(payload)
         if self.maintenance:
@@ -41,7 +53,14 @@ class Runtime:
                 if payload.get('operation') == 'room_restart':
                     started = await self.start_rooms()
                     return {'ok': started, 'error': '' if started else 'Room worker could not start; check station logs.'}
-                return await control.execute(payload)
+                result = await control.execute(payload)
+                if payload.get('operation') == 'set_bot_channel' and result.get('ok'):
+                    from meshcorestation.config import DATA_DIR
+                    from meshcorestation.rooms.service import RoomService
+                    RoomService(DATA_DIR / 'rooms.db').clear_bot()
+                    companion.room_bot_id = None
+                    companion.room_bot_name = None
+                return result
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -94,13 +113,38 @@ class Runtime:
             from meshcorestation.config import DATA_DIR
             from meshcorestation.rooms.service import RoomService
             from meshcorestation.rooms.server import RoomWorker
-            self.rooms = RoomWorker(self.companion, RoomService(DATA_DIR / 'rooms.db'))
+            service = RoomService(DATA_DIR / 'rooms.db')
+            selected = service.bot_room()
+            self.companion.room_bot_id = selected
+            self.companion.room_bot_name = service.config(selected)['name'] if selected is not None else None
+            self.rooms = RoomWorker(self.companion, service, self.handle_room_post)
             self.rooms.start()
             return True
         except Exception as exc:
             self.rooms = None
             self.logger.warning('Room server unavailable; bot continues: %s', exc)
             return False
+
+    async def handle_room_post(self, room, post):
+        if self.companion is None or self.companion.room_bot_id != room:
+            return
+        text = post.get('text', '')
+        command = self.companion.bot.match_command(text)
+        if command is None:
+            return
+        name = await self.companion.room_sender_name(post.get('author'))
+        message = {'message': text, 'raw_text': text, 'name': name,
+                   'sender_timestamp': post.get('sender_timestamp'), 'path': 'room',
+                   'room_id': room}
+        self.logger.info("%s | room=%r | sender=%r", command['trigger'], self.companion.room_bot_name, name)
+        reply = await self.companion.bot.handle_message(message, None, command)
+        if not reply:
+            return
+        from meshcorestation.commands.templates import split_reply
+        for index, part in enumerate(split_reply(reply)):
+            if index:
+                await asyncio.sleep(1)
+            self.rooms.service.local_post(room, part)
 
     async def session(self):
         self.companion = Companion(self.logger, self.database)
