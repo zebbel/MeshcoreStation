@@ -35,6 +35,24 @@
         filter();
     }
     function filter() { const q=el('voltage-search').value.trim().toLowerCase(); el('voltage-repeaters').querySelectorAll('li').forEach(n=>n.hidden=!n.dataset.name.includes(q)); }
+    function reportDestinations(data) {
+        const select = el('voltage-target'), selected = data.config.report_target || 'bot';
+        select.replaceChildren(new Option('Follow bot chat / room', 'bot'));
+        for (const chat of channelsCache.filter(c => c.type === 'private'))
+            select.append(new Option('Chat: ' + chat.name + ' (slot ' + chat.index + ')', 'channel:' + chat.name));
+        for (const room of data.rooms || [])
+            if (room.enabled) select.append(new Option('Room: ' + room.name, 'room:' + room.id));
+        if (![...select.options].some(option => option.value === selected))
+            select.append(new Option('Unavailable: ' + selected, selected));
+        select.value = selected;
+    }
+    async function refreshChannels() {
+        try {
+            const response = await fetch('/api/companion/channels', {cache:'no-store',headers:{'X-Meshcore-Control':'1'}});
+            const data = await response.json();
+            if (response.ok && data.ok && Array.isArray(data.channels)) channelsCache = data.channels;
+        } catch (_) { /* Keep selected target visible when radio is offline. */ }
+    }
     function render(data, form) {
         if (!form && snapshot) {
             if (dirty) data.config = snapshot.config;
@@ -43,6 +61,7 @@
         snapshot = data;
         if (form) {
             candidates(data);
+            reportDestinations(data);
             const c=data.config;
             el('voltage-enabled').checked=c.enabled; el('voltage-reports').checked=c.reports_enabled;
             el('voltage-interval').value=c.interval_minutes; el('voltage-lpp').value=c.voltage_channel;
