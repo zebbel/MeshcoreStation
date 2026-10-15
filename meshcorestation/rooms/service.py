@@ -2,7 +2,8 @@
 
 This module does not parse radio frames or trust client-supplied author names.
 Only an adapter that verifies MeshCore identity and encryption may call post()
-or synchronize(). It deliberately has no hooks into the existing channel bot.
+or synchronize(). A room can optionally be selected as the station bot transport;
+that selection is local state and does not grant radio administration.
 """
 from contextlib import contextmanager
 from pathlib import Path
@@ -34,7 +35,8 @@ class RoomService:
                     timestamp INTEGER NOT NULL, PRIMARY KEY(room_id,public_key));
                 CREATE TABLE IF NOT EXISTS rooms(
                     id INTEGER PRIMARY KEY, name TEXT NOT NULL,
-                    enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)));
+                    enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+                    is_bot INTEGER NOT NULL DEFAULT 0 CHECK(is_bot IN (0,1)));
                 CREATE TABLE IF NOT EXISTS members(
                     room_id INTEGER NOT NULL REFERENCES rooms(id), public_key TEXT NOT NULL,
                     role TEXT NOT NULL CHECK(role IN ('reader','writer','admin')),
@@ -51,6 +53,9 @@ class RoomService:
                     room_id INTEGER NOT NULL REFERENCES rooms(id), public_key TEXT NOT NULL,
                     timestamp INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(room_id,public_key));
             ''')
+            columns = {row['name'] for row in db.execute('PRAGMA table_info(rooms)')}
+            if 'is_bot' not in columns:
+                db.execute('ALTER TABLE rooms ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0 CHECK(is_bot IN (0,1))')
             # Never turn an existing private ACL room into an open/passwordless room.
             db.execute('UPDATE rooms SET enabled=0 WHERE id NOT IN (SELECT room_id FROM room_auth)')
 
@@ -95,7 +100,7 @@ class RoomService:
 
     def rooms(self):
         with self.connect() as db:
-            return [dict(row) for row in db.execute('SELECT id,name,enabled FROM rooms ORDER BY id')]
+            return [dict(row) for row in db.execute('SELECT id,name,enabled,is_bot FROM rooms ORDER BY id')]
 
     def set_enabled(self, room, enabled):
         if type(enabled) is not bool:
@@ -105,6 +110,23 @@ class RoomService:
                 raise ValueError('Set a room password before enabling it.')
             if db.execute('UPDATE rooms SET enabled=? WHERE id=?',(int(enabled),room)).rowcount!=1:
                 raise ValueError('Unknown room.')
+
+    def set_bot(self, room):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            if not db.execute('SELECT 1 FROM rooms WHERE id=?',(room,)).fetchone():
+                raise ValueError('Unknown room.')
+            db.execute('UPDATE rooms SET is_bot=0 WHERE is_bot=1')
+            db.execute('UPDATE rooms SET is_bot=1 WHERE id=?',(room,))
+
+    def clear_bot(self):
+        with self.connect() as db:
+            db.execute('UPDATE rooms SET is_bot=0 WHERE is_bot=1')
+
+    def bot_room(self):
+        with self.connect() as db:
+            row = db.execute('SELECT id FROM rooms WHERE is_bot=1 ORDER BY id LIMIT 1').fetchone()
+            return row[0] if row else None
 
     def grant(self, room, key, role):
         """Local administrative operation, never directly exposed to RF callers."""
@@ -130,7 +152,7 @@ class RoomService:
         if row is None or (write and row['role']=='reader'):
             raise PermissionError('Room access denied or room disabled.')
 
-    def post(self, room, authenticated_key, sender_timestamp, text):
+    def post(self, room, authenticated_key, sender_timestamp, text, return_created=False):
         key=self.public_key(authenticated_key)
         stamp=self.timestamp(sender_timestamp)
         if not isinstance(text,str) or not text or len(text.encode('utf-8'))>151 or any(ord(c)<32 or ord(c)==127 for c in text):
@@ -142,7 +164,8 @@ class RoomService:
             if existing:
                 if existing['text']!=text:
                     raise ValueError('Conflicting replay.')
-                return dict(existing)
+                result = dict(existing)
+                return (result, False) if return_created else result
             last=db.execute('SELECT timestamp FROM replay WHERE room_id=? AND public_key=?',(room,key)).fetchone()
             if last and stamp<=last[0]:
                 raise ValueError('Stale sender timestamp.')
@@ -150,7 +173,8 @@ class RoomService:
             now=self.timestamp(max(int(self.clock()),(previous+1) if previous is not None else 0))
             cursor=db.execute('INSERT INTO posts(room_id,author,sender_timestamp,timestamp,text) VALUES(?,?,?,?,?)',(room,key,stamp,now,text))
             db.execute('INSERT INTO replay VALUES(?,?,?) ON CONFLICT(room_id,public_key) DO UPDATE SET timestamp=excluded.timestamp',(room,key,stamp))
-            return dict(db.execute('SELECT * FROM posts WHERE id=?',(cursor.lastrowid,)).fetchone())
+            result = dict(db.execute('SELECT * FROM posts WHERE id=?',(cursor.lastrowid,)).fetchone())
+            return (result, True) if return_created else result
 
     def synchronize(self, room, authenticated_key, since, limit=20):
         key=self.public_key(authenticated_key)
