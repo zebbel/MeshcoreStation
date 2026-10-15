@@ -201,7 +201,14 @@ def test_room_ping_uses_exact_rx_packet_metadata_and_signed_signal(tmp_path):
     direct_rx = room_rx_metadata(direct, 7.0, -91)
     assert direct_rx['route_type'] == 2
     assert direct_rx['path_len'] is None and direct_rx['path'] == ''
-    assert direct_rx['room_scope_name'] == 'none (direct)'
+    assert direct_rx['room_scope_name'] == 'direct'
+    # Transport-direct packets are also labeled direct, even with a transport
+    # code: a known scope does not change the fact that the path is direct.
+    transport_direct = Packet(2, b'room message', 3, 0, b'', b'\x12\x34\x00\x00')
+    transport_rx = room_rx_metadata(transport_direct.encode(), 7.0, -91,
+                                    [{'name':'Europe', 'scope_key':scope.hex()}])
+    assert transport_rx['path_len'] is None
+    assert transport_rx['room_scope_name'] == 'direct'
 
     mc = SimpleNamespace()
     companion = SimpleNamespace(mc=mc, logger=SimpleNamespace(warning=lambda *a:None))
