@@ -1,5 +1,6 @@
 """Own the radio session, battery worker, and graceful reconnects in one process."""
 import asyncio
+import time
 from meshcorestation.bridge import bridge
 from meshcorestation.radio.companion import Companion
 from meshcorestation.radio.companion_control import CompanionControl
@@ -135,21 +136,44 @@ class Runtime:
         name = await self.companion.room_sender_name(post.get('author'))
         direct = rx.get('path_len') is None
         message = {'message': text, 'raw_text': text, 'name': name,
+                   'type': 'room', 'room_id': room,
+                   'room_name': self.companion.room_bot_name,
                    'sender_public_key': post.get('author'),
                    'sender_timestamp': post.get('sender_timestamp'),
+                   'recv_time': int(time.time()),
                    'path_len': rx.get('path_len'),
-                   'path': 'direct' if direct else
-                           f"{rx['path_len']} hops",
-                   'room_id': room, 'room_name': self.companion.room_bot_name}
+                   'path_hash_mode': rx['path_hash_size'] - 1 if isinstance(rx.get('path_hash_size'), int) else None,
+                   'path': 'direct' if direct else f"{rx['path_len']} hops",
+                   'command_status': 'processing'}
         self.logger.info("%s | room=%r | sender=%r", command['trigger'], self.companion.room_bot_name, name)
-        reply = await self.companion.bot.handle_message(message, rx, command)
-        if not reply:
-            return
+        # The regular channel handler already logs through this table. Use the
+        # same history for authenticated room messages, not the room posts table.
+        command_id = self.database.add_logger(message, rx, rx.get('room_scope_name') or 'unknown', '')
         from meshcorestation.commands.templates import split_reply
-        for index, part in enumerate(split_reply(reply)):
-            if index:
-                await asyncio.sleep(1)
-            self.rooms.service.local_post(room, part)
+        sent = []
+        status = 'processing'
+        try:
+            reply = await self.companion.bot.handle_message(message, rx, command)
+            if not reply:
+                status = 'no reply'
+                return
+            for part in split_reply(reply):
+                if sent:
+                    await asyncio.sleep(1)
+                self.rooms.service.local_post(room, part)
+                sent.append(part)
+            status = 'completed'
+        except BaseException:
+            status = 'partial' if sent else 'failed'
+            raise
+        finally:
+            # Finalize even when a command errors or a room transmission fails.
+            # The reply field contains only parts accepted into room storage,
+            # rather than text we merely attempted to post.
+            with self.database.db:
+                self.database.db.execute(
+                    'UPDATE logger SET reply=?,command_status=? WHERE id=?',
+                    (''.join(sent), status, command_id))
 
     async def session(self):
         self.companion = Companion(self.logger, self.database)
