@@ -1,7 +1,7 @@
 # Independent room server (experimental)
 
 Development branch: `feature/room-server`. Stable baseline: v2.7.8 on `main`.
-Published as experimental 2.8.0rc4 with password-based enrollment.
+Development source is now 2.8.0rc5 with password-based enrollment and optional room bot-channel routing.
 No companion flash is performed.
 
 ## What runs
@@ -38,6 +38,7 @@ Implemented protocol features:
   Repeater forwarding policies still determine which packets reach the station.
 - Original author prefixes in room pushes, client synchronization cursors,
   keep-alive replies and pending-message counts.
+- Any room can be selected as the MeshcoreStation bot channel. Newly received room posts are matched against the existing configured bot commands and replies are posted back into the same room. Selecting a normal companion channel switches the bot back.
 - Matching delivery ACKs, up to three delivery attempts, fair per-member polling
   and session expiry after one hour without authenticated activity. Logging in or
   sending a keep-alive resumes synchronization after failed attempts.
