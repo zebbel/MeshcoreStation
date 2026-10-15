@@ -1,7 +1,7 @@
 # Independent room server (experimental)
 
 Development branch: `feature/room-server`. Stable baseline: v2.7.8 on `main`.
-Development source is now 2.8.0rc7 with updated direct-room ping labels and distance (not a GitHub release).
+Development source is now 2.8.0rc8 with unified room and channel command history (not a GitHub release).
 No companion flash is performed.
 
 ## What runs
@@ -39,6 +39,15 @@ Implemented protocol features:
 - Original author prefixes in room pushes, client synchronization cursors,
   keep-alive replies and pending-message counts.
 - Any room can be selected as the MeshcoreStation bot channel. Newly received room posts are matched against the existing configured bot commands and replies are posted back into the same room. Selecting a normal companion channel switches the bot back.
+- Recognized room bot commands are also recorded in the dashboard's existing
+  `logger` command history. The entry records the room name and ID, the
+  authenticated sender public key and saved position, incoming SNR/RSSI,
+  hop/path information, packet scope, received command, and only the reply
+  parts actually accepted by local room storage. `command_status` records
+  `processing`, `completed`, `no reply`, `partial`, or `failed`.
+  Existing history and original channel history are preserved via an
+  additive SQLite schema migration. Room message-board posts that do not
+  match a configured command are not added to command history.
 - Room bot commands carry metadata from their **own** authenticated RF packet:
   signed RSSI in dBm, signed quarter-dB SNR, flood repeater hash count/path,
   and the matching scope name when its transport key is saved under Scopes.
