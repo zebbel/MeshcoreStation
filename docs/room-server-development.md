@@ -1,7 +1,7 @@
 # Independent room server (experimental)
 
 Development branch: `feature/room-server`. Stable baseline: v2.7.8 on `main`.
-Development source is now 2.8.0rc8 with unified room and channel command history (not a GitHub release).
+Development source is now 2.8.0rc9 with configurable battery report destinations (not a GitHub release).
 No companion flash is performed.
 
 ## What runs
@@ -146,3 +146,20 @@ room server, its runtime hooks or its dashboard entry to stable. Publish the ful
 room implementation only on the feature branch. Users first update their existing
 stable installation to obtain the selector; subsequent branch switches are web-only.
 Both branches must retain `WEB_SWITCH_PROTOCOL = 1` and support both choices.
+
+## Scheduled repeater battery reports
+
+In **Battery history / settings**, select **Send battery reports to**:
+
+- **Follow bot chat / room** (default, including upgrades from previous versions).
+- **Chat: ...** — a named private channel on the connected companion, independent of the bot chat.
+- **Room: ...** — an enabled room served locally by this station, independent of the bot chat.
+
+The selected target is saved as `voltage_config.report_target`. Channel
+reports use the companion's default transmit scope, as before. Room reports
+are queued as local room posts and delivered by the existing worker to
+authenticated members. Both kinds of report attempt are logged in Recent
+report attempts; queued never means guaranteed receipt. A missing/disabled
+room or missing/nonprivate/ambiguous channel causes an explicit failed
+attempt, never an automatic fallback to another destination. The migration
+preserves existing schedules and defaults the target to the bot chat/room.
