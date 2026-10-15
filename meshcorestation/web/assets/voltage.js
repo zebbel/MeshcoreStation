@@ -71,7 +71,10 @@
         const latest=data.latest;
         el('voltage-latest').textContent=latest ? `${latest.voltage===null?'Reading failed':window.MeshcoreStationBattery.reading(latest.voltage)} · ${date(latest.sampled_at,data.config.timezone)}${latest.error?' · '+latest.error:''}` : 'No readings yet.';
         const worker=data.worker, active=worker && worker.state!=='stopped' && data.server_time-worker.heartbeat<150;
-        el('voltage-worker').textContent=`${active?'Bot monitor: '+worker.state:'Bot monitor offline'} · Reports follow bot channel: ${data.bot_channel || '(none selected)'}. Private channels only.`;
+        const target = data.config.report_target || 'bot';
+        const room = (data.rooms || []).find(r => 'room:' + r.id === target);
+        const destination = target === 'bot' ? 'bot chat / room' : target.startsWith('channel:') ? 'chat ' + target.slice(8) : room ? 'room ' + room.name : target;
+        el('voltage-worker').textContent=`${active?'Bot monitor: '+worker.state:'Bot monitor offline'} · Reports to: ${destination}.`;
         el('voltage-chart-note').textContent=''; chart(data.samples,data.config.timezone,Number(el('voltage-days').value));
         const rows=el('voltage-recent'); rows.replaceChildren();
         for (const p of [...data.samples].slice(-10).reverse()) { const tr=document.createElement('tr'); for(const t of [date(p.sampled_at,data.config.timezone),p.voltage===null?'—':window.MeshcoreStationBattery.reading(p.voltage),p.error||'OK']) tr.append(node('td',t)); rows.append(tr); }
