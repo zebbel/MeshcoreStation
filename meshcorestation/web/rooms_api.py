@@ -44,6 +44,9 @@ def register_room_routes(server):
                     if type(rid) is not int or rid < 1:
                         raise ValueError('Select a room.')
                     service.details(rid)
+                if action == 'qr':
+                    from meshcorestation.web.companion_share import contact_card
+                    return reply(contact_card(service.config(rid), contact_type=3))
                 if action == 'create':
                     rid = service.create(body.get('name'))
                 elif action == 'enabled':

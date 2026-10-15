@@ -41,3 +41,25 @@ def test_bounds_and_type_errors(client):
     assert http.post('/api/rooms',json=[],headers=headers).status_code==400
     assert http.post('/api/rooms',json={'action':'post','room':1,'text':'x'*9000},headers=headers).status_code==400
     assert http.post('/api/rooms',json={'action':'enabled','room':True,'enabled':True},headers=headers).status_code==400
+
+
+def test_room_qr_uses_room_identity_and_type(client,monkeypatch):
+    import base64
+    import qrcode
+    from urllib.parse import urlsplit,parse_qs
+    http,path=client;headers={'X-Meshcore-Control':'1'}
+    room=http.post('/api/rooms',json={'action':'create','name':'My room'},headers=headers).json['rooms'][0]
+    encoded=[];make=qrcode.make
+    def capture(data,**kwargs):
+        encoded.append(data);return make(data,**kwargs)
+    monkeypatch.setattr(qrcode,'make',capture)
+    response=http.post('/api/rooms',json={'action':'qr','room':room['id']},headers=headers)
+    assert response.status_code==200
+    card=response.json
+    assert encoded==[card['uri']]==[room['contact_uri']]
+    query=parse_qs(urlsplit(card['uri']).query)
+    assert query['type']==['3'] and query['public_key']==[room['public_key']]
+    assert query['name']==['My room']
+    assert b'<svg' in base64.b64decode(card['image'].split(',',1)[1])
+    assert 'seed' not in card and 'scope_key' not in card
+    assert http.post('/api/rooms',json={'action':'qr','room':room['id']}).status_code==403

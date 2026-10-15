@@ -4,6 +4,7 @@
   if (location.pathname !== '/rooms') return;
   const $ = id => document.getElementById(id);
   let rooms = [], selected = null, busy = false;
+  let contacts = [], contactsLoaded = false, qrRoom = null, shownRoom = null;
   function current() { return rooms.find(r => r.id === selected); }
   async function request(body) {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25000);
@@ -14,6 +15,18 @@
       return result;
     } finally { clearTimeout(timer); }
   }
+  function renderContacts() {
+    const picker=$('contact-picker'), previous=picker.value;
+    const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=contactsLoaded?'Select a companion…':'Load contacts to choose a companion';
+    const members=new Set((current()?.members || []).map(m=>m.public_key.toLowerCase()));
+    picker.replaceChildren(placeholder,...contacts.map(c=>{
+      const option=document.createElement('option');option.value=c.public_key;
+      option.disabled=members.has(c.public_key);
+      option.textContent=`${c.name || 'Unnamed'} · ${c.public_key.slice(0,12)}${option.disabled?' · Already a member':''}`;
+      return option;
+    }));
+    if (contacts.some(c=>c.public_key===previous) && !members.has(previous)) picker.value=previous;
+  }
   function render(result, full) {
     rooms = result.rooms; lastStatus = result.status;
     if (!rooms.some(r => r.id === selected)) selected = rooms[0]?.id ?? null;
@@ -23,6 +36,11 @@
       $('room').value = selected;
     }
     const room = current(); $('details').hidden = !room;
+    if (shownRoom !== selected) {
+      shownRoom=selected; qrRoom=null; $('room-qr').hidden=true; $('room-qr-image').removeAttribute('src');
+      $('show-qr').textContent='Show room QR code'; $('member-key').value='';
+    }
+    if (full) renderContacts();
     if (!room) return;
     $('title').textContent = room.name; $('state').textContent = room.enabled ? 'Enabled' : 'Disabled · no room radio traffic';
     $('toggle').textContent = room.enabled ? 'Disable room' : 'Enable room'; $('send').disabled = !room.enabled;
@@ -44,6 +62,35 @@
     catch(e){$('error').textContent=e.message;}
     finally {busy=false;}
   }
+  $('show-qr').onclick=async()=>{
+    if (!$('room-qr').hidden) { $('room-qr').hidden=true; $('show-qr').textContent='Show room QR code'; return; }
+    const rid=selected; if (!rid) return;
+    $('show-qr').disabled=true;
+    try {
+      if (qrRoom!==rid) {
+        const card=await request({action:'qr',room:rid});
+        if (selected!==rid) return;
+        $('room-qr-image').src=card.image; qrRoom=rid;
+      }
+      $('room-qr').hidden=false; $('show-qr').textContent='Hide room QR code';
+    } catch(e) { $('error').textContent=e.message; }
+    finally { $('show-qr').disabled=false; }
+  };
+  $('load-contacts').onclick=async()=>{
+    $('load-contacts').disabled=true; $('contact-status').textContent='Loading companion contacts…';
+    const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),25000);
+    try {
+      const response=await fetch('/api/companion/contacts',{headers:{'X-Meshcore-Control':'1'},cache:'no-store',signal:controller.signal});
+      const result=await response.json();
+      if (!response.ok || !result.ok) throw Error(result.error || 'Could not load contacts');
+      contacts=(result.contacts || []).filter(c=>Number(c.type)===1 && /^[0-9a-f]{64}$/i.test(c.public_key)).map(c=>({...c,public_key:c.public_key.toLowerCase()}));
+      contacts.sort((a,b)=>(a.name || '').localeCompare(b.name || ''));
+      contactsLoaded=true;renderContacts();
+      $('contact-status').textContent=contacts.length?'Select a contact, choose permission, then click Add / update member.':'No companion contacts found. You can still enter a public key below.';
+    } catch(e) { $('contact-status').textContent=e.message; }
+    finally { clearTimeout(timeout); $('load-contacts').disabled=false; }
+  };
+  $('contact-picker').onchange=()=>{ $('member-key').value=$('contact-picker').value; };
   $('create').onsubmit=e=>{e.preventDefault();change({action:'create',name:$('name').value},'name');};
   $('grant').onsubmit=e=>{e.preventDefault();change({action:'grant',key:$('member-key').value.trim(),role:$('role').value},'member-key');};
   $('post').onsubmit=e=>{e.preventDefault();change({action:'post',text:$('text').value},'text');};

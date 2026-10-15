@@ -1,7 +1,7 @@
 # Independent room server (experimental)
 
 Development branch: `feature/room-server`. Stable baseline: v2.7.8 on `main`.
-Published as the experimental 2.8.0rc2 release. No companion flash is performed.
+Published as the experimental 2.8.0rc3 release. No companion flash is performed.
 
 ## What runs
 
@@ -56,13 +56,13 @@ selector is refused, so returning to stable cannot remove the way back.
 
 1. Open **Room server → Open room server** in the dashboard (`/rooms`).
 2. Create a room. It remains disabled until explicitly enabled.
-3. Add the full public key of each Android user's companion. Select reader or
-   writer. This is the user's companion key, not their phone identity.
+3. Use **Load companion contacts** to select an existing companion, or enter its
+   full public key manually. Select reader or writer and add the member. This is the user's companion key, not their phone identity.
 4. If your repeaters require a scope, enter the same 32-hex-character scope key
    in the room settings. Leaving it empty explicitly chooses unscoped floods.
 5. Enable the room. Check that the worker remains ready without an error. A
    companion that rejects raw TX stops only the room worker; the bot continues.
-6. Open/copy **Import room contact** on Android. The contact has room type 3 and
+6. Use **Show room QR code** and scan it on Android, or open/copy **Import room contact**. The contact has room type 3 and
    the room's key, which is different from the station companion's key.
 7. Log in with a blank password. Send a message from an approved writer, and
    verify another member receives it. Post a message from the dashboard and
