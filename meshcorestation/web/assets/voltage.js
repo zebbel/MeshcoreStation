@@ -82,7 +82,7 @@
         if (busy || (silent && dirty)) return;
         busy=true;controls();
         if (!silent) message('Loading voltage history…');
-        try { render(await request(),form); if (!silent) message(dirty?'Repeater selected. Save to use it for monitoring.':'History refreshed.'); }
+        try { if(form) await refreshChannels(); render(await request(),form); if (!silent) message(dirty?'Repeater selected. Save to use it for monitoring.':'History refreshed.'); }
         catch(error) { message(error.message,true); if(form) snapshot=null; }
         finally { busy=false;controls(); }
     }
@@ -118,7 +118,7 @@
         <label>Voltage LPP channel<input id="voltage-lpp" type="number" min="1" max="255" required></label>
         <label>First report<input id="voltage-time1" type="time" required></label><label>Second report<input id="voltage-time2" type="time" required></label>
         <label class="voltage-wide">Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label class="voltage-wide">Send battery reports to<select id="voltage-target" required></select></label></div>
-        <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Previous history is kept.</p>
+        <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Reports may follow the bot or use a private chat or enabled room. Previous history is kept.</p>
         <div class="voltage-actions"><button id="voltage-save" type="submit">Save settings</button><button id="voltage-read" type="button">Read now</button><button id="voltage-refresh" type="button">Refresh</button></div></form>
         <details><summary>Select from repeater list</summary><input id="voltage-search" type="search" aria-label="Search repeaters" placeholder="Search name or public key"><ul id="voltage-repeaters"></ul></details>
         <h3 id="voltage-latest">No readings yet.</h3><label>Chart period <select id="voltage-days"><option value="1" selected>24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
