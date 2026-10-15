@@ -5,6 +5,7 @@ const dom = new JSDOM('<html><body><dialog id="companion-dialog"><div class="com
 const w = dom.window;
 w.AbortSignal.timeout = () => undefined;
 w.confirm = () => true;
+let checkedBranch = 'main';
 let phase = '', checked = false, installed = false, tick;
 const requests = [];
 w.setInterval = callback => { tick = callback; return 1; };
@@ -12,10 +13,10 @@ w.clearInterval = () => {};
 w.fetch = async (url, options) => {
     const body = options.body ? JSON.parse(options.body) : null;
     requests.push(body);
-    if (body?.action === 'check') checked = true;
-    if (body?.action === 'install') { installed = true; phase = 'queued'; assert.equal(body.target, 'b'.repeat(40)); }
-    return {ok:true, json:async()=>({ok:true,version:'2.1.0',revision:'a'.repeat(40), ready:true,
-        check:checked ? {latest:'b'.repeat(40),available:true,latest_version:'2.2.0',checked_at:1,changes_url:'https://github.com/zebbel/MeshcoreStation/compare/a...b'} : {},
+    if (body?.action === 'check') { checked = true; checkedBranch = body.branch; }
+    if (body?.action === 'install') { installed = true; phase = 'queued'; assert.equal(body.target, 'b'.repeat(40)); assert.equal(body.branch, 'feature/room-server'); }
+    return {ok:true, json:async()=>({ok:true,branch:'main',version:'2.1.0',revision:'a'.repeat(40), ready:true,
+        check:checked ? {branch:checkedBranch,latest:'b'.repeat(40),available:true,latest_version:'2.2.0',checked_at:1,changes_url:'https://github.com/zebbel/MeshcoreStation/compare/a...b'} : {},
         status:{phase,message:phase ? 'Update '+phase : ''}})};
 };
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -28,6 +29,12 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
     panel.querySelector('.update-check').click(); await settle();
     assert(!panel.querySelector('.update-install').disabled);
     assert(panel.querySelector('.update-latest').textContent.includes('2.2.0'));
+    const select = panel.querySelector('.update-branch');
+    select.value = 'feature/room-server'; select.dispatchEvent(new w.Event('change'));
+    assert(panel.querySelector('.update-install').disabled);
+    panel.querySelector('.update-check').click(); await settle();
+    assert.equal(checkedBranch, 'feature/room-server');
+    assert(!panel.querySelector('.update-install').disabled);
     panel.querySelector('.update-install').click(); await settle();
     assert(installed);
     assert(panel.querySelector('.update-check').disabled);

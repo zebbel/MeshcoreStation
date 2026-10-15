@@ -10,10 +10,14 @@ def register_update_routes(server):
         revision = updater.local_revision()
     except Exception:
         revision = 'unknown'
+    try:
+        branch = updater.local_branch()
+    except Exception:
+        branch = 'unknown'
 
     @server.get('/api/update/health')
     def update_health():
-        return jsonify(ok=True, revision=revision, version=__version__)
+        return jsonify(ok=True, revision=revision, version=__version__, branch=branch)
 
     @server.route('/api/update', methods=['GET', 'POST'])
     def updates():
@@ -31,14 +35,16 @@ def register_update_routes(server):
         try:
             if request.method == 'POST':
                 body = request.get_json(silent=True) or {}
+                if not isinstance(body, dict):
+                    raise ValueError('Invalid update request.')
                 if body.get('action') == 'check':
-                    return reply({'ok': True, 'check': updater.check()})
+                    return reply({'ok': True, 'check': updater.check(body.get('branch'))})
                 if body.get('action') == 'install':
-                    updater.queue(body.get('target'))
+                    updater.queue(body.get('target'), body.get('branch'))
                 else:
                     return reply({'ok': False, 'error': 'Unknown update action.'}, 400)
             return reply({'ok': True, 'version': __version__, 'revision': revision,
                           'check': updater.read('check.json'), 'status': updater.read('status.json'),
-                          'ready': updater.ready()})
+                          'ready': updater.ready(), 'branch': branch, 'branches': updater.BRANCHES})
         except Exception as exc:
             return reply({'ok': False, 'error': str(exc)}, 409)

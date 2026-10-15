@@ -12,6 +12,7 @@ def area(tmp_path, monkeypatch):
     monkeypatch.setattr(u, 'ROOT', tmp_path)
     monkeypatch.setattr(u, 'STATE', tmp_path / '.updates')
     monkeypatch.setattr(u, 'ready', lambda: True)
+    monkeypatch.setattr(u, 'local_branch', lambda: 'main')
     return tmp_path
 
 
@@ -25,7 +26,7 @@ def test_lock_rejects_concurrency(area):
 def test_queue_requires_checked_commit_and_clean_source(area, monkeypatch):
     monkeypatch.setattr(u, 'validate_checkout', lambda: None)
     monkeypatch.setattr(u, 'local_revision', lambda: 'a'*40)
-    u.write('check.json', {'latest': 'b'*40, 'current': 'a'*40, 'available': True})
+    u.write('check.json', {'latest': 'b'*40, 'current': 'a'*40, 'available': True, 'branch': 'main', 'current_branch': 'main'})
     with pytest.raises(RuntimeError, match='Check for updates'):
         u.queue('c'*40)
     u.queue('b'*40)
@@ -131,7 +132,7 @@ def test_interrupted_update_recovers(area, monkeypatch):
 
 
 def test_unavailable_worker_and_changed_revision_refuse_install(area, monkeypatch):
-    u.write('check.json', {'latest':'b'*40,'current':'a'*40,'available':True})
+    u.write('check.json', {'latest':'b'*40,'current':'a'*40,'available':True,'branch':'main','current_branch':'main'})
     monkeypatch.setattr(u,'ready',lambda:False)
     with pytest.raises(RuntimeError, match='one-time'):
         u.queue('b'*40)
@@ -242,3 +243,60 @@ def test_interrupted_fast_update_keeps_venv(area,monkeypatch):
     u.recover(dict(old='a'*40,target='b'*40,backup=str(backup),data=str(data),port=80,backup_complete=True,backup_venv=False))
     assert (venv/'pkg').read_text()=='keep'
     assert (data/'db').read_text()=='old'
+
+
+def test_two_way_branch_switch_with_real_git(area, monkeypatch):
+    def git(*args):
+        return subprocess.check_output(['git',*args],cwd=area,text=True).strip()
+    git('init','-b','main');git('config','user.email','test@example.test');git('config','user.name','Test')
+    (area/'.gitignore').write_text('.updates/\n')
+    package=area/'meshcorestation';package.mkdir()
+    (package/'__init__.py').write_text('__version__="2.7.8"')
+    (package/'updater.py').write_text('WEB_SWITCH_PROTOCOL = 1\n')
+    git('add','.');git('commit','-m','stable');git('remote','add','origin',u.REMOTE)
+    stable=git('rev-parse','HEAD')
+    git('switch','-c','feature/room-server');(area/'room.txt').write_text('feature')
+    git('add','.');git('commit','-m','room');feature=git('rev-parse','HEAD')
+    git('switch','main')
+    monkeypatch.setattr(u,'local_branch',lambda:u.branch_name(git('symbolic-ref','--short','HEAD')))
+    real=u.run
+    def run(*args,**kwargs):
+        if args[:2]==('git','fetch'):
+            head=stable if args[-1]=='refs/heads/main' else feature
+            (area/'.git/FETCH_HEAD').write_text(head+'\n');return ''
+        return real(*args,**kwargs)
+    monkeypatch.setattr(u,'run',run)
+    checked=u.check('feature/room-server')
+    assert checked['available'] and checked['latest']==feature
+    u.verify_target('feature/room-server',feature)
+    u.restore_source(feature,'feature/room-server')
+    assert u.local_branch()=='feature/room-server' and (area/'room.txt').exists()
+    # Stable is an ancestor, not a fast-forward from experimental.
+    checked=u.check('main')
+    assert checked['available'] and checked['latest']==stable
+    u.verify_target('main',stable);u.restore_source(stable,'main')
+    assert u.local_branch()=='main' and not (area/'room.txt').exists()
+    with pytest.raises(RuntimeError,match='Choose Stable'):
+        u.check('--upload-pack=evil')
+
+
+def test_switch_requires_return_path_and_checked_branch(area,monkeypatch):
+    monkeypatch.setattr(u,'run',lambda *a,**k:'old updater')
+    with pytest.raises(RuntimeError,match='switching back'):
+        u.require_switch_support('b'*40)
+    u.write('check.json',dict(current='a'*40,latest='b'*40,available=True,branch='main',current_branch='main'))
+    with pytest.raises(RuntimeError,match='selected version'):
+        u.queue('b'*40,'feature/room-server')
+    assert not u.read('request.json')
+
+
+def test_interrupted_switch_restores_branch_and_room_data(area,monkeypatch):
+    data=area/'data';data.mkdir();(data/'rooms.db').write_text('new')
+    backup=area/'.updates/backup';(backup/'data').mkdir(parents=True)
+    (backup/'data/rooms.db').write_text('saved rooms');(backup/'meshcorestation.env').write_text('settings')
+    calls=[];monkeypatch.setattr(u,'run',lambda *a,**k:calls.append(a) or '')
+    monkeypatch.setattr(u,'service',lambda *a:None);monkeypatch.setattr(u,'healthy',lambda *a:None)
+    u.recover(dict(old='a'*40,old_branch='feature/room-server',target='b'*40,
+                   backup=str(backup),data=str(data),port=80,backup_complete=True,backup_venv=False))
+    assert ('git','switch','-C','feature/room-server','a'*40) in calls
+    assert (data/'rooms.db').read_text()=='saved rooms'

@@ -16,6 +16,9 @@ ROOT = Path(__file__).resolve().parent.parent
 STATE = ROOT / '.updates'
 REMOTE = 'https://github.com/zebbel/MeshcoreStation.git'
 SERVICE = 'meshcorestation.service'
+WEB_SWITCH_PROTOCOL = 1
+BRANCHES = {'main': 'Stable', 'feature/room-server': 'Room server (experimental)'}
+
 ACTIVE = {'queued', 'preparing', 'backing_up', 'installing', 'verifying', 'rolling_back'}
 
 
@@ -92,11 +95,47 @@ def local_revision():
     return run('git', 'rev-parse', 'HEAD')
 
 
+def branch_name(value):
+    if value not in BRANCHES:
+        raise RuntimeError('Choose Stable or Room server (experimental).')
+    return value
+
+
+def local_branch():
+    return branch_name(run('git', 'symbolic-ref', '--short', 'HEAD'))
+
+
+def restore_source(old, branch=None):
+    if branch is not None:
+        run('git', 'switch', '-C', branch_name(branch), old)
+    else:  # Recover transactions created by the earlier main-only updater.
+        run('git', 'reset', '--hard', old)
+
+
+def require_switch_support(target):
+    source = run('git', 'show', f'{target}:meshcorestation/updater.py')
+    if not re.search(r'^WEB_SWITCH_PROTOCOL = 1$', source, re.MULTILINE):
+        raise RuntimeError('This version does not yet support switching back from the web app. '
+                           'Publish the version selector to both branches first.')
+
+
+def verify_target(branch, target):
+    branch_name(branch)
+    run('git', 'fetch', '--no-tags', REMOTE, 'refs/heads/' + branch)
+    latest = run('git', 'rev-parse', 'FETCH_HEAD')
+    if target != latest:
+        raise RuntimeError('The selected version changed on GitHub. Check again before installing.')
+    require_switch_support(target)
+    # Do not overwrite unpublished work on an existing destination branch.
+    existing = run('git', 'for-each-ref', '--format=%(objectname)', 'refs/heads/' + branch)
+    if existing:
+        run('git', 'merge-base', '--is-ancestor', existing, target)
+
+
 def validate_checkout():
     if run('git', 'rev-parse', '--show-toplevel') != str(ROOT):
         raise RuntimeError('Install from a Git clone to use web updates.')
-    if run('git', 'symbolic-ref', '--short', 'HEAD') != 'main':
-        raise RuntimeError('Web updates require the main branch.')
+    local_branch()
     if run('git', 'status', '--porcelain', '--untracked-files=normal'):
         raise RuntimeError('Local source changes must be committed or removed before updating.')
     remote = run('git', 'remote', 'get-url', 'origin').removesuffix('.git').lower()
@@ -111,15 +150,21 @@ def ready():
         return False
 
 
-def check():
+def check(branch=None):
     with lock():
         validate_checkout()
-        run('git', 'fetch', '--no-tags', REMOTE, 'refs/heads/main')
+        current_branch = local_branch()
+        branch = branch_name(branch if branch is not None else current_branch)
+        run('git', 'fetch', '--no-tags', REMOTE, 'refs/heads/' + branch)
         current, latest = local_revision(), run('git', 'rev-parse', 'FETCH_HEAD')
-        run('git', 'merge-base', '--is-ancestor', current, latest)
+        if branch != current_branch:
+            require_switch_support(latest)
+        if branch == current_branch:
+            run('git', 'merge-base', '--is-ancestor', current, latest)
         source = run('git', 'show', f'{latest}:meshcorestation/__init__.py')
         match = re.search(r'__version__\s*=\s*[\'"]([^\'"]+)', source)
-        result = {'current': current, 'latest': latest, 'available': current != latest,
+        result = {'current': current, 'latest': latest, 'available': current != latest or branch != current_branch,
+                  'branch': branch, 'current_branch': current_branch,
                   'latest_version': match.group(1) if match else latest[:8],
                   'checked_at': int(time.time()), 'ready': ready(),
                   'changes_url': f'https://github.com/zebbel/MeshcoreStation/compare/{current}...{latest}'}
@@ -127,9 +172,14 @@ def check():
         return result
 
 
-def queue(target):
+def queue(target, branch=None):
     with lock():
         checked = read('check.json')
+        if 'branch' not in checked:
+            raise RuntimeError('Check for updates again before installing.')
+        selected = branch_name(branch if branch is not None else checked.get('branch', 'main'))
+        if selected != checked.get('branch', 'main'):
+            raise RuntimeError('Check for updates on the selected version again.')
         if not ready():
             raise RuntimeError('Run the one-time terminal update to install the web update service.')
         if read('status.json').get('phase') in ACTIVE or (STATE / 'request.json').exists() or read('transaction.json'):
@@ -139,8 +189,12 @@ def queue(target):
             raise RuntimeError('Check for updates again before installing.')
         if local_revision() != checked['current']:
             raise RuntimeError('The installed code changed. Check for updates again.')
-        write('status.json', {'phase': 'queued', 'message': 'Update queued. Preparing backup…', 'target': target})
-        write('request.json', {'target': target, 'current': checked['current']})
+        current_branch = local_branch() if 'branch' in checked else None
+        if current_branch is not None and current_branch != checked.get('current_branch'):
+            raise RuntimeError('Installed branch changed. Check again.')
+        write('status.json', {'branch': selected, 'phase': 'queued', 'message': 'Update queued. Preparing backup…', 'target': target})
+        write('request.json', {'target': target, 'current': checked['current'],
+                               **({'branch': selected, 'current_branch': current_branch} if current_branch is not None else {})})
 
 
 def service(action):
@@ -205,7 +259,7 @@ def recover(transaction):
     try:
         service('stop')
         if transaction['backup_complete']:
-            run('git', 'reset', '--hard', transaction['old'])
+            restore_source(transaction['old'], transaction.get('old_branch'))
             if transaction.get('backup_venv', True):
                 if (ROOT / '.venv').exists():
                     shutil.rmtree(ROOT / '.venv')
@@ -254,7 +308,7 @@ def worker():
             nonlocal phase_started
             phase_started = time.monotonic()
             progress_state.update(phase=phase, message=message, elapsed_seconds=0, started_at=time.time(),
-                                  target=request['target'], backup=str(backup) if backup else None)
+                                  target=request['target'], branch=request.get('branch', 'main'), backup=str(backup) if backup else None)
             write('status.json', progress_state)
             print(message, flush=True)
         try:
@@ -263,7 +317,14 @@ def worker():
             old, target = local_revision(), request['target']
             if old != request['current'] or not re.fullmatch('[0-9a-f]{40}', target):
                 raise RuntimeError('Source changed since the update was checked.')
-            run('git', 'merge-base', '--is-ancestor', old, target)
+            old_branch = request.get('current_branch')
+            target_branch = request.get('branch')
+            if target_branch is not None:
+                if local_branch() != old_branch:
+                    raise RuntimeError('Installed branch changed. Check again.')
+                verify_target(target_branch, target)
+            else:
+                run('git', 'merge-base', '--is-ancestor', old, target)
             status('preparing', 'Validating dependencies and preparing compatible wheels while the station runs…')
             wheelhouse = prepare_dependencies(old, target)
             backup_venv = wheelhouse is not None
@@ -279,7 +340,7 @@ def worker():
             backup = STATE / ('backup-' + time.strftime('%Y%m%d-%H%M%S'))
             backup.mkdir(mode=0o700)
             status('backing_up', 'Stopping MeshcoreStation and backing up code, data' + (' and dependencies…' if backup_venv else ' and settings; unchanged dependencies are retained…'))
-            transaction = {'old': old, 'data': str(data), 'port': PORT,
+            transaction = {'old': old, 'old_branch': old_branch, 'branch': target_branch, 'data': str(data), 'port': PORT,
                            'backup': str(backup), 'backup_complete': False, 'backup_venv': backup_venv, 'target': target}
             write('transaction.json', transaction)
             stopped = True
@@ -295,7 +356,7 @@ def worker():
             transaction['backup_complete'] = True
             write('transaction.json', transaction)
             status('installing', 'Installing the update and checking dependencies…')
-            run('git', 'reset', '--hard', target)
+            restore_source(target, target_branch)
             python = str(ROOT / '.venv/bin/python3')
             if wheelhouse is not None:
                 run(python, '-m', 'pip', 'install', '--force-reinstall', '--no-index', '--only-binary=:all:',
@@ -317,7 +378,7 @@ def worker():
                     status('rolling_back', 'Update failed. Restoring the previous installation…')
                     service('stop')
                     if backup_complete:
-                        run('git', 'reset', '--hard', old)
+                        restore_source(old, old_branch)
                         if backup_venv:
                             shutil.rmtree(ROOT / '.venv')
                             shutil.copytree(backup / 'venv', ROOT / '.venv', symlinks=True)
