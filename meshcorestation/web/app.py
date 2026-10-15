@@ -30,4 +30,6 @@ def create_app():
     register_oled_routes(app.server)
     from meshcorestation.web.reply_api import register_reply_routes
     register_reply_routes(app.server)
+    from meshcorestation.web.rooms_api import register_room_routes
+    register_room_routes(app.server)
     return app

@@ -1,0 +1,24 @@
+const fs=require('fs'),assert=require('assert'),{JSDOM}=require('jsdom');
+const html=fs.readFileSync('meshcorestation/web/rooms.html','utf8');
+const dom=new JSDOM(html,{url:'http://localhost/rooms',runScripts:'outside-only',pretendToBeVisual:true});
+const w=dom.window, requests=[];
+const room={id:1,name:'Community',enabled:1,scope_key:'',public_key:'aa'.repeat(32),contact_uri:'meshcore://contact/add?type=3',members:[{public_key:'bb'.repeat(32),role:'writer'}],posts:[{timestamp:1000,author:'bb'.repeat(32),text:'<img src=x onerror=alert(1)>'}]};
+w.fetch=async(url,options)=>{requests.push(options.body?JSON.parse(options.body):null);return {ok:true,json:async()=>({ok:true,rooms:[room],status:{running:true,sessions:1,dropped_packets:0}})};};
+w.setInterval=()=>0;
+w.eval(fs.readFileSync('meshcorestation/web/assets/rooms.js','utf8'));
+(async()=>{
+ await new Promise(r=>setTimeout(r,10));
+ assert(!w.document.getElementById('details').hidden);
+ assert.equal(w.document.querySelectorAll('#posts img').length,0);
+ assert(w.document.getElementById('posts').textContent.includes('<img'));
+ const text=w.document.getElementById('text');text.value='From dashboard';
+ w.document.getElementById('post').dispatchEvent(new w.Event('submit',{cancelable:true}));
+ await new Promise(r=>setTimeout(r,10));
+ assert.deepEqual(requests.at(-1),{room:1,action:'post',text:'From dashboard'});
+ assert.equal(text.value,'');
+ w.fetch=async()=>({ok:false,json:async()=>({ok:false,error:'Room disabled'})});
+ text.value='Keep draft';w.document.getElementById('post').dispatchEvent(new w.Event('submit',{cancelable:true}));
+ await new Promise(r=>setTimeout(r,10));
+ assert.equal(text.value,'Keep draft');assert.equal(w.document.getElementById('error').textContent,'Room disabled');
+ dom.window.close();console.log('Room UI controls and safe message rendering passed');
+})().catch(e=>{console.error(e);process.exit(1);});

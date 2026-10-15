@@ -14,6 +14,7 @@ class Runtime:
         self.reconnect_requested = asyncio.Event()
         self.requests = set()
         self.oled = None
+        self.rooms = None
         self.maintenance = False
         self.usb_closed = asyncio.Event()
         self.resume_radio = asyncio.Event()
@@ -37,6 +38,9 @@ class Runtime:
             async with companion.control_lock:
                 if control is not self.control:
                     return {'ok': False, 'error': 'Companion reconnected; refresh before retrying.'}
+                if payload.get('operation') == 'room_restart':
+                    started = await self.start_rooms()
+                    return {'ok': started, 'error': '' if started else 'Room worker could not start; check station logs.'}
                 return await control.execute(payload)
         except asyncio.CancelledError:
             raise
@@ -51,6 +55,9 @@ class Runtime:
         for task in tuple(self.requests):
             task.cancel()
         await asyncio.gather(*tuple(self.requests), return_exceptions=True)
+        if self.rooms is not None:
+            await self.rooms.close()
+            self.rooms = None
         if self.voltage is not None:
             await self.voltage.close()
             self.voltage = None
@@ -80,6 +87,21 @@ class Runtime:
         self.resume_radio.set()
         self.reconnect_requested.set()
 
+    async def start_rooms(self):
+        if self.rooms:
+            await self.rooms.close()
+        try:
+            from meshcorestation.config import DATA_DIR
+            from meshcorestation.rooms.service import RoomService
+            from meshcorestation.rooms.server import RoomWorker
+            self.rooms = RoomWorker(self.companion, RoomService(DATA_DIR / 'rooms.db'))
+            self.rooms.start()
+            return True
+        except Exception as exc:
+            self.rooms = None
+            self.logger.warning('Room server unavailable; bot continues: %s', exc)
+            return False
+
     async def session(self):
         self.companion = Companion(self.logger, self.database)
         if not await self.companion.connect():
@@ -96,6 +118,7 @@ class Runtime:
         self.voltage.start()
         self.oled = OledDisplay(self.companion)
         self.oled.start()
+        await self.start_rooms()
         self.logger.set_log_level()
         while True:
             connected = self.companion.mc.connection_manager.is_connected
