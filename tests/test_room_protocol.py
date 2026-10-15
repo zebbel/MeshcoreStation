@@ -54,7 +54,10 @@ def test_private_login_posts_push_ack_restart(mesh):
     outgoing = datagram(writer,endpoint.identity.public,ws,2,clear,(0,b'')).encode()
     reply = Packet.parse(endpoint.receive(outgoing)[0])
     assert reply.kind==3 and reply.payload == ack(clear,writer.public)
+    assert len(endpoint.new_posts) == 1 and endpoint.new_posts[0]['text'] == 'Hello board'
+    endpoint.new_posts.clear()
     assert endpoint.receive(outgoing)  # retry is acknowledged but not duplicated
+    assert endpoint.new_posts == []
     assert len(service.details(rid)['posts']) == 1
     now[0] += 7
     push = Packet.parse(endpoint.next_push())
