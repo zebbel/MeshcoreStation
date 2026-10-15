@@ -203,8 +203,10 @@ def room_rx_metadata(raw, snr, rssi, scopes=()):
     packet = Packet.parse(raw)
     flooded = packet.route in (0, 1)
     hops = packet.path_code & 63 if flooded else None
-    scope = 'unscoped' if packet.route == 1 else 'none (direct)' if packet.route == 2 else 'unrecognized scoped packet'
-    if packet.route in (0, 3) and len(packet.codes) == 4:
+    # Direct routing describes the received path regardless of any transport
+    # code. Flooded packets may still match a named scope.
+    scope = 'direct' if packet.route in (2, 3) else 'unscoped' if packet.route == 1 else 'unrecognized scoped packet'
+    if packet.route == 0 and len(packet.codes) == 4:
         code = int.from_bytes(packet.codes[:2], 'little')
         matched = set()
         for entry in scopes:
