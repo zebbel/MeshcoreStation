@@ -75,3 +75,17 @@ def test_password_validation_and_legacy_room_migration(tmp_path):
     assert len(upgraded.details(rid)['posts'])==1
     upgraded.set_password(rid,'new');upgraded.set_enabled(rid,True)
     assert upgraded.login(rid,B,1,b'new')[0]=='writer'
+
+
+def test_room_bot_selection_is_exclusive_and_persistent(room):
+    service,rid=room
+    other=service.create('Bot two')
+    service.set_bot(rid)
+    assert service.bot_room()==rid and service.details(rid)['is_bot']==1
+    service.set_bot(other)
+    assert service.bot_room()==other
+    assert service.details(rid)['is_bot']==0 and service.details(other)['is_bot']==1
+    restored=RoomService(service.path)
+    assert restored.bot_room()==other
+    restored.clear_bot()
+    assert restored.bot_room() is None
