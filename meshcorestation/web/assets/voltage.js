@@ -1,5 +1,5 @@
 (() => {
-    let dialog, snapshot = null, busy = false, wantedKey = '', timer = null, dirty = false;
+    let dialog, snapshot = null, busy = false, wantedKey = '', timer = null, dirty = false, channelsCache = [];
     const el = id => document.getElementById(id);
     const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
     function message(text, bad = false) { el('voltage-message').textContent = text; el('voltage-message').classList.toggle('voltage-error', bad); }
