@@ -30,6 +30,7 @@ class RoomEndpoint:
         self.sessions = OrderedDict()
         self.last_advert = 0
         self.received = self.sent = 0
+        self.new_posts = []
         self.auth_revision = service.config(room)['auth_revision']
 
     def refresh_auth(self):
@@ -142,7 +143,9 @@ class RoomEndpoint:
             if packet.kind == 2 and data[4] >> 2 == 0 and role != 'reader':
                 text_bytes = data[5:].split(b'\0', 1)[0]
                 text = text_bytes.decode('utf-8')
-                self.service.post(self.room, key, timestamp, text)
+                post, created = self.service.post(self.room, key, timestamp, text, return_created=True)
+                if created:
+                    self.new_posts.append(post)
                 self.received += 1
                 client.failures = 0
                 result = Packet(3, ack(data[:5]+text_bytes, bytes.fromhex(key)))
@@ -192,8 +195,9 @@ class RoomEndpoint:
 
 
 class RoomWorker:
-    def __init__(self, companion, service):
+    def __init__(self, companion, service, on_post=None):
         self.companion, self.service = companion, service
+        self.on_post = on_post
         self.queue = asyncio.Queue(maxsize=128)
         self.endpoints = OrderedDict()
         self.task = self.subscription = None
@@ -257,6 +261,13 @@ class RoomWorker:
                             responses = []
                         for response in responses:
                             await self.transmit(response, endpoint)
+                        if self.on_post and endpoint.new_posts:
+                            posts, endpoint.new_posts = endpoint.new_posts, []
+                            for post in posts:
+                                try:
+                                    await self.on_post(endpoint.room, post)
+                                except Exception as exc:
+                                    self.companion.logger.warning('Room bot command failed; room continues: %s', exc)
                     if time.time() - endpoint.last_advert >= 3600:
                         advert = endpoint.advert()
                         if advert:
