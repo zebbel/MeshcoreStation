@@ -78,7 +78,18 @@ def fields(template):
 def render(template, data):
     fields(template)
     pieces = []
+    omit_unit_after = None
     for literal, name, spec, _ in string.Formatter().parse(template):
+        # The usual ping template places units just after the placeholder.
+        # Avoid nonsensical "not reported (direct) hops" or "...km" text.
+        if omit_unit_after == 'hop_count' and literal.startswith(' hops'):
+            literal = literal[5:]
+        elif omit_unit_after == 'route_distance':
+            if literal.startswith('km'):
+                literal = literal[2:]
+            elif literal.startswith(' km'):
+                literal = literal[3:]
+        omit_unit_after = None
         pieces.append(literal)
         if name is None:
             continue
@@ -86,7 +97,9 @@ def render(template, data):
         if isinstance(value, Distance):
             value, prefix = value.value, value.qualifier
         if isinstance(value, UnavailableMeasurement):
-            pieces.append(value.reason); continue
+            pieces.append(value.reason)
+            omit_unit_after = name
+            continue
         if value is None or (isinstance(value, float) and not math.isfinite(value)):
             pieces.append('unknown'); continue
         if name in NUMERIC:
