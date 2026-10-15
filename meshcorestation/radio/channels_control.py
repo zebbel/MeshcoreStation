@@ -42,12 +42,12 @@ async def read_channels(companion):
             raise RuntimeError('Incomplete channel response. Refresh before retrying.')
         slots.append((name, secret))
         if name or secret != bytes(16):
-            channels.append({'index': index, 'name': name, 'type': channel_type(name, secret), 'protected': index == companion.channel_idx})
+            channels.append({'index': index, 'name': name, 'type': channel_type(name, secret), 'protected': index == companion.channel_idx and companion.room_bot_id is None})
     # Keyed revisions detect changes to keys without disclosing keys or their hashes.
     state = [identity, companion.channel_idx, [(n, s.hex()) for n, s in slots]]
     revision = hmac.new(REVISION_KEY, json.dumps(state).encode(), hashlib.sha256).hexdigest()
     return {'public_key': identity, 'revision': revision, 'capacity': capacity,
-            'free_slots': sum(n == '' and s == bytes(16) and i != companion.channel_idx
+            'free_slots': sum(n == '' and s == bytes(16) and (i != companion.channel_idx or companion.room_bot_id is not None)
                               for i, (n, s) in enumerate(slots)), 'channels': channels}, slots
 
 
@@ -122,7 +122,7 @@ async def handle_channels(companion, request):
             raise ValueError('Invalid channel slot')
         if request.get('confirm_delete') is not True:
             raise ValueError('Confirm channel deletion first')
-        if index == companion.channel_idx:
+        if index == companion.channel_idx and companion.room_bot_id is None:
             raise ValueError('This channel is used by the running bot and cannot be deleted')
         if slots[index] == ('', bytes(16)):
             raise ValueError('Channel no longer exists. Refresh the list.')
