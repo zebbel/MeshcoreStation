@@ -196,22 +196,42 @@ class RoomService:
                 raise ValueError('Unknown delivered post.')
             db.execute('INSERT INTO cursors VALUES(?,?,?) ON CONFLICT(room_id,public_key) DO UPDATE SET timestamp=MAX(timestamp,excluded.timestamp)',(room,key,stamp))
 
+    CONFIG_QUERY = (
+        'SELECT r.*,i.public_key,COALESCE(a.revision,0) AS auth_revision '
+        'FROM rooms r JOIN identities i ON r.id=i.room_id '
+        'LEFT JOIN room_auth a ON a.room_id=r.id'
+    )
+
+    @classmethod
+    def _config(cls, db, room):
+        row = db.execute(cls.CONFIG_QUERY + ' WHERE r.id=?', (room,)).fetchone()
+        if row is None:
+            raise ValueError('Unknown room.')
+        return dict(row)
+
     def config(self, room):
         with self.connect() as db:
-            row = db.execute('SELECT r.*,i.public_key,COALESCE(a.revision,0) AS auth_revision FROM rooms r JOIN identities i ON r.id=i.room_id LEFT JOIN room_auth a ON a.room_id=r.id WHERE r.id=?',(room,)).fetchone()
-            if row is None:
-                raise ValueError('Unknown room.')
-            return dict(row)
+            return self._config(db, room)
+
+    @staticmethod
+    def _details(db, result):
+        room = result['id']
+        result['members'] = [dict(r) for r in db.execute(
+            'SELECT public_key,role FROM members WHERE room_id=? ORDER BY public_key', (room,))]
+        result['posts'] = [dict(r) for r in db.execute(
+            'SELECT * FROM (SELECT * FROM posts WHERE room_id=? ORDER BY timestamp DESC LIMIT 100) ORDER BY timestamp', (room,))]
+        return result
 
     def details(self, room):
         with self.connect() as db:
-            row = db.execute('SELECT r.*,i.public_key,COALESCE(a.revision,0) AS auth_revision FROM rooms r JOIN identities i ON r.id=i.room_id LEFT JOIN room_auth a ON a.room_id=r.id WHERE r.id=?',(room,)).fetchone()
-            if row is None:
-                raise ValueError('Unknown room.')
-            result = dict(row)
-            result['members'] = [dict(r) for r in db.execute('SELECT public_key,role FROM members WHERE room_id=? ORDER BY public_key',(room,))]
-            result['posts'] = [dict(r) for r in db.execute('SELECT * FROM (SELECT * FROM posts WHERE room_id=? ORDER BY timestamp DESC LIMIT 100) ORDER BY timestamp',(room,))]
-            return result
+            return self._details(db, self._config(db, room))
+
+    def snapshot(self):
+        """Read all room panels in one consistent transaction/connection."""
+        with self.connect() as db:
+            db.execute('BEGIN')
+            rooms = list(db.execute(self.CONFIG_QUERY + ' ORDER BY r.id'))
+            return [self._details(db, dict(row)) for row in rooms]
 
     def identity(self, room):
         from .wire import Identity

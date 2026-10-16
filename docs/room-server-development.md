@@ -1,7 +1,7 @@
-# Independent room server (experimental)
+# Independent room server
 
-Development branch: `feature/room-server`. Stable baseline: v2.7.8 on `main`.
-Development source is now 2.8.0rc9 with configurable battery report destinations (not a GitHub release).
+V3 testing branch: `feature/v3`, based on `feature/room-server` 2.8.0rc9.
+Development version: 3.0.0a1. See [V3 review](v3-review.md) for changes and rollout.
 No companion flash is performed.
 
 ## What runs
@@ -23,7 +23,7 @@ own persistent Ed25519 identity. Rooms start disabled and require a password bef
 automatically enroll participants with writer access, up to 64 public keys per
 room. Existing participants retain their assigned reader or writer access. Administrative changes are local to the
 dashboard; a room member cannot run repeater CLI commands or administer the host.
-Bot conversations are not automatically copied into a board.
+Only the selected bot room executes configured commands; other rooms remain boards.
 
 Implemented protocol features:
 
@@ -73,8 +73,8 @@ not provide remote CLI administration.
 
 After the version selector is published to both branches, update the stable
 installation once to obtain it. Then open **Settings → Updates / version**, choose
-**Room server (experimental)**, click **Check for updates**, review and confirm
-**Switch to Room server (experimental)**. The dashboard restarts and reloads.
+**Room server**, click **Check for updates**, review and confirm
+**Switch to Room server**. The dashboard restarts and reloads.
 Selecting **Stable** uses the same process to return. Each switch backs up data
 and rolls back both branch and revision if startup fails. A target without the
 selector is refused, so returning to stable cannot remove the way back.
@@ -163,3 +163,6 @@ report attempts; queued never means guaranteed receipt. A missing/disabled
 room or missing/nonprivate/ambiguous channel causes an explicit failed
 attempt, never an automatic fallback to another destination. The migration
 preserves existing schedules and defaults the target to the bot chat/room.
+
+V3 runs recognized room commands through a separate bounded worker. See
+[architecture](architecture.md) for queue, cancellation and permission semantics.

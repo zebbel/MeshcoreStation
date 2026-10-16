@@ -1,34 +1,37 @@
 """Same-origin room management. Private identity seeds never leave the host."""
 import json
 import sqlite3
+import threading
 from pathlib import Path
-from urllib.parse import urlsplit, urlencode
-from flask import jsonify, request, send_file
+from urllib.parse import urlencode
+from flask import request, send_file
 from meshcorestation.config import DATA_DIR
 from meshcorestation.rooms.service import RoomService
-from meshcorestation.web.companion_settings import allowed_host
+from meshcorestation.web.http import control_request_error, json_response as reply
 
 
 def register_room_routes(server):
+    services = {}
+    service_lock = threading.Lock()
+
+    def room_service():
+        # Service contains no shared SQLite connection. Each operation opens its own.
+        path = DATA_DIR / 'rooms.db'
+        with service_lock:
+            if path not in services:
+                services[path] = RoomService(path)
+            return services[path]
+
     @server.get('/rooms')
     def rooms_page():
         return send_file(Path(__file__).with_name('rooms.html'))
 
     @server.route('/api/rooms', methods=['GET', 'POST'])
     def rooms_api():
-        def reply(body, status=200):
-            response = jsonify(body)
-            response.status_code = status
-            response.headers['Cache-Control'] = 'no-store'
-            return response
-        origin = request.headers.get('Origin')
-        if (not allowed_host((urlsplit(request.host_url).hostname or '').lower())
-                or request.headers.get('X-Meshcore-Control') != '1'
-                or request.headers.get('Sec-Fetch-Site') == 'cross-site'
-                or (origin and origin != request.host_url.rstrip('/'))):
+        if control_request_error():
             return reply(dict(ok=False, error='Open room settings from this dashboard.'), 403)
         try:
-            service = RoomService(DATA_DIR / 'rooms.db')
+            service = room_service()
             from meshcorestation.bridge import bridge
             if request.method == 'POST':
                 if request.mimetype != 'application/json':
@@ -43,7 +46,7 @@ def register_room_routes(server):
                 if action not in ('create', 'restart'):
                     if type(rid) is not int or rid < 1:
                         raise ValueError('Select a room.')
-                    service.details(rid)
+                    service.config(rid)
                 if action == 'qr':
                     from meshcorestation.web.companion_share import contact_card
                     return reply(contact_card(service.config(rid), contact_type=3))
@@ -75,8 +78,7 @@ def register_room_routes(server):
             worker = getattr(bridge.runtime, 'rooms', None)
             status = worker.status() if worker else dict(running=False,error='Room worker unavailable; connect the companion.',sessions=0,dropped_packets=0)
             rooms = []
-            for row in service.rooms():
-                detail = service.details(row['id'])
+            for detail in service.snapshot():
                 detail['contact_uri'] = 'meshcore://contact/add?' + urlencode(dict(name=detail['name'],public_key=detail['public_key'],type=3))
                 rooms.append(detail)
             return reply(dict(ok=True, rooms=rooms, status=status))

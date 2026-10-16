@@ -30,7 +30,7 @@
   function render(result, full) {
     rooms = result.rooms; lastStatus = result.status;
     if (!rooms.some(r => r.id === selected)) selected = rooms[0]?.id ?? null;
-    $('status').textContent = (result.status.running ? 'Room worker ready' : 'Room worker stopped') + ` · ${result.status.sessions} connected members · ${result.status.dropped_packets} dropped input packets` + (result.status.error ? ' · '+result.status.error : '');
+    $('status').textContent = (result.status.running ? 'Room worker ready' : 'Room worker stopped') + ` · ${result.status.sessions} connected members · ${result.status.queued_commands || 0} queued commands · ${result.status.dropped_commands || 0} dropped commands · ${result.status.dropped_packets} dropped input packets` + (result.status.error ? ' · '+result.status.error : '');
     if (full) {
       $('room').replaceChildren(...rooms.map(r => {const option = document.createElement('option');option.value=r.id;option.textContent=r.name+(r.enabled?' · enabled':' · disabled');return option;}));
       $('room').value = selected;

@@ -232,6 +232,9 @@ class RoomWorker:
     def __init__(self, companion, service, on_post=None):
         self.companion, self.service = companion, service
         self.on_post = on_post
+        self.command_queue = asyncio.Queue(maxsize=32)
+        self.command_task = None
+        self.dropped_commands = 0
         self.queue = asyncio.Queue(maxsize=128)
         self.endpoints = OrderedDict()
         self.task = self.subscription = None
@@ -242,6 +245,8 @@ class RoomWorker:
     def start(self):
         from meshcore import EventType
         self.subscription = self.companion.mc.subscribe(EventType.RX_LOG_DATA, self.on_rx)
+        if self.on_post:
+            self.command_task = asyncio.create_task(self.run_commands(), name='room-bot')
         self.task = asyncio.create_task(self.run(), name='room-server')
 
     def on_rx(self, event):
@@ -276,9 +281,43 @@ class RoomWorker:
             raise RuntimeError('Companion rejected raw packet transmission. Firmware with CMD_SEND_RAW_PACKET (65) is required.')
         self.next_send = time.monotonic() + 1.2
 
+    def enqueue_command(self, room, post, rx):
+        # Do not let board chat crowd out recognized commands from the bot room.
+        if not self.on_post or self.companion.room_bot_id != room:
+            return
+        if self.companion.bot.match_command(post.get('text', '')) is None:
+            return
+        revision = self.service.config(room)['auth_revision']
+        try:
+            self.command_queue.put_nowait((room, post, rx, revision))
+        except asyncio.QueueFull:
+            self.dropped_commands += 1
+            self.companion.logger.warning('Room bot queue full; command retained in room history but not executed.')
+
+    async def run_commands(self):
+        """Slow bot work must not block room login, ACK and push processing."""
+        while True:
+            room, post, rx, revision = await self.command_queue.get()
+            try:
+                async with self.companion.control_lock:
+                    config = self.service.config(room)
+                    if (not config['enabled'] or config['auth_revision'] != revision
+                            or self.companion.room_bot_id != room):
+                        continue
+                    if self.service.access(room, post['author']) == 'reader':
+                        continue
+                    await self.on_post(room, post, rx)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.companion.logger.warning('Room bot command failed; room continues: %s', exc)
+            finally:
+                self.command_queue.task_done()
+
     def status(self):
         return dict(running=bool(self.task and not self.task.done() and not self.error),
                     error=self.error, dropped_packets=self.dropped,
+                    queued_commands=self.command_queue.qsize(), dropped_commands=self.dropped_commands,
                     sessions=sum(len(e.sessions) for e in self.endpoints.values()))
 
     async def run(self):
@@ -314,9 +353,9 @@ class RoomWorker:
                             rx = room_rx_metadata(raw, snr, rssi, scopes)
                             for post in posts:
                                 try:
-                                    await self.on_post(endpoint.room, post, rx)
+                                    self.enqueue_command(endpoint.room, post, rx)
                                 except Exception as exc:
-                                    self.companion.logger.warning('Room bot command failed; room continues: %s', exc)
+                                    self.companion.logger.warning('Room bot dispatch failed; room continues: %s', exc)
                     if time.time() - endpoint.last_advert >= 3600:
                         advert = endpoint.advert()
                         if advert:
@@ -331,6 +370,9 @@ class RoomWorker:
             self.error = str(exc)
             self.companion.logger.warning('Room server stopped; bot continues: %s', exc)
         finally:
+            if self.command_task:
+                self.command_task.cancel()
+                await asyncio.gather(self.command_task, return_exceptions=True)
             self.endpoints.clear()
 
     async def close(self):
@@ -341,4 +383,11 @@ class RoomWorker:
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
             self.task = None
+        if self.command_task:
+            self.command_task.cancel()
+            await asyncio.gather(self.command_task, return_exceptions=True)
+            self.command_task = None
+        while not self.command_queue.empty():
+            self.command_queue.get_nowait()
+            self.command_queue.task_done()
         self.endpoints.clear()

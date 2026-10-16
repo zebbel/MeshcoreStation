@@ -8,7 +8,6 @@ from meshcore import MeshCore, EventType
 
 from meshcorestation.radio.clock import synchronize_clock
 from meshcorestation.radio.bot import Bot
-from meshcorestation.commands.templates import split_reply
 from meshcorestation.radio.repeater_sync import RepeaterSync
 
 BAUDRATE = 115200
@@ -277,22 +276,23 @@ class Companion:
             matched_rx = self._find_matching_rx(message_data)
             command_id = self.database.add_logger(message_data, matched_rx, 'processing', '')
             self.active_command_id = command_id
-            sent = []
+            from meshcorestation.commands.delivery import ReplyDelivery
+            delivery = ReplyDelivery()
             scope_name = 'no reply'
+
+            async def send(part):
+                nonlocal scope_name
+                scope_name = await self.send_channel_message(self.channel_idx, part, matched_rx)
+                if scope_name is False:
+                    return None
+                return 'scope not known' if scope_name == 'unscoped (unknown request scope)' else part
+
             try:
                 reply = await self.bot.handle_message(message_data, matched_rx, command)
-                if not reply:
-                    return
-                for part in split_reply(reply):
-                    if sent:
-                        await asyncio.sleep(1)
-                    scope_name = await self.send_channel_message(self.channel_idx, part, matched_rx)
-                    if scope_name is False:
-                        break
-                    if scope_name == 'unscoped (unknown request scope)':
-                        sent = ['scope not known']
-                        break
-                    sent.append(part)
+                await delivery.deliver(reply, send)
+            except BaseException:
+                delivery.failed()
+                raise
             finally:
                 self.active_command_id = None
                 positions = self.database.get_companion_positions_by_name(message_data.get('name'))
@@ -302,8 +302,8 @@ class Companion:
                         sender_longitude=?,sender_altitude=?,sender_position_updated_at=? WHERE id=?''',
                         (position.get('public_key'),position.get('latitude'),position.get('longitude'),
                          position.get('altitude'),position.get('updated_at'),command_id))
-                    self.database.db.execute('UPDATE logger SET scope_name=?,reply=? WHERE id=?',
-                        (scope_name if scope_name is not False else 'partial or failed reply',''.join(sent),command_id))
+                    self.database.db.execute('UPDATE logger SET scope_name=?,reply=?,command_status=? WHERE id=?',
+                        (scope_name if scope_name is not False else 'partial or failed reply', delivery.text, delivery.status, command_id))
 
 ################################################
 # RX LOG FUNCTIONS

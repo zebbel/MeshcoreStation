@@ -15,6 +15,13 @@ from meshcorestation import updater
 from meshcorestation.config import DATA_DIR
 
 REPO = 'zebbel/MeshCore'
+SOURCES = {'custom': REPO, 'official': 'meshcore-dev/MeshCore'}
+
+def source_repo(source):
+    if source not in SOURCES:
+        raise ValueError('Choose Custom MeshcoreStation or Official MeshCore firmware.')
+    return SOURCES[source]
+
 TARGET = 'heltec_v4_companion_radio_usb'
 MANIFEST = TARGET + '.json'
 MAX_IMAGE = 8 * 1024 * 1024
@@ -49,31 +56,44 @@ def download(url, limit):
     return data
 
 
-def releases(target=TARGET):
+def releases(target=TARGET, source='custom'):
+    repo = source_repo(source)
     if target not in PROFILES:
         return []
-    items = json.loads(download(f'https://api.github.com/repos/{REPO}/releases?per_page=50', 2_000_000))
+    items = json.loads(download(f'https://api.github.com/repos/{repo}/releases?per_page=50', 12_000_000))
     result = []
     for item in items:
         if item.get('draft'):
             continue
         assets = {a['name']: a for a in item.get('assets', [])}
+        if source == 'official':
+            names = [n for n in assets if re.fullmatch(
+                re.escape(target) + r'-v[0-9]+\.[0-9]+\.[0-9]+-[0-9a-f]+\.bin', n)]
+            if len(names) == 1:
+                name = names[0]
+                merged = name[:-4] + '-merged.bin'
+                if merged in assets and all(re.fullmatch(r'sha256:[0-9a-f]{64}', str(assets[n].get('digest', ''))) for n in (name, merged)):
+                    result.append(dict(id=item['id'], tag=item['tag_name'], name=item['name'] or item['tag_name'],
+                        prerelease=item['prerelease'], assets=assets, target=target, source=source,
+                        image=name, merged=merged))
+            continue
         names = [n for n in assets if manifest_name(n, target)]
         if len(names) == 1:
-            candidate = dict(assets=assets, manifest=names[0], target=target)
+            candidate = dict(assets=assets, manifest=names[0], target=target, source=source)
             try:
                 read_manifest(candidate)
             except (ValueError, TypeError, KeyError):
                 continue
             result.append({'id': item['id'], 'tag': item['tag_name'], 'name': item['name'] or item['tag_name'],
-                           'prerelease': item['prerelease'], 'assets': assets, 'manifest': names[0], 'target': target})
+                           'prerelease': item['prerelease'], 'assets': assets, 'manifest': names[0], 'target': target, 'source': source})
     return result
 
 
 def asset(release, name, limit):
     entry = release['assets'].get(name, {})
     url = entry.get('browser_download_url', '')
-    if not url.startswith(f'https://github.com/{REPO}/releases/download/'):
+    repo = source_repo(release.get('source', 'custom'))
+    if not url.startswith(f'https://github.com/{repo}/releases/download/'):
         raise ValueError('Missing release asset or unexpected download location')
     return download(url, limit)
 
@@ -100,9 +120,37 @@ def read_manifest(release):
     return manifest
 
 
+def verified_official_asset(release, name):
+    digest = release['assets'][name].get('digest', '')
+    if not re.fullmatch(r'sha256:[0-9a-f]{64}', str(digest)):
+        raise ValueError('Official release asset is missing its SHA-256 digest')
+    data = asset(release, name, MAX_IMAGE)
+    if hashlib.sha256(data).hexdigest() != digest[7:]:
+        raise ValueError('Official release checksum does not match')
+    return data
+
+
 def prepare(release):
-    manifest = read_manifest(release)
-    image = asset(release, manifest['image'], MAX_IMAGE)
+    if release.get('source', 'custom') == 'official':
+        target = release['target']
+        profile = PROFILES[target]
+        name, merged_name = release['image'], release['merged']
+        if not re.fullmatch(re.escape(target) + r'-v[0-9]+\.[0-9]+\.[0-9]+-[0-9a-f]+\.bin', name) or merged_name != name[:-4] + '-merged.bin':
+            raise ValueError('Official firmware asset does not match the device target')
+        image = verified_official_asset(release, name)
+        merged = verified_official_asset(release, merged_name)
+        offset = profile['offset']
+        if merged[offset:offset + len(image)] != image:
+            raise ValueError('Official merged image does not contain the matching application')
+        table = merged[0x8000:0x8C00]
+        manifest = dict(schema=1, target=target, chip=profile['chip'], offset=offset,
+            image=name, sha256=hashlib.sha256(image).hexdigest(),
+            partition_sha256=hashlib.sha256(table).hexdigest())
+        validate_layout(table, manifest, len(image))
+    else:
+        source_repo(release.get('source', 'custom'))
+        manifest = read_manifest(release)
+        image = asset(release, manifest['image'], MAX_IMAGE)
     if (len(image) < 64 or image[0] != 0xE9 or struct.unpack_from('<H', image, 12)[0] != PROFILES[manifest['target']]['image_chip_id']
             or image[32:36] != b'\x32\x54\xcd\xab'):
         raise ValueError('Expected an ESP32-S3 application image, not a merged/factory image')
@@ -154,6 +202,10 @@ class FirmwareUpdater:
         self.task = None
         self.catalog = []
         self.catalog_device = None
+        self.source = updater.read('firmware-source.json').get('source', 'custom')
+        if self.source not in SOURCES:
+            self.source = 'custom'
+        self.catalog_source = None
         self.check_lock = threading.Lock()
         self.check_future = None
         self.check_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="firmware-releases")
@@ -182,16 +234,16 @@ class FirmwareUpdater:
         mc = getattr(self.runtime.companion, 'mc', None)
         connected = bool(mc and getattr(getattr(mc, 'connection_manager', None), 'is_connected', False))
         reason = 'Connect a companion to check firmware updates.' if not connected else 'No automatic firmware update profile is available for ' + str(self.runtime.device_info.get('model') or 'this unrecognized device') + '.'
-        return {'ok': True, 'status': dict(self.state),
+        return {'ok': True, 'status': dict(self.state), 'source': self.source, 'sources': SOURCES,
                 'supported': supported, 'connected': connected,
                 'target': target if supported else None,
                 'target_label': profile['label'] if supported else None,
                 'compatibility_message': '' if supported else reason,
                 'ready': supported and importlib.util.find_spec('esptool') is not None,
                 'device': dict(self.runtime.device_info),
-                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog if identity is not None and identity == self.catalog_device and r.get('target', TARGET) == target]}
+                'releases': [{k: r[k] for k in ('id', 'tag', 'name', 'prerelease')} for r in self.catalog if self.catalog_source == self.source and identity is not None and identity == self.catalog_device and r.get('target', TARGET) == target]}
 
-    def check_releases(self):
+    def check_releases(self, source=None):
         """Runs on an HTTP worker, independent of radio connectivity/activity."""
         if not self.check_lock.acquire(blocking=False):
             raise ValueError('A firmware release check is already running.')
@@ -200,12 +252,18 @@ class FirmwareUpdater:
                 raise ValueError('Firmware update already running')
             if self.check_future is not None and not self.check_future.done():
                 raise ValueError('The previous GitHub request is still finishing; try again shortly.')
+            source = source or self.source
+            source_repo(source)
+            self.source = source
+            updater.write('firmware-source.json', {'source': source})
             identity = self.device_identity()
+            self.catalog_source = None
             self.catalog = []
             self.catalog_device = None
             if identity is None:
                 return self.snapshot()
-            self.check_future = self.check_pool.submit(releases, profile_for_model(identity[2])[0])
+            args = (profile_for_model(identity[2])[0],) if source == 'custom' else (profile_for_model(identity[2])[0], source)
+            self.check_future = self.check_pool.submit(releases, *args)
             try:
                 catalog = self.check_future.result(timeout=25)
             except concurrent.futures.TimeoutError:
@@ -214,6 +272,7 @@ class FirmwareUpdater:
                 raise ValueError('Connected device changed. Check releases again.')
             self.catalog = catalog
             self.catalog_device = identity
+            self.catalog_source = source
             return self.snapshot()
         finally:
             self.check_lock.release()
@@ -224,6 +283,8 @@ class FirmwareUpdater:
             if self.task and not self.task.done():
                 raise ValueError('Firmware update already running')
             release = next((r for r in self.catalog if r['id'] == payload.get('release_id')), None)
+            if release and (payload.get('source', 'custom') != self.catalog_source or payload.get('source', 'custom') != self.source):
+                raise ValueError('Firmware source changed. Check releases again before installing.')
             if not release or self.device_identity() is None or self.device_identity() != self.catalog_device or not (payload.get('confirm_device') is True and payload.get('target') == profile_for_model(self.runtime.device_info.get('model'))[0] or payload.get('confirm_heltec_v4') is True and profile_for_model(self.runtime.device_info.get('model'))[0] == TARGET):
                 raise ValueError('Check releases and confirm the currently connected device first')
             if not importlib.util.find_spec('esptool'):
@@ -233,7 +294,7 @@ class FirmwareUpdater:
             target = profile_for_model(self.runtime.device_info.get('model'))[0]
             if release.get('target', TARGET) != target:
                 raise ValueError('Release target does not match the connected device')
-            self.set_state('queued', 'Preparing firmware update…', busy=True, release=release['tag'], log='', backup=None)
+            self.set_state('queued', 'Preparing firmware update…', busy=True, release=release['tag'], source=self.source, log='', backup=None)
             self.task = asyncio.create_task(self.install({**release, '_device': self.device_identity()}))
         elif action != 'status':
             raise ValueError('Unknown firmware operation')

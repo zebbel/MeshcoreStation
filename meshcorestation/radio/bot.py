@@ -1,6 +1,5 @@
 """Configured reply dispatch plus existing position, scope and distance helpers."""
-import math
-import sqlite3
+from meshcorestation.geometry import distance_km
 
 from meshcorestation.storage.command_store import read as read_commands
 from meshcorestation.commands.templates import fields, render
@@ -12,10 +11,6 @@ class Bot:
         self.companion = companion
         self.database = database
         self.position_update_running = False
-
-################################################
-# MESSAGE FUNCTIONS
-################################################
 
     def match_command(self, text):
         parts = text.strip().split(maxsplit=1)
@@ -41,68 +36,6 @@ class Bot:
             self.logger.warning('Configured reply could not be rendered for command %s', command['trigger'])
             return 'Reply configuration error. Please ask the MeshcoreStation owner to review this command.'
 
-################################################
-# HELP FUNCTIONS
-################################################
-
-    def _get_help_text(self):
-        from meshcorestation.commands.templates import command_list
-        return command_list(read_commands(self.database.db))
-
-################################################
-# STATUS FUNCTIONS
-################################################
-
-    async def _get_status_text(self):
-        core, radio, packets = await self.companion.get_status()
-
-        battery_mv = self._get_value(core, "battery_mv", "battery")
-        uptime = self._get_value(core, "uptime_secs", "uptime")
-        queue_len = self._get_value(core, "queue_len", "queue")
-        errors = self._get_value(core, "errors", "error_flags")
-    
-        noise_floor = self._get_value(radio, "noise_floor")
-        last_rssi = self._get_value(radio, "last_rssi", "RSSI")
-        last_snr = self._get_value(radio, "last_snr", "SNR")
-    
-        packets_rx = self._get_value(packets, "packets_received", "packets_recv", "recv", "rx")
-        packets_tx = self._get_value(packets, "packets_sent", "sent", "tx")
-    
-        repeater_count = self.database.get_repeater_count()
-    
-        parts = ["status"]
-    
-        if battery_mv is not None:
-            parts.append(f"{battery_mv / 1000:.2f}V")
-    
-        if uptime is not None:
-            parts.append(f"up {self._format_uptime(uptime)}")
-    
-        if noise_floor is not None:
-            parts.append(f"NF {noise_floor}")
-    
-        if last_rssi is not None:
-            parts.append(f"RSSI {last_rssi}")
-    
-        if last_snr is not None:
-            parts.append(f"SNR {last_snr:+.1f}")
-    
-        if packets_rx is not None:
-            parts.append(f"RX {packets_rx}")
-    
-        if packets_tx is not None:
-            parts.append(f"TX {packets_tx}")
-    
-        if queue_len is not None:
-            parts.append(f"Q {queue_len}")
-    
-        if errors not in (None, 0):
-            parts.append(f"ERR {errors}")
-    
-        parts.append(f"repeaters {repeater_count}")
-    
-        return " | ".join(parts)
-
     def _get_value(self, data, *names, default=None):
         if not isinstance(data, dict):
             return default
@@ -112,132 +45,6 @@ class Bot:
                 return data[name]
 
         return default
-
-################################################
-# PING FUNCTIONS
-################################################
-
-    async def _handle_ping(self, message_data, matched_rx):
-        reply_parts = [f"@[{message_data['name']}]", "pong", message_data['path']]
-
-        if matched_rx is not None:
-            rx_path = self._format_rx_path(matched_rx)
-            snr = matched_rx.get("snr")
-            rssi = matched_rx.get("rssi")
-
-            if rx_path and rx_path != message_data['path']:
-                reply_parts.append(f"path {rx_path}")
-
-            if snr is not None:
-                reply_parts.append(f"SNR {snr:+.1f} dB")
-
-            if rssi is not None:
-                reply_parts.append(f"RSSI {rssi} dBm")
-
-        reply_parts.append(await self._get_distance_text(message_data, matched_rx))
-        reply = " | ".join(reply_parts)
-
-        self.logger.info("Reply: %s", reply)
-        return reply
-
-################################################
-# UPDATE COMPANION POSITION FUNCTIONS
-################################################
-
-    async def _update_position(self, contact_name):
-        if self.position_update_running:
-            return "Position update already running; try again shortly."
-
-        self.position_update_running = True
-
-        try:
-            result = await self.companion.get_telemetry(contact_name)
-
-            if result is None:
-                return "Could not retrieve telemetry; saved position unchanged."
-
-            contact = result["contact"]
-            telemetry = result["telemetry"]
-            gps = next((item.get("value") for item in telemetry if item.get("type") == "gps" and item.get("channel") == 1), None)
-
-            if not isinstance(gps, dict):
-                return "No GPS position in telemetry; saved position unchanged."
-
-            latitude = float(gps["latitude"])
-            longitude = float(gps["longitude"])
-            altitude = gps.get("altitude")
-            altitude = float(altitude) if altitude is not None else None
-
-            if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
-                return "Invalid GPS coordinates; saved position unchanged."
-
-            if altitude is not None and not math.isfinite(altitude):
-                return "Invalid GPS altitude; saved position unchanged."
-
-            self.database.save_companion_position(contact["public_key"], contact["adv_name"], latitude, longitude, altitude)
-
-            self.logger.info(f"Position saved for {contact_name}: lat={latitude}, lon={longitude}, altitude={altitude}")
-            return "Position updated and saved."
-
-        except Exception as exc:
-            self.logger.warning("Position update error: %s %s", type(exc).__name__, exc)
-            return "Position update failed; check the bot log."
-
-        finally:
-            self.position_update_running = False
-
-################################################
-# ADD SCOPE FUNCTIONS
-################################################
-
-    def _add_scope(self, message):
-        parts = message.strip().split(maxsplit=2)
-
-        if len(parts) != 3 or parts[1].casefold() != "add":
-            return "Usage: scope add <name>"
-
-        try:
-            name, added = self.database.add_scope(parts[2])
-        except ValueError as exc:
-            return str(exc)
-        except sqlite3.Error as exc:
-            self.logger.warning("Scope database error: %s", exc)
-            return "Could not save scope; check the bot log."
-
-        return f"Scope {name} added." if added else f"Scope {name} already exists."
-
-################################################
-# DISTANCE FUNCTIONS
-################################################
-
-    async def _get_distance_text(self, message_data, matched_rx):
-        try:
-            positions = self.database.get_companion_positions_by_name(message_data["name"])
-
-            if not positions:
-                return "Distance unavailable: send position first"
-
-            if len(positions) != 1:
-                return "Distance unavailable: duplicate saved names"
-
-            own_info = await self.companion.get_self_info()
-
-            if not own_info:
-                return "Distance unavailable: cannot read bot position"
-
-            start = self._valid_position(positions[0]["latitude"], positions[0]["longitude"])
-            end = self._valid_position(own_info.get("adv_lat"), own_info.get("adv_lon"))
-
-            if start is None or end is None:
-                return "Distance unavailable: missing or invalid coordinates"
-
-            direct = self._distance_km(*start, *end)
-            route = self._get_route_distance_text(start, end, message_data, matched_rx)
-            return f"Direct {direct:.2f} km | {route}"
-
-        except (KeyError, TypeError, ValueError) as exc:
-            self.logger.warning("Distance calculation error: %s %s", type(exc).__name__, exc)
-            return "Distance unavailable: invalid data"
 
     def _get_route_distance_text(self, start, end, message_data, matched_rx):
         hops = self.companion._get_message_hops(message_data)
@@ -322,15 +129,7 @@ class Bot:
         return None if (latitude, longitude) == (0, 0) else (latitude, longitude)
 
     def _distance_km(self, lat1, lon1, lat2, lon2):
-        lat1, lon1, lat2, lon2 = map(math.radians, (lat1, lon1, lat2, lon2))
-        delta_lat = lat2 - lat1
-        delta_lon = lon2 - lon1
-        a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
-        return 6371.0088 * 2 * math.asin(math.sqrt(max(0.0, min(1.0, a))))
-
-################################################
-# HELPER FUNCTIONS
-################################################
+        return distance_km((lat1, lon1), (lat2, lon2))
 
     def _format_rx_path(self, rx):
         hops = rx.get("path_len")

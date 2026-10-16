@@ -1,8 +1,7 @@
 """Update endpoints use the same local-origin guard as radio controls."""
-from urllib.parse import urlsplit
 from flask import jsonify, request
 from meshcorestation import __version__, updater
-from meshcorestation.web.companion_settings import allowed_host
+from meshcorestation.web.http import control_request_error, json_response as reply
 
 
 def register_update_routes(server):
@@ -21,22 +20,15 @@ def register_update_routes(server):
 
     @server.route('/api/update', methods=['GET', 'POST'])
     def updates():
-        def reply(body, code=200):
-            response = jsonify(body)
-            response.status_code = code
-            response.headers['Cache-Control'] = 'no-store'
-            return response
-        origin = request.headers.get('Origin')
-        if (not allowed_host((urlsplit(request.host_url).hostname or '').lower())
-                or request.headers.get('X-Meshcore-Control') != '1'
-                or request.headers.get('Sec-Fetch-Site') == 'cross-site'
-                or (origin and origin != request.host_url.rstrip('/'))):
+        if control_request_error():
             return reply({'ok': False, 'error': 'Open Updates from this dashboard on your local network.'}, 403)
         try:
             if request.method == 'POST':
                 body = request.get_json(silent=True) or {}
                 if not isinstance(body, dict):
                     raise ValueError('Invalid update request.')
+                if body.get('action') == 'branches':
+                    return reply({'ok': True, 'branches': updater.available_branches()})
                 if body.get('action') == 'check':
                     return reply({'ok': True, 'check': updater.check(body.get('branch'))})
                 if body.get('action') == 'install':
@@ -45,6 +37,6 @@ def register_update_routes(server):
                     return reply({'ok': False, 'error': 'Unknown update action.'}, 400)
             return reply({'ok': True, 'version': __version__, 'revision': revision,
                           'check': updater.read('check.json'), 'status': updater.read('status.json'),
-                          'ready': updater.ready(), 'branch': branch, 'branches': updater.BRANCHES})
+                          'ready': updater.ready(), 'branch': branch})
         except Exception as exc:
             return reply({'ok': False, 'error': str(exc)}, 409)

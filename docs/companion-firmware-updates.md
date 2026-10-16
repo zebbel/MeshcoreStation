@@ -1,10 +1,29 @@
 # Companion firmware updates
 
-Settings → Companion firmware checks published releases in `zebbel/MeshCore`.
+Settings → Companion firmware has a **Firmware source** dropdown:
+
+- **Custom MeshcoreStation** checks published releases in `zebbel/MeshCore`.
+- **Official MeshCore** checks published releases in `meshcore-dev/MeshCore`.
+
+Choose a source and press **Check firmware releases**. The choice is saved when
+checking. Changing source clears the previous release selection, so check again
+before installing. Switching back to official firmware uses the same installation
+flow as a custom update; switching to custom again works the same way.
+
 Only the **Heltec V4 OLED USB** target is supported. Firmware compilation stays
 in VS Code/PlatformIO. No releases are created or firmware flashed automatically.
+Releases are filtered for the connected device; BLE, TFT and other hardware
+variants are not offered for this target. Official firmware may not support the
+custom OLED pages or room-server transport features.
 
-## Publish a compatible release
+Official releases must include a matching application binary and merged binary
+with GitHub SHA-256 digests. Both are verified. The merged binary supplies the
+partition table and is checked against the application, but is never flashed.
+An installed partition layout mismatch stops installation and requires manual
+migration. Existing data partitions are left untouched; compatibility of their
+contents across firmware versions is not guaranteed.
+
+## Publish a compatible custom release
 
 Build `heltec_v4_companion_radio_usb` in the MeshCore checkout, then run this
 helper from the MeshcoreStation checkout (paths can be absolute):

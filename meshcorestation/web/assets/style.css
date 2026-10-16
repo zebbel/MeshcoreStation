@@ -1,4 +1,4 @@
-:root { color-scheme: light dark; --bg: #f3f5f8; --panel: #fff; --text: #1b2938; --muted: #627386; --border: #dce3eb; --accent: #2469d8; --soft: #edf3ff; --green: #167953; --red: #bc4444; --shadow: 0 5px 24px #19395708; }
+:root { color-scheme: light dark; --bg: #f3f5f8; --panel: #fff; --text: #1b2938; --muted: #627386; --border: #dce3eb; --accent: #2469d8; --soft: #edf3ff; --green: #167953; --red: #bc4444; --shadow: 0 5px 24px #19395708; --control-radius: 7px; --control-padding: 10px; }
 @media (prefers-color-scheme: dark) { :root { --bg: #0d131c; --panel: #151e2a; --text: #e6edf7; --muted: #94a4ba; --border: #2a3748; --accent: #83b3ff; --soft: #1e304d; --green: #6fdbb0; --red: #ff9494; --shadow: none; } }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 14px; }
@@ -86,3 +86,16 @@ dd { white-space: pre-wrap; font-size: 13px; }
 
 .route-arrow-icon { background: transparent; border: 0; pointer-events: none; }
 .route-direction-arrow { display: block; position: absolute; left: 3px; top: 3px; width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 14px solid; transform-origin: 7px 7px; filter: drop-shadow(0 0 2px #fff); }
+
+/* Shared form appearance, including controls inserted by settings modules. */
+:where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea) {
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--control-radius);
+    padding: var(--control-padding); max-width: 100%;
+}
+:where(input, select, textarea, button, a, summary):focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+}
+:where(input[type=checkbox], input[type=radio]) { accent-color: var(--accent); }
+button:disabled:hover { background: var(--panel); }
+.companion-toolbar { flex-wrap: wrap; }

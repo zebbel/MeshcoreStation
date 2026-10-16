@@ -152,31 +152,24 @@ class Runtime:
         # The regular channel handler already logs through this table. Use the
         # same history for authenticated room messages, not the room posts table.
         command_id = self.database.add_logger(message, rx, rx.get('room_scope_name') or 'unknown', '')
-        from meshcorestation.commands.templates import split_reply
-        sent = []
-        status = 'processing'
+        from meshcorestation.commands.delivery import ReplyDelivery
+        delivery = ReplyDelivery()
+
+        async def send(part):
+            self.rooms.service.local_post(room, part)
+            return part
+
         try:
             reply = await self.companion.bot.handle_message(message, rx, command)
-            if not reply:
-                status = 'no reply'
-                return
-            for part in split_reply(reply):
-                if sent:
-                    await asyncio.sleep(1)
-                self.rooms.service.local_post(room, part)
-                sent.append(part)
-            status = 'completed'
+            await delivery.deliver(reply, send)
         except BaseException:
-            status = 'partial' if sent else 'failed'
+            delivery.failed()
             raise
         finally:
-            # Finalize even when a command errors or a room transmission fails.
-            # The reply field contains only parts accepted into room storage,
-            # rather than text we merely attempted to post.
             with self.database.db:
                 self.database.db.execute(
                     'UPDATE logger SET reply=?,command_status=? WHERE id=?',
-                    (''.join(sent), status, command_id))
+                    (delivery.text, delivery.status, command_id))
 
     async def session(self):
         self.companion = Companion(self.logger, self.database)
