@@ -2,8 +2,7 @@
 
 ## Installation
 
-Use Raspberry Pi OS / Debian, systemd and Python 3.12 or newer. Clone the branch
-you intend to run, then run `bash install.sh` as your normal user. Choose
+Use Raspberry Pi OS / Debian, systemd and Python 3.12 or newer. Clone the stable `main` branch, then run `bash install.sh` as your normal user. Choose
 **Install / repair** and the web port (default 80). The installer creates `.venv`,
 installs dependencies, writes `meshcorestation.env`, installs the service and
 adds serial access through `dialout`.
@@ -61,8 +60,11 @@ Web updates keep backup directories rather than deleting them automatically.
   Android remote management requires RF admin support, which these rooms do not provide.
 - Room command queue fills: inspect dropped-command count and slow telemetry
   requests. Original posts remain in room history; dropped executions are not replayed.
-- Firmware check finds no files: the connected model needs a compatible manifest
-  and application binary in the configured firmware repository.
+- Firmware check finds no files: select the intended firmware source and check
+  again. Custom releases need a matching manifest and application binary; official
+  releases need matching application and merged binaries with GitHub checksums.
+- Statistics time out: select 24 hours or press Refresh to retry. Automatic refresh
+  pauses after an error; the panel uses stored observations, not radio telemetry.
 - Update fails: read the updater journal and dashboard progress. Preserve rollback
   backups. Repair interrupted Debian package installation separately from Python
   dependencies; do not start concurrent apt or pip jobs.

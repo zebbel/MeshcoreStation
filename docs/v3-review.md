@@ -1,13 +1,14 @@
-# V3 review before publication
+# V3 release notes and validation
 
-Version: **3.0.0a1**. Local branch: **feature/v3**.
-Baseline: **feature/room-server**, `f5c6b77a32796856e6f186b032f38f6e836e1bea`.
+Stable version: **3.0.0**. Release branch: **main**.
+V3 originated from room-server 2.8.0rc9, commit `f5c6b77`. The former feature
+branches are retired; follow the [update guide](web-version-switching.md).
 
 This is an incremental internal rewrite retaining working protocols and existing
 features. It does not replace the UI framework or rewrite radio cryptography.
 Those changes would add migration risk without demonstrated benefit on the Pi.
 
-## Changes to review
+## Changes
 
 | Area | Change | Effect |
 | --- | --- | --- |
@@ -22,7 +23,7 @@ Those changes would add migration risk without demonstrated benefit on the Pi.
 | Documentation | New overview, operations, user guide, architecture and rollout instructions | Clear separation of setup, use and development |
 
 No runtime dependency change, no destructive database migration, no firmware
-flash and no GitHub upload are part of preparing this local candidate.
+flash and no automatic companion update are required for the V3 upgrade.
 
 ## Limits and risks
 
@@ -41,7 +42,7 @@ flash and no GitHub upload are part of preparing this local candidate.
 - No claim is made about Pi CPU, memory or update-time improvement until measured
   on the target Pi. Database connection counts and queue behavior are testable here.
 
-## Validation and release gate
+## Validation
 
 Run Python regression tests, room and updater JavaScript tests, installation smoke
 check and whitespace checks. Keep dependency versions unchanged. New tests cover
@@ -49,7 +50,7 @@ shared HTTP rejection, accepted/partial/cancelled delivery, a single-connection
 room snapshot without secrets, queue bounds/shutdown, stale-command rejection and
 V3 branch validation.
 
-Before promotion, test on the Pi with a stopped-service backup:
+Recommended checks after upgrading, with a stopped-service backup available:
 
 1. Restore existing station and room data; confirm identities, settings and history.
 2. Test channel commands, room commands, bad/good passwords and permission changes.
@@ -60,17 +61,13 @@ Before promotion, test on the Pi with a stopped-service backup:
    flash only deliberately with the appropriate compatible firmware.
 7. Measure idle CPU/RAM, command latency and queue counts on the Pi Zero.
 
-Publication requires the owner's review first. Publishing the testing branch does
-not authorize merging to `main`. The companion 2.8.0rc10 selector update on `feature/room-server` enables web-only
-entry into V3. Update that branch first, then select `feature/v3`.
-
 ## Local validation result
 
-On 16 October 2026, this candidate passed **260 Python tests**, room UI tests,
-update UI tests (including V3 selection), the installation smoke check and
-`git diff --check`. The baseline passed 245 Python tests before modification.
-The added packet-loop test verifies a second input is processed while the first
-room command waits. No Raspberry Pi, Android or real radio test was performed.
+The V3 code passed **280 Python tests** and statistics UI checks before its
+promotion to main. Earlier checks covered room, update and firmware UI behavior,
+installation smoke checks and whitespace checks. Hardware flashing and radio
+interoperability were not tested in this development environment. Stable release
+labeling does not change the known limitations listed above.
 
 ## UI consistency pass
 
@@ -83,7 +80,7 @@ uses the shared fixed-header/scrollable-body dialog structure.
 Room and OLED interaction checks, stylesheet-isolation checks and affected Python
 layout/API tests pass. Screenshot review is still pending: this environment has
 no installed browser and its attempted Chromium download failed. Check desktop
-and mobile layouts in both color schemes on the testing installation.
+and mobile layouts in both color schemes on your installation.
 
 ## Faster code-only updates
 
@@ -119,3 +116,13 @@ not been tested.
 
 After these changes, all 279 Python tests, the firmware UI test, installation
 smoke check and whitespace check passed locally.
+
+## Dashboard and statistics fixes
+
+The room subtitle and Period selector align with their surrounding controls.
+Battery settings group monitoring and daily reports separately. Repeated route
+JSON is aggregated before decoding, reducing work on long observation histories.
+The statistics panel allows 60 seconds and pauses automatic retries after an
+error; select a shorter period or press Refresh to retry. A local synthetic test
+with 30,000 repeated observations ran about 3.8 times faster; this is not a Pi
+hardware measurement.

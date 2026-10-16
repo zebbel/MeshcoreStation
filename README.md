@@ -4,17 +4,16 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Development version: 3.0.0a1. Branch: `feature/v3`.** This is a testing branch
-based on `feature/room-server` 2.8.0rc9, commit `f5c6b77`. It is not the stable
-release. V3 publication and promotion to `main` are separate decisions.
+**Stable version: 3.0.0. Branch: `main`.** V3 includes the room server and all
+previous V3 improvements. The former feature branches have been retired.
 
 ## Choose your workflow
 
 - [Installation and operation](docs/operations.md): setup, settings, backups and troubleshooting.
 - [Using the station](docs/user-guide.md): bot commands, rooms, maps and battery reports.
-- [V3 changes and test plan](docs/v3-review.md): what changed, validation and rollout.
+- [V3 release notes and validation](docs/v3-review.md): what changed, validation and rollout.
 - [Architecture and development](docs/architecture.md): ownership, data flow and tests.
-- [Version switching](docs/web-version-switching.md): testing and returning to the previous branch.
+- [Version switching](docs/web-version-switching.md): updating on main and moving from retired branches.
 - [Companion firmware](docs/companion-firmware-updates.md) and [OLED pages](docs/companion-oled.md).
 - [Room protocol and storage](docs/room-server-development.md).
 
@@ -35,10 +34,10 @@ Raspberry Pi OS / Debian with systemd, Python 3.12+, and a USB serial MeshCore
 companion. Rooms need the custom firmware's raw RX/TX support. OLED support is
 capability-gated. Firmware assets must match the connected device.
 
-After V3 is published, a separate test installation can be created with:
+For a new installation:
 
 ```bash
-git clone --branch feature/v3 https://github.com/zebbel/MeshcoreStation.git
+git clone --branch main https://github.com/zebbel/MeshcoreStation.git
 cd MeshcoreStation
 bash install.sh
 ```
@@ -49,4 +48,4 @@ installation, follow the [version switching guide](docs/web-version-switching.md
 
 No new Python runtime dependencies are introduced by this V3 refactor. Existing
 station and room databases remain in place. Keep a stopped-service backup before
-testing, and retain it until rollback has been verified on your hardware.
+upgrading, and retain it until the station is working correctly on your hardware.

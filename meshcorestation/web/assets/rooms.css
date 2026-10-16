@@ -28,3 +28,14 @@
     .rooms-page section { padding: 16px; }
     .rooms-page form > button { flex: 1 1 auto; }
 }
+
+.rooms-page .members-head, .rooms-page #members li { display: grid; grid-template-columns: minmax(0,1fr) 120px 100px; gap: 16px; align-items: center; }
+.rooms-page .members-head { padding: 12px 0; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; font-weight: 600; }
+.rooms-page .member-identity { display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.rooms-page .member-identity small { color: var(--muted); }
+.rooms-page .member-remove { color: var(--red); }
+@media(max-width:550px) {
+    .rooms-page .members-head { display: none; }
+    .rooms-page #members li { grid-template-columns: minmax(0,1fr) auto; }
+    .rooms-page .member-identity { grid-column: 1 / -1; }
+}

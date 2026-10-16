@@ -1,5 +1,9 @@
 # Using MeshcoreStation
 
+This guide covers stable **3.0.0** on `main`, including the bot, room server,
+repeater monitoring and dashboard. For upgrades from a former feature branch,
+see [Updates and branch migration](web-version-switching.md).
+
 ## Bot conversations
 
 Choose a private companion channel or select **Use as bot channel** on a local
@@ -77,3 +81,16 @@ explicitly; active installations are polled for progress. Only assets for the
 supported connected device are offered. See the
 [firmware guide](companion-firmware-updates.md) before flashing or migrating a
 partition layout. Application updates and companion firmware updates are separate.
+
+## Room participant controls
+
+Participants appear automatically after password login. Contact names are loaded
+once when the room page opens; **Update contact** refreshes them on demand.
+Known participants and message authors show their names; unknown keys are
+shortened, with the full key available on hover. Contact refresh does not add
+members or change permissions.
+
+Use the participant's **Read / Write** dropdown to change permission: Read allows
+receiving messages, while Write also allows posting. Changes save immediately.
+**Remove** disconnects a participant, but they can rejoin if they still know the
+room password. Change the password to prevent that.

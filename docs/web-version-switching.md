@@ -1,48 +1,62 @@
-# Version switching and rollback
+# Updates, branch migration and rollback
 
-## Branches
+## Stable branch
 
-| Branch | Purpose |
-| --- | --- |
-| `main` | Existing stable application |
-| `feature/room-server` | Room-server version |
-| `feature/v3` | V3 testing, based on room-server 2.8.0rc9 |
+**MeshcoreStation 3.0.0** is the stable V3 release on **main**. The room server is
+included. `feature/v3` and `feature/room-server` have been retired and removed
+from GitHub; their commit histories are preserved in main.
 
-## First entry into V3 from the web app
+## Update from the dashboard
 
-1. On `feature/room-server`, open **Settings → Updates / version**.
-2. Check for updates and install the room-server update **2.8.0rc10** or newer.
-3. After the dashboard reloads, press **Check for updates** to refresh branches.
-4. Select **feature/v3**, press **Check for updates** again, review the target,
-   and install. The dashboard reloads into **3.0.0a1**.
+1. Open **Settings → Updates / version**.
+2. Select **main**. If needed, press **Check for updates** to refresh branch choices.
+3. Press **Check for updates** with main selected and review the revision.
+4. Press **Install update**, or **Switch to main** if running a former feature branch.
+5. Wait for the dashboard to restart and reload.
 
-The selector update is published on `feature/room-server`; an older `main`
-installation must first switch to and update the room-server branch. Keep the
-updater's backup until you have tested V3 with your companion and Android app.
+An old installed branch can remain in the dropdown as the current selection even
+though it no longer exists on GitHub. Checking that deleted branch will fail;
+select main instead. Branches refresh on initial page load and **Check for
+updates**, without an extra refresh button or repeated progress-poll discovery.
 
-## Updates while on V3
+The updater checks the exact target and checkout cleanliness, backs up code and
+data, and restores the previous installation if startup fails. When requirements
+are unchanged it reuses the virtual environment without a dependency scan or pip
+installation. Dependency changes trigger wheel preparation and environment backup.
+Startup smoke and health checks still apply to both paths.
 
-In **Settings → Updates / version**, select **feature/v3**, check for updates,
-review the commit, and install. The selector loads all GitHub branch names on initial load and when you click
-**Check for updates**; progress polling does not refresh the remote list. Branch
-listing does not guarantee installability: the selected revision must pass the
-web-switch compatibility check. A listing error retains the current selection. The updater checks the exact target, backs up data and dependencies,
-and rolls back if application startup fails. Radio functionality still needs a
-hardware check. Dashboard reload follows a successful revision change.
+## Older installations without a working branch selector
 
-The updater refuses local edits and conflicting unpublished commits. It retains
-backup files under `.updates/`. Keep enough disk space and do not run parallel
-package-management jobs.
+Use the dashboard when possible. For manual migration, first stop the service and
+back up the complete data directory and `meshcorestation.env`. Record the current
+revision. With a clean checkout and no unpublished commits on the local main:
 
-## Return path
+```bash
+cd ~/MeshcoreStation
+git status --short
+git rev-parse HEAD
+sudo systemctl stop meshcorestation
+# Back up data/ and meshcorestation.env before continuing.
+git fetch origin main
+git switch main
+git merge --ff-only FETCH_HEAD
+git branch --set-upstream-to=origin/main main
+bash install.sh
+```
 
-To leave V3, select **feature/room-server** or **main** in V3's version
-selector, check and install. Stable does not run the room server but retains its
-database. This V3 refactor does not destructively migrate either database.
+If no local main exists, use `git switch -c main FETCH_HEAD` instead of
+`git switch main`. A clone restricted to a former feature branch may need
+`git remote set-branches origin main` before fetching. Choose **Install / repair**
+in the existing installation directory. Do not discard local changes or force
+reset unpublished commits to make an update proceed.
 
-The updated room-server selector also offers V3 for re-entry. If dashboard startup
-fails, stop the service and restore the saved installation, configuration and data
-as a unit. Never copy SQLite files while the station is writing them.
+## Recovery
 
-Promotion to `main` happens only after review and hardware testing; creating the
-V3 branch is not approval to merge it into stable.
+Keep updater backups under `.updates/` until the installation works on your
+hardware. The removed feature branches are not rollback targets. If recovery is
+needed, stop the service and restore a matching saved installation, configuration
+and data together. Never copy SQLite files while the station is writing them.
+
+Switching to main does not disable rooms or remove their database. To stop room
+traffic, disable the rooms in the room-server page. Application updates do not
+flash the companion; companion firmware updates are a separate operation.

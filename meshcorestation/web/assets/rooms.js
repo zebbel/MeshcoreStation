@@ -4,7 +4,7 @@
   if (location.pathname !== '/rooms') return;
   const $ = id => document.getElementById(id);
   let rooms = [], selected = null, busy = false;
-  let contacts = [], contactsLoaded = false, qrRoom = null, shownRoom = null;
+  let contacts = [], contactsBusy = false, membersKey = null, qrRoom = null, shownRoom = null;
   function current() { return rooms.find(r => r.id === selected); }
   async function request(body) {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25000);
@@ -15,17 +15,28 @@
       return result;
     } finally { clearTimeout(timer); }
   }
-  function renderContacts() {
-    const picker=$('contact-picker'), previous=picker.value;
-    const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=contactsLoaded?'Select a companion…':'Load contacts to choose a companion';
-    const members=new Set((current()?.members || []).map(m=>m.public_key.toLowerCase()));
-    picker.replaceChildren(placeholder,...contacts.map(c=>{
-      const option=document.createElement('option');option.value=c.public_key;
-      option.disabled=members.has(c.public_key);
-      option.textContent=`${c.name || 'Unnamed'} · ${c.public_key.slice(0,12)}${option.disabled?' · Already a member':''}`;
-      return option;
+  function contactName(key) { return contacts.find(c=>c.public_key===key.toLowerCase())?.name?.trim() || ''; }
+  function shortKey(key) { return key.slice(0,6)+'…'+key.slice(-4); }
+  function renderMembers() {
+    const room=current();
+    const members=(room?.members || []).filter(m=>m.public_key!==room.public_key);
+    const signature=JSON.stringify([selected,members,contacts]);
+    if(signature===membersKey)return;
+    membersKey=signature;
+    $('members').replaceChildren(...members.map(m=>{
+      const li=document.createElement('li'),identity=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');
+      const known=contactName(m.public_key), display=known || shortKey(m.public_key);
+      identity.className='member-identity';name.textContent=display;name.title=m.public_key;
+      note.textContent=known?'Known contact':'Unknown contact';identity.append(name,note);
+      const permission=document.createElement('select');permission.className='member-permission';
+      permission.setAttribute('aria-label','Permission for '+display);
+      for(const [value,label] of [['reader','Read'],['writer','Write']]){const option=document.createElement('option');option.value=value;option.textContent=label;permission.append(option);}
+      permission.value=m.role;
+      permission.onchange=()=>{const role=permission.value;permission.value=m.role;change({action:'grant',key:m.public_key,role});};
+      const remove=document.createElement('button');remove.textContent='Remove';remove.type='button';remove.className='member-remove';remove.setAttribute('aria-label','Remove '+display);remove.onclick=()=>change({action:'revoke',key:m.public_key});
+      li.append(identity,permission,remove);return li;
     }));
-    if (contacts.some(c=>c.public_key===previous) && !members.has(previous)) picker.value=previous;
+    if(!members.length)$('members').textContent='No participants yet. Members appear after password login.';
   }
   function render(result, full) {
     rooms = result.rooms; lastStatus = result.status;
@@ -38,31 +49,28 @@
     const room = current(); $('details').hidden = !room;
     if (shownRoom !== selected) {
       shownRoom=selected; qrRoom=null; $('room-qr').hidden=true; $('room-qr-image').removeAttribute('src');
-      $('show-qr').textContent='Show room QR code'; $('member-key').value=''; $('room-password').value='';
+      $('show-qr').textContent='Show room QR code'; $('room-password').value='';
     }
-    if (full) renderContacts();
     if (!room) return;
     $('title').textContent = room.name; $('state').textContent = room.enabled ? 'Enabled' : 'Disabled · no room radio traffic';
     $('toggle').textContent = room.enabled ? 'Disable room' : 'Enable room'; $('send').disabled = !room.enabled;
     $('bot-channel').textContent = room.is_bot ? 'Bot channel ✓' : 'Use as bot channel';
-    $('public-key').value = room.public_key; $('import').href = room.contact_uri;
+    $('public-key').value = room.public_key;
     $('password-state').textContent=room.auth_revision ? 'Password is set. Enter a new password only to change it.' : 'Set a password, then enable this room. Existing history and identity are preserved.';
     $('toggle').disabled=!room.auth_revision;
-    $('members').replaceChildren(...room.members.filter(m=>m.public_key!==room.public_key).map(m => {
-      const li=document.createElement('li'), span=document.createElement('span'), button=document.createElement('button');
-      span.textContent=m.public_key+' · '+m.role;button.textContent='Remove';button.type='button';button.onclick=()=>change({action:'revoke',key:m.public_key});li.append(span,button);return li;
-    }));
+    renderMembers();
     $('posts').replaceChildren(...room.posts.map(p => {
       const row=document.createElement('article'), label=document.createElement('small'), text=document.createElement('p');
-      label.textContent=new Date(p.timestamp*1000).toLocaleString()+' · '+(p.author===room.public_key?'Room':p.author.slice(0,12));label.title=p.author;text.textContent=p.text;row.append(label,text);return row;
+      label.textContent=new Date(p.timestamp*1000).toLocaleString()+' · '+(p.author===room.public_key?'Room':contactName(p.author) || shortKey(p.author));label.title=p.author;text.textContent=p.text;row.append(label,text);return row;
     }));
     if (!room.posts.length) $('posts').textContent='No messages yet.';
   }
   async function change(body, clear) {
     if (busy) return;busy=true;$('error').textContent='';
+    $('members').querySelectorAll('select,button').forEach(n=>n.disabled=true);
     try {render(await request({room:selected,...body}),true);if(clear)$(clear).value='';}
     catch(e){$('error').textContent=e.message;}
-    finally {busy=false;}
+    finally {busy=false;$('members').querySelectorAll('select,button').forEach(n=>n.disabled=false);}
   }
   $('show-qr').onclick=async()=>{
     if (!$('room-qr').hidden) { $('room-qr').hidden=true; $('show-qr').textContent='Show room QR code'; return; }
@@ -78,23 +86,22 @@
     } catch(e) { $('error').textContent=e.message; }
     finally { $('show-qr').disabled=false; }
   };
-  $('load-contacts').onclick=async()=>{
-    $('load-contacts').disabled=true; $('contact-status').textContent='Loading companion contacts…';
+  async function updateContacts(){
+    if(contactsBusy)return;
+    contactsBusy=true;$('update-contact').disabled=true;$('contact-status').textContent='Updating contact names…';
     const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),25000);
     try {
       const response=await fetch('/api/companion/contacts',{headers:{'X-Meshcore-Control':'1'},cache:'no-store',signal:controller.signal});
       const result=await response.json();
-      if (!response.ok || !result.ok) throw Error(result.error || 'Could not load contacts');
+      if(!response.ok || !result.ok)throw Error(result.error || 'Could not update contacts');
       contacts=(result.contacts || []).filter(c=>Number(c.type)===1 && /^[0-9a-f]{64}$/i.test(c.public_key)).map(c=>({...c,public_key:c.public_key.toLowerCase()}));
-      contacts.sort((a,b)=>(a.name || '').localeCompare(b.name || ''));
-      contactsLoaded=true;renderContacts();
-      $('contact-status').textContent=contacts.length?'Select a contact, choose permission, then click Add / update member.':'No companion contacts found. You can still enter a public key below.';
-    } catch(e) { $('contact-status').textContent=e.message; }
-    finally { clearTimeout(timeout); $('load-contacts').disabled=false; }
-  };
-  $('contact-picker').onchange=()=>{ $('member-key').value=$('contact-picker').value; };
+      render({rooms,status:lastStatus},false);
+      $('contact-status').textContent=contacts.length?'Contact names updated.':'No companion contacts found. Unknown members keep their shortened keys.';
+    }catch(e){$('contact-status').textContent=(e.name==='AbortError'?'Contact update timed out.':e.message)+' Existing names are retained; press Update contact to retry.';}
+    finally{clearTimeout(timeout);contactsBusy=false;$('update-contact').disabled=false;}
+  }
+  $('update-contact').onclick=updateContacts;
   $('create').onsubmit=e=>{e.preventDefault();change({action:'create',name:$('name').value},'name');};
-  $('grant').onsubmit=e=>{e.preventDefault();change({action:'grant',key:$('member-key').value.trim(),role:$('role').value},'member-key');};
   $('post').onsubmit=e=>{e.preventDefault();change({action:'post',text:$('text').value},'text');};
   $('password-form').onsubmit=e=>{e.preventDefault();change({action:'password',password:$('room-password').value},'room-password');};
   $('toggle').onclick=()=>change({action:'enabled',enabled:!Boolean(current().enabled)});
@@ -104,5 +111,5 @@
   $('room').onchange=()=>{selected=Number($('room').value);render({rooms,status:lastStatus},true);};
   let lastStatus={running:false,sessions:0,dropped_packets:0};
   async function refresh(first=false){if(busy||document.hidden)return;busy=true;try{const result=await request();lastStatus=result.status;render(result,first);}catch(e){$('error').textContent=e.message;}finally{busy=false;}}
-  refresh(true);setInterval(()=>refresh(),5000);
+  refresh(true);updateContacts();setInterval(()=>refresh(),5000);
 })();
