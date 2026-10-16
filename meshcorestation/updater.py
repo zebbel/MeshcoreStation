@@ -17,7 +17,6 @@ STATE = ROOT / '.updates'
 REMOTE = 'https://github.com/zebbel/MeshcoreStation.git'
 SERVICE = 'meshcorestation.service'
 WEB_SWITCH_PROTOCOL = 1
-BRANCHES = {'main': 'Stable', 'feature/room-server': 'Room server (experimental)'}
 
 ACTIVE = {'queued', 'preparing', 'backing_up', 'installing', 'verifying', 'rolling_back'}
 
@@ -96,9 +95,31 @@ def local_revision():
 
 
 def branch_name(value):
-    if value not in BRANCHES:
-        raise RuntimeError('Choose Stable or Room server (experimental).')
+    """Validate a literal Git branch, never a ref expression or command option."""
+    if (not isinstance(value, str) or not value or len(value) > 255
+            or value.startswith('-') or value == '@'
+            or any(ord(c) < 33 or ord(c) == 127 or c in '~^:?*[\\' for c in value)
+            or '..' in value or '@{' in value
+            or any(not part or part.startswith('.') or part.endswith(('.', '.lock'))
+                   for part in value.split('/'))):
+        raise RuntimeError('Choose a valid Git branch name.')
     return value
+
+
+def available_branches():
+    """Read all advertised heads from the fixed project remote, only on request."""
+    with lock():
+        output = run('git', 'ls-remote', '--heads', REMOTE, timeout=20)
+    branches = set()
+    for line in output.splitlines():
+        fields = line.split('\t', 1)
+        if len(fields) != 2 or not re.fullmatch('[0-9a-f]{40,64}', fields[0]):
+            continue
+        if fields[1].startswith('refs/heads/'):
+            branches.add(branch_name(fields[1][11:]))
+    if not branches:
+        raise RuntimeError('GitHub returned no project branches. Retry the branch refresh.')
+    return {name: name for name in sorted(branches)}
 
 
 def local_branch():

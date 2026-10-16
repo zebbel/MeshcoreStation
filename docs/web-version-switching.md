@@ -1,24 +1,48 @@
-# Switch versions from the dashboard
+# Version switching and rollback
 
-First update the stable installation to **2.7.9** using the existing web updater.
-After the dashboard reloads, open **Settings → Updates / version**.
+## Branches
 
-1. Select **Stable** or **Room server (experimental)**.
-2. Click **Check for updates** and review the selected version.
-3. Click **Install update** or **Switch to…**, then confirm.
-4. Wait for the service to restart and the dashboard to reload automatically.
+| Branch | Purpose |
+| --- | --- |
+| `main` | Existing stable application |
+| `feature/room-server` | Room-server version |
+| `feature/v3` | V3 testing, based on room-server 2.8.0rc9 |
 
-Stable follows `main`; Room server follows `feature/room-server`. Checks and
-subsequent updates follow the selected branch. Switching back to Stable stops the
-room server and keeps `data/rooms.db`, including room identities, members and posts.
-Returning to the experimental branch resumes enabled rooms with their saved data.
+## First entry into V3 from the web app
 
-The updater backs up data and settings, reuses validated unchanged dependencies,
-and restores the previous branch and revision if startup verification fails.
-Local source changes or unpublished destination-branch commits block a switch.
-Both branches must retain the selector; switching to a release without it is
-refused to preserve the web-based return path.
+1. On `feature/room-server`, open **Settings → Updates / version**.
+2. Check for updates and install the room-server update **2.8.0rc10** or newer.
+3. After the dashboard reloads, press **Check for updates** to refresh branches.
+4. Select **feature/v3**, press **Check for updates** again, review the target,
+   and install. The dashboard reloads into **3.0.0a1**.
 
-The experimental room server requires hardware testing with Android and your mesh.
-It is disabled until you create and enable a room. Stable contains the version
-selector but does not activate or include the experimental room runtime.
+The selector update is published on `feature/room-server`; an older `main`
+installation must first switch to and update the room-server branch. Keep the
+updater's backup until you have tested V3 with your companion and Android app.
+
+## Updates while on V3
+
+In **Settings → Updates / version**, select **feature/v3**, check for updates,
+review the commit, and install. The selector loads all GitHub branch names on initial load and when you click
+**Check for updates**; progress polling does not refresh the remote list. Branch
+listing does not guarantee installability: the selected revision must pass the
+web-switch compatibility check. A listing error retains the current selection. The updater checks the exact target, backs up data and dependencies,
+and rolls back if application startup fails. Radio functionality still needs a
+hardware check. Dashboard reload follows a successful revision change.
+
+The updater refuses local edits and conflicting unpublished commits. It retains
+backup files under `.updates/`. Keep enough disk space and do not run parallel
+package-management jobs.
+
+## Return path
+
+To leave V3, select **feature/room-server** or **main** in V3's version
+selector, check and install. Stable does not run the room server but retains its
+database. This V3 refactor does not destructively migrate either database.
+
+The updated room-server selector also offers V3 for re-entry. If dashboard startup
+fails, stop the service and restore the saved installation, configuration and data
+as a unit. Never copy SQLite files while the station is writing them.
+
+Promotion to `main` happens only after review and hardware testing; creating the
+V3 branch is not approval to merge it into stable.

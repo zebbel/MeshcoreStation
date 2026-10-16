@@ -37,6 +37,8 @@ def register_update_routes(server):
                 body = request.get_json(silent=True) or {}
                 if not isinstance(body, dict):
                     raise ValueError('Invalid update request.')
+                if body.get('action') == 'branches':
+                    return reply({'ok': True, 'branches': updater.available_branches()})
                 if body.get('action') == 'check':
                     return reply({'ok': True, 'check': updater.check(body.get('branch'))})
                 if body.get('action') == 'install':
@@ -45,6 +47,6 @@ def register_update_routes(server):
                     return reply({'ok': False, 'error': 'Unknown update action.'}, 400)
             return reply({'ok': True, 'version': __version__, 'revision': revision,
                           'check': updater.read('check.json'), 'status': updater.read('status.json'),
-                          'ready': updater.ready(), 'branch': branch, 'branches': updater.BRANCHES})
+                          'ready': updater.ready(), 'branch': branch})
         except Exception as exc:
             return reply({'ok': False, 'error': str(exc)}, 409)
