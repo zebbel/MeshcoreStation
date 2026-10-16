@@ -323,3 +323,63 @@ def test_profile_selects_target_and_rejects_cross_target(manager,monkeypatch):
     with pytest.raises(ValueError,match='does not match'):
         asyncio.run(manager.request(dict(action='install',release_id=1,confirm_device=True,target=target)))
     assert manager.task is None
+
+
+def official_fixture():
+    name=fw.TARGET+'-v1.18.0-abcdef1.bin'
+    merged_name=name[:-4]+'-merged.bin'
+    image=fixture_image()
+    merged=fixture_flash()[:0x10000]+image
+    blobs={name:image,merged_name:bytes(merged)}
+    assets={n:dict(name=n,digest='sha256:'+hashlib.sha256(b).hexdigest(),
+        browser_download_url=f'https://github.com/meshcore-dev/MeshCore/releases/download/companion-v1.18.0/{n}') for n,b in blobs.items()}
+    return dict(id=9,tag='companion-v1.18.0',name='Official',prerelease=False,
+        target=fw.TARGET,source='official',assets=assets,image=name,merged=merged_name),blobs
+
+
+def test_official_image_preparation_and_device_filter(monkeypatch):
+    import json
+    release,blobs=official_fixture()
+    item=dict(id=9,tag_name=release['tag'],name='Official',prerelease=False,assets=list(release['assets'].values()))
+    urls=[]
+    def download(url,limit):
+        urls.append(url)
+        return json.dumps([item]).encode() if 'api.github.com' in url else blobs[url.rsplit('/',1)[1]]
+    monkeypatch.setattr(fw,'download',download)
+    catalog=fw.releases(fw.TARGET,'official')
+    assert len(catalog)==1 and catalog[0]['source']=='official'
+    manifest,image=fw.prepare(catalog[0])
+    assert image==fixture_image()
+    assert manifest['partition_sha256']==hashlib.sha256(fixture_flash()[0x8000:0x8C00]).hexdigest()
+    assert urls[0].startswith('https://api.github.com/repos/meshcore-dev/MeshCore/')
+    item['assets'][0]['name']='heltec_v4_companion_radio_ble-v1.18.0-abcdef1.bin'
+    assert fw.releases(fw.TARGET,'official')==[]
+
+
+@pytest.mark.parametrize('problem',['digest','missing_digest','merged_app','layout'])
+def test_official_assets_fail_closed(monkeypatch,problem):
+    release,blobs=official_fixture()
+    if problem=='digest':blobs[release['image']]=b'broken'
+    if problem=='missing_digest':release['assets'][release['image']]['digest']=None
+    if problem in ('merged_app','layout'):
+        merged=bytearray(blobs[release['merged']])
+        merged[0x10000 if problem=='merged_app' else 0x8000]^=1
+        blobs[release['merged']]=bytes(merged)
+        release['assets'][release['merged']]['digest']='sha256:'+hashlib.sha256(merged).hexdigest()
+    monkeypatch.setattr(fw,'download',lambda url,limit:blobs[url.rsplit('/',1)[1]])
+    with pytest.raises(ValueError):fw.prepare(release)
+
+
+def test_source_mismatch_and_repository_guard(manager,monkeypatch):
+    release,_=official_fixture()
+    monkeypatch.setattr(fw,'releases',lambda target,source:[release])
+    assert manager.check_releases('official')['source']=='official'
+    assert fw.updater.read('firmware-source.json')['source']=='official'
+    with pytest.raises(ValueError,match='source changed'):
+        asyncio.run(manager.request(dict(action='install',source='custom',release_id=9,confirm_device=True,target=fw.TARGET)))
+    assert manager.task is None
+    release['source']='custom'
+    with pytest.raises(ValueError,match='download location'):
+        fw.asset(release,release['image'],fw.MAX_IMAGE)
+    with pytest.raises(ValueError):manager.check_releases('another-repository')
+    manager.check_pool.shutdown()

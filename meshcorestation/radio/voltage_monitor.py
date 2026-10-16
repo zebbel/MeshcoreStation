@@ -135,44 +135,63 @@ class VoltageMonitor:
         self.heartbeat('idle')
 
     async def report(self, slot, cfg, sample):
-        state, detail, channel_name = 'failed', '', None
+        state, detail, destination = 'failed', '', None
         try:
             if config(self.db)['revision'] != cfg['revision']:
-                raise ValueError('Settings changed during reading; report skipped.')
+                raise ValueError('Report settings changed.')
             c = self.companion
-            index = c.channel_idx
-            if index is None:
-                raise ValueError('No bot channel selected.')
-            result = await c.mc.commands.get_channel(index)
-            if result is None or result.type != EventType.CHANNEL_INFO:
-                raise ValueError('Could not verify the current bot channel.')
-            channel = result.payload or {}
-            channel_name, secret = channel.get('channel_name'), channel.get('channel_secret')
-            if (channel.get('channel_idx') != index or channel_name != c.channel_name
-                    or not isinstance(secret, bytes) or len(secret) != 16 or secret == bytes(16)
-                    or hashlib.sha256(secret).digest()[:1].hex() != c.channel_hash):
-                raise ValueError('Bot channel changed on device; reselect it in Channels.')
-            if channel_type(channel_name, secret) != 'private':
-                raise ValueError('Reports require a private bot channel; public/hashtag channel selected.')
             stamp = datetime.fromtimestamp(sample['sampled_at'], ZoneInfo(cfg['timezone'])).strftime('%d.%m %H:%M')
-            name = ''.join(ch for ch in sample['name'] if ord(ch) >= 32 and ord(ch) != 127)[:31]
+            name = ''.join(ch for ch in sample['name'] if ord(ch) >= 32 and ord(ch) != 127)
+            name = name.encode('utf-8')[:31].decode('utf-8', errors='ignore')
             reading = f'{sample["voltage"]:.2f} V' if sample['voltage'] is not None else 'unavailable (no valid reading)'
             message = f'Battery {name}: {reading} | {stamp}'
-            async with c.reply_lock:
-                # Proactive reports use the companion's configured default scope.
-                reset = await c.mc.commands.set_flood_scope(None)
-                if reset is None or reset.type != EventType.OK:
-                    raise ValueError('Could not restore the default transmit scope; report skipped.')
+            target = cfg.get('report_target', 'bot')
+            if target == 'bot':
+                target = f'room:{c.room_bot_id}' if c.room_bot_id is not None else f'channel:{c.channel_name}'
+            if target.startswith('room:'):
+                worker = getattr(c, 'room_worker', None)
+                if worker is None or not worker.status()['running']:
+                    raise ValueError('Room worker offline.')
+                room_id = int(target[5:])
+                room = worker.service.config(room_id)
+                destination = 'Room: ' + room['name']
+                if not room['enabled']:
+                    raise ValueError('Selected room disabled.')
                 if config(self.db)['revision'] != cfg['revision']:
-                    raise ValueError('Settings changed; report skipped.')
-                state, detail = 'unconfirmed', 'Send attempted; acknowledgement not confirmed. No automatic retry.'
-                sent = await c.mc.commands.send_chan_msg(index, message)
-                if sent is not None and sent.type == EventType.OK:
-                    state, detail = 'queued', message + ' (Companion accepted; delivery is not confirmed.)'
+                    raise ValueError('Report settings changed.')
+                worker.service.local_post(room_id, message)
+                state, detail = 'queued', message + ' (Room queued; delivery unconfirmed.)'
+            elif target.startswith('channel:'):
+                from meshcorestation.radio.channels_control import read_channels
+                info, slots = await read_channels(c)
+                matches = [item for item in info['channels'] if item['name'] == target[8:]]
+                if len(matches) != 1:
+                    raise ValueError('Private report channel missing or ambiguous.')
+                index = matches[0]['index']
+                channel_name, secret = slots[index]
+                destination = 'Chat: ' + channel_name
+                if matches[0]['type'] != 'private' or channel_type(channel_name, secret) != 'private':
+                    raise ValueError('Reports require a private chat.')
+                if cfg.get('report_target', 'bot') == 'bot':
+                    if index != c.channel_idx or hashlib.sha256(secret).digest()[:1].hex() != c.channel_hash:
+                        raise ValueError('Bot channel changed.')
+                async with c.reply_lock:
+                    reset = await c.mc.commands.set_flood_scope(None)
+                    if reset is None or reset.type != EventType.OK:
+                        raise ValueError('Could not reset default scope.')
+                    if config(self.db)['revision'] != cfg['revision']:
+                        raise ValueError('Report settings changed.')
+                    state, detail = 'unconfirmed', 'Send attempted; no automatic retry.'
+                    sent = await c.mc.commands.send_chan_msg(index, message)
+                    if sent is not None and sent.type == EventType.OK:
+                        state, detail = 'queued', message + ' (Companion accepted; delivery unconfirmed.)'
+            else:
+                raise ValueError('Invalid report destination.')
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             detail = (str(exc) or type(exc).__name__)[:300]
         with self.db:
-            self.db.execute('UPDATE voltage_reports SET status=?,detail=?,channel_name=? WHERE slot=?', (state, detail, channel_name, slot))
+            self.db.execute('UPDATE voltage_reports SET status=?,detail=?,channel_name=? WHERE slot=?',
+                            (state, detail, destination, slot))
         self.companion.logger.info('Voltage report: %s %s', state, detail)

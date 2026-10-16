@@ -20,4 +20,3 @@
 @media (max-width: 700px) { .channel-fields { grid-template-columns: 1fr; } #channels-dialog { padding: 16px; } }
 #channel-form [hidden] { display: none; }
 #channel-generate { margin-top: 10px; }
-#channels-dialog button:disabled { opacity: .5; cursor: not-allowed; }

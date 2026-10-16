@@ -4,7 +4,7 @@ import re
 from urllib.parse import urlencode
 
 
-def contact_card(settings):
+def contact_card(settings, *, contact_type=1):
     import qrcode
     from qrcode.image.svg import SvgPathFillImage
 
@@ -14,7 +14,9 @@ def contact_card(settings):
         raise ValueError('Invalid companion public key')
     if not isinstance(name, str) or not name or len(name.encode('utf-8')) > 31:
         raise ValueError('Invalid companion name')
-    uri = 'meshcore://contact/add?' + urlencode({'name': name, 'public_key': key.lower(), 'type': 1})
+    if type(contact_type) is not int or contact_type not in (1, 3):
+        raise ValueError('Unsupported contact type')
+    uri = 'meshcore://contact/add?' + urlencode({'name': name, 'public_key': key.lower(), 'type': contact_type})
     image = qrcode.make(uri, image_factory=SvgPathFillImage, border=4)
     svg = image.to_string()
     return {'ok': True, 'name': name, 'public_key': key.lower(), 'uri': uri,

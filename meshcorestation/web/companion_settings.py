@@ -1,13 +1,10 @@
 """Guard local HTTP control requests and dispatch validated operations."""
-import ipaddress
 import json
-import os
 import re
-import socket
 import threading
 from pathlib import Path
-from urllib.parse import urlsplit
-from flask import jsonify, request
+from flask import request
+from meshcorestation.web.http import allowed_host, control_request_error, json_response as reply
 from meshcorestation.web.data import DB_PATH
 
 CONTROL_LOCK = threading.Lock()
@@ -18,18 +15,6 @@ CONTACT_OPERATIONS = {"get_contacts", "add_contact", "delete_contact"}
 CHANNEL_OPERATIONS = {"get_channels", "add_channel", "delete_channel", "set_bot_channel"}
 CONTACT_FIELDS = {"public_key", "name", "type", "latitude", "longitude"}
 
-
-def allowed_host(host):
-    local = socket.gethostname().lower()
-    names = {"localhost", "meshcorestation", "meshcorestation.local", "meshcore", "meshcore.local", local, local.split(".")[0] + ".local"}
-    names.update(name.strip().lower() for name in os.getenv("MESHCORESTATION_CONTROL_HOSTS", "").split(",") if name.strip())
-    if host in names:
-        return True
-    try:
-        address = ipaddress.ip_address(host)
-        return address.is_private or address.is_loopback
-    except ValueError:
-        return False
 
 
 def bot_request(payload):
@@ -81,21 +66,9 @@ def register_companion_routes(server):
     @server.route("/api/companion/contacts", methods=["GET", "POST"])
     @server.route("/api/companion/channels", methods=["GET", "POST"])
     def companion_settings_api():
-        def reply(body, status=200):
-            response = jsonify(body)
-            response.status_code = status
-            response.headers["Cache-Control"] = "no-store"
-            response.headers["X-Content-Type-Options"] = "nosniff"
-            return response
-
-        host = urlsplit(request.host_url).hostname or ""
-        origin = request.headers.get("Origin")
-        if not allowed_host(host.lower()):
-            return reply({"ok": False, "error": "Use the Pi hostname or the Pi's local IP for companion settings."}, 403)
-        if request.headers.get("X-Meshcore-Control") != "1" or request.headers.get("Sec-Fetch-Site") == "cross-site":
-            return reply({"ok": False, "error": "Open settings from this dashboard."}, 403)
-        if origin and origin != request.host_url.rstrip("/"):
-            return reply({"ok": False, "error": "Cross-origin settings requests are blocked."}, 403)
+        error = control_request_error()
+        if error:
+            return reply({"ok": False, "error": error}, 403)
 
         if request.path == "/api/repeater":
             from meshcorestation.web.repeater_api import repeater_request

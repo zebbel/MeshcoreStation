@@ -17,7 +17,6 @@ STATE = ROOT / '.updates'
 REMOTE = 'https://github.com/zebbel/MeshcoreStation.git'
 SERVICE = 'meshcorestation.service'
 WEB_SWITCH_PROTOCOL = 1
-BRANCHES = {'main': 'Stable', 'feature/room-server': 'Room server (experimental)'}
 
 ACTIVE = {'queued', 'preparing', 'backing_up', 'installing', 'verifying', 'rolling_back'}
 
@@ -96,9 +95,31 @@ def local_revision():
 
 
 def branch_name(value):
-    if value not in BRANCHES:
-        raise RuntimeError('Choose Stable or Room server (experimental).')
+    """Validate a literal Git branch, never a ref expression or command option."""
+    if (not isinstance(value, str) or not value or len(value) > 255
+            or value.startswith('-') or value == '@'
+            or any(ord(c) < 33 or ord(c) == 127 or c in '~^:?*[\\' for c in value)
+            or '..' in value or '@{' in value
+            or any(not part or part.startswith('.') or part.endswith(('.', '.lock'))
+                   for part in value.split('/'))):
+        raise RuntimeError('Choose a valid Git branch name.')
     return value
+
+
+def available_branches():
+    """Read all advertised heads from the fixed project remote, only on request."""
+    with lock():
+        output = run('git', 'ls-remote', '--heads', REMOTE, timeout=20)
+    branches = set()
+    for line in output.splitlines():
+        fields = line.split('\t', 1)
+        if len(fields) != 2 or not re.fullmatch('[0-9a-f]{40,64}', fields[0]):
+            continue
+        if fields[1].startswith('refs/heads/'):
+            branches.add(branch_name(fields[1][11:]))
+    if not branches:
+        raise RuntimeError('GitHub returned no project branches. Retry the branch refresh.')
+    return {name: name for name in sorted(branches)}
 
 
 def local_branch():
@@ -225,16 +246,14 @@ def check_dependencies(python):
 
 
 def prepare_dependencies(old, target):
-    """Return None for a validated unchanged environment, or a staged wheelhouse."""
+    """Use requirements.txt as the dependency-change signal; otherwise reuse the venv."""
     python = str(ROOT / '.venv/bin/python3')
     before = run('git', 'show', f'{old}:requirements.txt')
     after = run('git', 'show', f'{target}:requirements.txt')
     if before == after:
-        try:
-            run(python, '-m', 'scripts.check_dependencies', '--check-only', timeout=600)
-            return None
-        except (RuntimeError, subprocess.TimeoutExpired):
-            pass  # Repair only from prebuilt wheels, with the station still running.
+        # Code-only updates do not invoke pip or scan installed packages.
+        # The application smoke test and post-start health check still gate success.
+        return None
     wheelhouse = STATE / ('wheels-' + target)
     wheelhouse.mkdir(parents=True, exist_ok=True)
     requirements = wheelhouse / 'requirements.txt'
@@ -325,7 +344,7 @@ def worker():
                 verify_target(target_branch, target)
             else:
                 run('git', 'merge-base', '--is-ancestor', old, target)
-            status('preparing', 'Validating dependencies and preparing compatible wheels while the station runs…')
+            status('preparing', 'Comparing dependency requirements; preparing wheels only if they changed…')
             wheelhouse = prepare_dependencies(old, target)
             backup_venv = wheelhouse is not None
             from meshcorestation.config import DATA_DIR, PORT
@@ -355,7 +374,7 @@ def worker():
             backup_complete = True
             transaction['backup_complete'] = True
             write('transaction.json', transaction)
-            status('installing', 'Installing the update and checking dependencies…')
+            status('installing', 'Installing the selected application revision…')
             restore_source(target, target_branch)
             python = str(ROOT / '.venv/bin/python3')
             if wheelhouse is not None:
@@ -363,7 +382,7 @@ def worker():
                     '--find-links', str(wheelhouse), '-r', 'requirements.txt', timeout=1800)
                 run(python, '-m', 'scripts.check_dependencies', '--check-only', timeout=600)
             else:
-                status('installing', 'Code-only update: keeping validated Python dependencies; no pip installation needed.')
+                status('installing', 'Code-only update: requirements unchanged; skipping package checks and installation.')
             run(python, '-m', 'scripts.check_install')
             status('verifying', 'Restarting MeshcoreStation and checking the dashboard…')
             service('start')

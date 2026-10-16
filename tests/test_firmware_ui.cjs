@@ -7,15 +7,15 @@ w.AbortSignal.timeout = () => undefined;
 w.confirm = () => true;
 let requests = 0, now = 100000;
 w.Date.now = () => now;
-let tick, checked = false, busy = false, installs = 0;
+let tick, checked = false, busy = false, installs = 0, source = 'custom';
 w.setInterval = cb => { tick = cb; return 1; };
 w.fetch = async (url, options) => {
     requests++;
     assert.equal(options.headers['X-Meshcore-Control'], '1');
     const body = options.body ? JSON.parse(options.body) : {};
-    if (body.action === 'check') checked = true;
-    if (body.action === 'install') { installs++; assert.equal(body.release_id, 7); assert(body.confirm_device); assert.equal(body.target,'heltec_v4_companion_radio_usb'); busy = true; }
-    return {ok:true,json:async()=>({ok:true,ready:true,supported:true,target:'heltec_v4_companion_radio_usb',target_label:'Heltec V4 OLED USB',device:{ver:'test'},status:{busy,message:busy?'Flashing':'Ready',log:'<script>unsafe</script>'},releases:checked?[{id:7,name:'OLED',prerelease:true}]:[]})};
+    if (body.action === 'check') { checked = true; source = body.source; }
+    if (body.action === 'install') { installs++; assert.equal(body.release_id, 7); assert.equal(body.source,source); assert(body.confirm_device); assert.equal(body.target,'heltec_v4_companion_radio_usb'); busy = true; }
+    return {ok:true,json:async()=>({ok:true,source,ready:true,supported:true,target:'heltec_v4_companion_radio_usb',target_label:'Heltec V4 OLED USB',device:{ver:'test'},status:{busy,message:busy?'Flashing':'Ready',log:'<script>unsafe</script>'},releases:checked?[{id:7,name:'OLED',prerelease:true}]:[]})};
 };
 const settle = () => new Promise(r => setImmediate(r));
 (async()=>{
@@ -29,13 +29,13 @@ const settle = () => new Promise(r => setImmediate(r));
     panel.querySelector('.firmware-check').click(); await settle();
     assert(panel.querySelector('.firmware-current').textContent.includes('test'));
     assert(!panel.querySelector('.firmware-install').disabled);
-    assert(panel.querySelector('option').textContent.includes('prerelease'));
-    const option = panel.querySelector('option');
-    const select = panel.querySelector('select');
+    assert(panel.querySelector('#firmware-release option').textContent.includes('prerelease'));
+    const option = panel.querySelector('#firmware-release option');
+    const select = panel.querySelector('#firmware-release');
     now += 15000; tick();
     assert(!select.disabled, 'Background polling must not disable the release selector');
     await settle();
-    assert.equal(panel.querySelector('option'), option, 'Unchanged release options must keep their DOM nodes');
+    assert.equal(panel.querySelector('#firmware-release option'), option, 'Unchanged release options must keep their DOM nodes');
     panel.querySelector('.firmware-install').click(); await settle();
     assert.equal(installs,1);
     assert(panel.querySelector('.firmware-check').disabled);
@@ -44,5 +44,15 @@ const settle = () => new Promise(r => setImmediate(r));
     busy=false; tick(); await settle();
     assert(!panel.querySelector('.firmware-install').disabled);
     const stoppedRequests=requests; now+=60000; tick(); await settle(); assert.equal(requests,stoppedRequests);
+    const picker=panel.querySelector('#firmware-source');
+    picker.value='official';picker.dispatchEvent(new w.Event('change'));
+    assert(panel.querySelector('.firmware-install').disabled);
+    assert.equal(select.options.length,0);
+    const beforeCheck=requests;
+    panel.querySelector('.firmware-check').click();await settle();
+    assert.equal(source,'official');assert.equal(requests,beforeCheck+1);
+    assert(!panel.querySelector('.firmware-install').disabled);
+    panel.querySelector('.firmware-install').click();await settle();
+    assert.equal(installs,2);assert(picker.disabled);
     dom.window.close(); console.log('Firmware UI passed');
 })().catch(e=>{console.error(e);process.exit(1);});

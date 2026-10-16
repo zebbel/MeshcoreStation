@@ -1,5 +1,6 @@
 """Own the radio session, battery worker, and graceful reconnects in one process."""
 import asyncio
+import time
 from meshcorestation.bridge import bridge
 from meshcorestation.radio.companion import Companion
 from meshcorestation.radio.companion_control import CompanionControl
@@ -14,6 +15,7 @@ class Runtime:
         self.reconnect_requested = asyncio.Event()
         self.requests = set()
         self.oled = None
+        self.rooms = None
         self.maintenance = False
         self.usb_closed = asyncio.Event()
         self.resume_radio = asyncio.Event()
@@ -24,6 +26,18 @@ class Runtime:
 
     async def dispatch(self, payload):
         """Serialize control changes with bot replies and telemetry requests."""
+        if payload.get('operation') == 'room_bot':
+            from meshcorestation.config import DATA_DIR
+            from meshcorestation.rooms.service import RoomService
+            service = RoomService(DATA_DIR / 'rooms.db')
+            room = payload.get('room')
+            if type(room) is not int or room < 1:
+                raise ValueError('Select a room.')
+            service.set_bot(room)
+            if self.companion is not None:
+                self.companion.room_bot_id = room
+                self.companion.room_bot_name = service.config(room)['name']
+            return {'ok': True}
         if payload.get('operation') == 'firmware':
             return await self.firmware.request(payload)
         if self.maintenance:
@@ -37,7 +51,17 @@ class Runtime:
             async with companion.control_lock:
                 if control is not self.control:
                     return {'ok': False, 'error': 'Companion reconnected; refresh before retrying.'}
-                return await control.execute(payload)
+                if payload.get('operation') == 'room_restart':
+                    started = await self.start_rooms()
+                    return {'ok': started, 'error': '' if started else 'Room worker could not start; check station logs.'}
+                result = await control.execute(payload)
+                if payload.get('operation') == 'set_bot_channel' and result.get('ok'):
+                    from meshcorestation.config import DATA_DIR
+                    from meshcorestation.rooms.service import RoomService
+                    RoomService(DATA_DIR / 'rooms.db').clear_bot()
+                    companion.room_bot_id = None
+                    companion.room_bot_name = None
+                return result
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -51,6 +75,11 @@ class Runtime:
         for task in tuple(self.requests):
             task.cancel()
         await asyncio.gather(*tuple(self.requests), return_exceptions=True)
+        if self.rooms is not None:
+            await self.rooms.close()
+            self.rooms = None
+            if self.companion is not None:
+                self.companion.room_worker = None
         if self.voltage is not None:
             await self.voltage.close()
             self.voltage = None
@@ -80,6 +109,68 @@ class Runtime:
         self.resume_radio.set()
         self.reconnect_requested.set()
 
+    async def start_rooms(self):
+        if self.rooms:
+            await self.rooms.close()
+        try:
+            from meshcorestation.config import DATA_DIR
+            from meshcorestation.rooms.service import RoomService
+            from meshcorestation.rooms.server import RoomWorker
+            service = RoomService(DATA_DIR / 'rooms.db')
+            selected = service.bot_room()
+            self.companion.room_bot_id = selected
+            self.companion.room_bot_name = service.config(selected)['name'] if selected is not None else None
+            self.rooms = RoomWorker(self.companion, service, self.handle_room_post)
+            self.companion.room_worker = self.rooms
+            self.rooms.start()
+            return True
+        except Exception as exc:
+            self.rooms = None
+            self.logger.warning('Room server unavailable; bot continues: %s', exc)
+            return False
+
+    async def handle_room_post(self, room, post, rx):
+        if self.companion is None or self.companion.room_bot_id != room:
+            return
+        text = post.get('text', '')
+        command = self.companion.bot.match_command(text)
+        if command is None:
+            return
+        name = await self.companion.room_sender_name(post.get('author'))
+        direct = rx.get('path_len') is None
+        message = {'message': text, 'raw_text': text, 'name': name,
+                   'type': 'room', 'room_id': room,
+                   'room_name': self.companion.room_bot_name,
+                   'sender_public_key': post.get('author'),
+                   'sender_timestamp': post.get('sender_timestamp'),
+                   'recv_time': int(time.time()),
+                   'path_len': rx.get('path_len'),
+                   'path_hash_mode': rx['path_hash_size'] - 1 if isinstance(rx.get('path_hash_size'), int) else None,
+                   'path': 'direct' if direct else f"{rx['path_len']} hops",
+                   'command_status': 'processing'}
+        self.logger.info("%s | room=%r | sender=%r", command['trigger'], self.companion.room_bot_name, name)
+        # The regular channel handler already logs through this table. Use the
+        # same history for authenticated room messages, not the room posts table.
+        command_id = self.database.add_logger(message, rx, rx.get('room_scope_name') or 'unknown', '')
+        from meshcorestation.commands.delivery import ReplyDelivery
+        delivery = ReplyDelivery()
+
+        async def send(part):
+            self.rooms.service.local_post(room, part)
+            return part
+
+        try:
+            reply = await self.companion.bot.handle_message(message, rx, command)
+            await delivery.deliver(reply, send)
+        except BaseException:
+            delivery.failed()
+            raise
+        finally:
+            with self.database.db:
+                self.database.db.execute(
+                    'UPDATE logger SET reply=?,command_status=? WHERE id=?',
+                    (delivery.text, delivery.status, command_id))
+
     async def session(self):
         self.companion = Companion(self.logger, self.database)
         if not await self.companion.connect():
@@ -96,6 +187,7 @@ class Runtime:
         self.voltage.start()
         self.oled = OledDisplay(self.companion)
         self.oled.start()
+        await self.start_rooms()
         self.logger.set_log_level()
         while True:
             connected = self.companion.mc.connection_manager.is_connected

@@ -3,27 +3,17 @@ import json
 import sqlite3
 import time
 from contextlib import closing
-from urllib.parse import urlsplit
-from flask import jsonify, request
+from flask import request
 from meshcorestation.config import DB_PATH
 from meshcorestation.storage import oled_store as store
 from meshcorestation.radio.oled_scene import render
-from meshcorestation.web.companion_settings import allowed_host
+from meshcorestation.web.http import control_request_error, json_response as reply
 
 
 def register_oled_routes(server):
     @server.route('/api/oled/pages',methods=['GET','POST'])
     def oled_pages():
-        def reply(body, status=200):
-            response = jsonify(body)
-            response.status_code = status
-            response.headers['Cache-Control'] = 'no-store'
-            return response
-        origin = request.headers.get('Origin')
-        if (not allowed_host((urlsplit(request.host_url).hostname or '').lower())
-                or request.headers.get('X-Meshcore-Control') != '1'
-                or request.headers.get('Sec-Fetch-Site') == 'cross-site'
-                or (origin and origin != request.host_url.rstrip('/'))):
+        if control_request_error():
             return reply(dict(ok=False,error='Open the OLED editor from this dashboard.'),403)
         try:
             from meshcorestation.bridge import bridge

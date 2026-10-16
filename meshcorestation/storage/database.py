@@ -81,8 +81,16 @@ class Database:
                 sender_latitude REAL,
                 sender_longitude REAL,
                 sender_altitude REAL,
-                sender_position_updated_at INTEGER
+                sender_position_updated_at INTEGER,
+                room_id INTEGER,
+                command_status TEXT
             )""")
+        # Existing installations retain their history while gaining room metadata.
+        logger_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(logger)")}
+        if "room_id" not in logger_columns:
+            self.db.execute("ALTER TABLE logger ADD COLUMN room_id INTEGER")
+        if "command_status" not in logger_columns:
+            self.db.execute("ALTER TABLE logger ADD COLUMN command_status TEXT")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_logger_recv_time ON logger(recv_time)")
 
         from meshcorestation.storage.reply_store import initialize as initialize_replies
@@ -97,7 +105,7 @@ class Database:
         rx = matched_rx if matched_rx is not None else {}
 
         shared_fields = "sender_timestamp recv_time path_len txt_type attempt".split()
-        message_fields = "type channel_idx message path path_hash_mode".split()
+        message_fields = "type channel_idx message path path_hash_mode room_id command_status".split()
         rx_fields = "path_hash_size route_type payload_type payload_ver transport_code pkt_hash msg_hash raw_hex".split()
 
         data = {field: message_data.get(field) for field in message_fields}
@@ -109,14 +117,20 @@ class Database:
         data["snr"] = message_data.get("SNR") if message_data.get("SNR") is not None else rx.get("snr")
         data["rx_path"] = rx.get("path")
         data["channel_hash"] = rx.get("channel_hash") or rx.get("chan_hash")
-        data["channel_name"] = rx.get("channel_name") or rx.get("chan_name")
+        data["channel_name"] = message_data.get("room_name") if message_data.get("room_id") is not None else rx.get("channel_name") or rx.get("chan_name")
         data["scope_name"] = scope_name
         data["reply"] = reply
 
-        positions = self.get_companion_positions_by_name(message_data.get("name"))
-        position = positions[0] if len(positions) == 1 else {}
-
-        data["sender_public_key"] = position.get("public_key")
+        if message_data.get("room_id") is not None:
+            # Room messages have a cryptographically authenticated sender key.
+            # Never substitute a same-name companion's coordinates or identity.
+            sender_key = self._normalize_public_key(message_data.get("sender_public_key"))
+            position = self.get_companion_position(sender_key) or {}
+            data["sender_public_key"] = sender_key
+        else:
+            positions = self.get_companion_positions_by_name(message_data.get("name"))
+            position = positions[0] if len(positions) == 1 else {}
+            data["sender_public_key"] = position.get("public_key")
         data["sender_latitude"] = position.get("latitude")
         data["sender_longitude"] = position.get("longitude")
         data["sender_altitude"] = position.get("altitude")

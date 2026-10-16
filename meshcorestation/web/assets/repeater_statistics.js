@@ -1,5 +1,5 @@
 (() => {
-    let dialog, busy=false, timer=null, requestId=0, knownRepeaters=[];
+    let dialog, busy=false, timer=null, requestId=0, knownRepeaters=[], autoRefreshPaused=false;
     const el=(tag,value,cls)=>{const node=document.createElement(tag);if(value!=null)node.textContent=value;if(cls)node.className=cls;return node;};
     const date=value=>value ? new Date(value*1000).toLocaleString(undefined,{timeZone:'Europe/Berlin'}) : 'No observations yet';
     function message(value){dialog.querySelector('.stats-message').textContent=value;}
@@ -83,10 +83,10 @@
         dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=true);message(save?'Saving selection…':'Loading observations…');
         try{
             const url=`/api/repeater-statistics?days=${dialog.querySelector('.stats-period').value}`;
-            const response=await fetch(url,{method:save?'POST':'GET',cache:'no-store',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},...(save?{body:JSON.stringify({public_key:dialog.querySelector('.stats-repeater').value})}:{}),signal:AbortSignal.timeout(15000)});
+            const response=await fetch(url,{method:save?'POST':'GET',cache:'no-store',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},...(save?{body:JSON.stringify({public_key:dialog.querySelector('.stats-repeater').value})}:{}),signal:AbortSignal.timeout(60000)});
             const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Statistics request failed.');
-            if(id===requestId){render(result);message('Observed by MeshcoreStation · saved metadata only · no radio requests');}
-        }catch(error){message(error.message);}finally{busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=false);}
+            if(id===requestId){autoRefreshPaused=false;render(result);message('Observed by MeshcoreStation · saved metadata only · no radio requests');}
+        }catch(error){autoRefreshPaused=true;message(['TimeoutError','AbortError'].includes(error.name)?'Statistics took longer than 60 seconds. Automatic refresh is paused. Try 24 hours or press Refresh to retry.':error.message+' Automatic refresh is paused; press Refresh to retry.');}finally{busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=false);}
     }
     function attach(){
         const section=document.getElementById('repeater-statistics-disclosure');
@@ -107,7 +107,7 @@
             clearInterval(timer);timer=null;
             if(section.open){
                 load();
-                timer=setInterval(()=>{if(section.open && !document.getElementById('stats-repeater-picker')?.open)load();},30000);
+                timer=setInterval(()=>{if(section.open && !autoRefreshPaused && !document.getElementById('stats-repeater-picker')?.open)load();},30000);
             }
         }
         section.addEventListener('toggle',toggle);

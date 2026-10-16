@@ -12,7 +12,7 @@
 .battery-chart text { font: 12px system-ui; fill: var(--muted); }
 .voltage-outside { fill: var(--red); }
 #battery-overview-error { color: var(--red); }
-#battery-overview-days { padding: 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+#battery-overview-days { padding: var(--control-padding); background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--control-radius); }
 #contacts-list li { align-items: flex-start; }
 .contact-details { margin-top: 12px; }
 .contact-details summary { cursor: pointer; color: var(--accent); }

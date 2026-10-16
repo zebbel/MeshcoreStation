@@ -1,5 +1,5 @@
 (() => {
-    let dialog, snapshot = null, busy = false, wantedKey = '', timer = null, dirty = false;
+    let dialog, snapshot = null, busy = false, wantedKey = '', timer = null, dirty = false, channelsCache = [];
     const el = id => document.getElementById(id);
     const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
     function message(text, bad = false) { el('voltage-message').textContent = text; el('voltage-message').classList.toggle('voltage-error', bad); }
@@ -35,6 +35,24 @@
         filter();
     }
     function filter() { const q=el('voltage-search').value.trim().toLowerCase(); el('voltage-repeaters').querySelectorAll('li').forEach(n=>n.hidden=!n.dataset.name.includes(q)); }
+    function reportDestinations(data) {
+        const select = el('voltage-target'), selected = data.config.report_target || 'bot';
+        select.replaceChildren(new Option('Follow bot chat / room', 'bot'));
+        for (const chat of channelsCache.filter(c => c.type === 'private'))
+            select.append(new Option('Chat: ' + chat.name + ' (slot ' + chat.index + ')', 'channel:' + chat.name));
+        for (const room of data.rooms || [])
+            if (room.enabled) select.append(new Option('Room: ' + room.name, 'room:' + room.id));
+        if (![...select.options].some(option => option.value === selected))
+            select.append(new Option('Unavailable: ' + selected, selected));
+        select.value = selected;
+    }
+    async function refreshChannels() {
+        try {
+            const response = await fetch('/api/companion/channels', {cache:'no-store',headers:{'X-Meshcore-Control':'1'}});
+            const data = await response.json();
+            if (response.ok && data.ok && Array.isArray(data.channels)) channelsCache = data.channels;
+        } catch (_) { /* Keep selected target visible when radio is offline. */ }
+    }
     function render(data, form) {
         if (!form && snapshot) {
             if (dirty) data.config = snapshot.config;
@@ -43,6 +61,7 @@
         snapshot = data;
         if (form) {
             candidates(data);
+            reportDestinations(data);
             const c=data.config;
             el('voltage-enabled').checked=c.enabled; el('voltage-reports').checked=c.reports_enabled;
             el('voltage-interval').value=c.interval_minutes; el('voltage-lpp').value=c.voltage_channel;
@@ -52,7 +71,10 @@
         const latest=data.latest;
         el('voltage-latest').textContent=latest ? `${latest.voltage===null?'Reading failed':window.MeshcoreStationBattery.reading(latest.voltage)} · ${date(latest.sampled_at,data.config.timezone)}${latest.error?' · '+latest.error:''}` : 'No readings yet.';
         const worker=data.worker, active=worker && worker.state!=='stopped' && data.server_time-worker.heartbeat<150;
-        el('voltage-worker').textContent=`${active?'Bot monitor: '+worker.state:'Bot monitor offline'} · Reports follow bot channel: ${data.bot_channel || '(none selected)'}. Private channels only.`;
+        const target = data.config.report_target || 'bot';
+        const room = (data.rooms || []).find(r => 'room:' + r.id === target);
+        const destination = target === 'bot' ? 'bot chat / room' : target.startsWith('channel:') ? 'chat ' + target.slice(8) : room ? 'room ' + room.name : target;
+        el('voltage-worker').textContent=`${active?'Bot monitor: '+worker.state:'Bot monitor offline'} · Reports to: ${destination}.`;
         el('voltage-chart-note').textContent=''; chart(data.samples,data.config.timezone,Number(el('voltage-days').value));
         const rows=el('voltage-recent'); rows.replaceChildren();
         for (const p of [...data.samples].slice(-10).reverse()) { const tr=document.createElement('tr'); for(const t of [date(p.sampled_at,data.config.timezone),p.voltage===null?'—':window.MeshcoreStationBattery.reading(p.voltage),p.error||'OK']) tr.append(node('td',t)); rows.append(tr); }
@@ -63,7 +85,7 @@
         if (busy || (silent && dirty)) return;
         busy=true;controls();
         if (!silent) message('Loading voltage history…');
-        try { render(await request(),form); if (!silent) message(dirty?'Repeater selected. Save to use it for monitoring.':'History refreshed.'); }
+        try { if(form) await refreshChannels(); render(await request(),form); if (!silent) message(dirty?'Repeater selected. Save to use it for monitoring.':'History refreshed.'); }
         catch(error) { message(error.message,true); if(form) snapshot=null; }
         finally { busy=false;controls(); }
     }
@@ -73,7 +95,7 @@
     }
     async function save(event) {
         event.preventDefault(); if(busy || !snapshot || !el('voltage-form').reportValidity()) return;
-        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value)};
+        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value),report_target:el('voltage-target').value};
         busy=true;controls();
         try { await request({operation:'save',expected_revision:snapshot.config.revision,value});wantedKey=value.public_key;dirty=false;message('Settings saved. The bot applies them automatically.'); }
         catch(error) { message(error.message+' Refresh before retrying.',true); return; }
@@ -93,13 +115,17 @@
         dialog.innerHTML=`<div class="dialog-header"><h2 id="voltage-title">Repeater battery</h2><button type="button" id="voltage-close" aria-label="Close battery history">×</button></div>
         <p id="voltage-message" role="status" aria-live="polite"></p><p id="voltage-worker" class="muted"></p>
         <form id="voltage-form"><div class="voltage-fields">
-        <label class="voltage-wide">Repeater<select id="voltage-repeater"></select></label><button type="button" id="voltage-map">Select repeater on map</button>
-        <label><input type="checkbox" id="voltage-enabled"> Enable monitoring</label><label><input type="checkbox" id="voltage-reports"> Send two daily reports</label>
+        <div class="voltage-wide voltage-repeater-choice"><label>Repeater<select id="voltage-repeater"></select></label><button type="button" id="voltage-map">Select repeater on map</button></div>
+        <fieldset class="voltage-wide voltage-group"><legend>Monitoring</legend><div class="voltage-fields">
+        <label class="voltage-wide voltage-toggle"><input type="checkbox" id="voltage-enabled"> Enable monitoring</label>
         <label>Read every (minutes)<input id="voltage-interval" type="number" min="5" max="1440" required></label>
         <label>Voltage LPP channel<input id="voltage-lpp" type="number" min="1" max="255" required></label>
+        </div></fieldset>
+        <fieldset class="voltage-wide voltage-group"><legend>Daily reports</legend><div class="voltage-fields">
+        <label class="voltage-wide voltage-toggle"><input type="checkbox" id="voltage-reports"> Send two daily reports</label>
         <label>First report<input id="voltage-time1" type="time" required></label><label>Second report<input id="voltage-time2" type="time" required></label>
-        <label class="voltage-wide">Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label></div>
-        <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Previous history is kept.</p>
+        <label>Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label>Send battery reports to<select id="voltage-target" required></select></label></div></fieldset></div>
+        <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Reports may follow the bot or use a private chat or enabled room. Previous history is kept.</p>
         <div class="voltage-actions"><button id="voltage-save" type="submit">Save settings</button><button id="voltage-read" type="button">Read now</button><button id="voltage-refresh" type="button">Refresh</button></div></form>
         <details><summary>Select from repeater list</summary><input id="voltage-search" type="search" aria-label="Search repeaters" placeholder="Search name or public key"><ul id="voltage-repeaters"></ul></details>
         <h3 id="voltage-latest">No readings yet.</h3><label>Chart period <select id="voltage-days"><option value="1" selected>24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>

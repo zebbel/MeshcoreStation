@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'report_time_1', 'report_time_2', 'timezone', 'voltage_channel')
+FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'report_time_1', 'report_time_2', 'timezone', 'voltage_channel', 'report_target')
 
 
 def initialize(db):
@@ -15,6 +15,7 @@ def initialize(db):
       reports_enabled INTEGER NOT NULL DEFAULT 1,
       report_time_1 TEXT NOT NULL DEFAULT '08:00', report_time_2 TEXT NOT NULL DEFAULT '20:00',
       timezone TEXT NOT NULL DEFAULT 'Europe/Berlin', voltage_channel INTEGER NOT NULL DEFAULT 1,
+      report_target TEXT NOT NULL DEFAULT 'bot',
       revision INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL DEFAULT 0,
       request_seq INTEGER NOT NULL DEFAULT 0, handled_seq INTEGER NOT NULL DEFAULT 0);
     INSERT OR IGNORE INTO voltage_config (id) VALUES (1);
@@ -29,6 +30,9 @@ def initialize(db):
     CREATE TABLE IF NOT EXISTS voltage_worker (
       id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL NOT NULL, state TEXT NOT NULL);
     ''')
+    # Keep the previous bot-chat destination for existing installations.
+    if 'report_target' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
+        db.execute("ALTER TABLE voltage_config ADD COLUMN report_target TEXT NOT NULL DEFAULT 'bot'")
 
 
 def config(db):
@@ -56,6 +60,22 @@ def validate(value, db):
         raise ValueError('Selected repeater is not in the known repeater list.')
     if result['enabled'] and not key:
         raise ValueError('Select a repeater before enabling monitoring.')
+    target = result['report_target']
+    if not isinstance(target, str):
+        raise ValueError('Choose a battery report destination.')
+    if target == 'bot':
+        pass
+    elif target.startswith('room:'):
+        room_id = target[5:]
+        if not room_id.isdecimal() or room_id.startswith('0') or not 1 <= int(room_id) <= 2147483647:
+            raise ValueError('Choose an existing room.')
+    elif target.startswith('channel:'):
+        name = target[8:]
+        if (not name or name.strip() != name or len(name.encode('utf-8')) > 31
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)):
+            raise ValueError('Choose a valid companion channel.')
+    else:
+        raise ValueError('Choose a battery report destination.')
     for field, lo, hi in (('interval_minutes', 5, 1440), ('voltage_channel', 1, 255)):
         if type(result[field]) is not int or not lo <= result[field] <= hi:
             raise ValueError(f'{field} must be a whole number from {lo} to {hi}.')

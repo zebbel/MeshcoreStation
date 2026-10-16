@@ -54,5 +54,8 @@ const button=t=>[...d.querySelectorAll('button')].find(b=>b.textContent===t);
  d.getElementById('oled-close').click();await tick();
  assert(calls.some(c=>c?.action==='stop_preview'));
  assert(!d.getElementById('oled-editor').open);
+ assert(d.querySelector('#oled-editor > .dialog-header'));
+ assert(d.querySelector('#oled-editor > .dialog-body #oled-fields'));
+ assert(!d.querySelector('#oled-editor > .dialog-body .dialog-header'));
  dom.window.close();console.log('OLED drag, resize, graph bounds, save, duplicate, safe text and preview checks passed.');
 })().catch(e=>{console.error(e);dom.window.close();process.exit(1);});

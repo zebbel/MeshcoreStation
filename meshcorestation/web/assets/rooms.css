@@ -1,0 +1,30 @@
+/* Room-only layout. Dash also loads this asset: never style bare elements here. */
+.rooms-page .room-shell { max-width: 1100px; margin: auto; padding: 32px 24px; }
+.rooms-page .room-back { display: inline-block; margin-bottom: 16px; }
+.rooms-page a { color: var(--accent); }
+.rooms-page h1 small { font-size: 12px; font-weight: 500; letter-spacing: normal; color: var(--muted); }
+.rooms-page p { line-height: 1.5; }
+.rooms-page section { padding: 24px; margin: 20px 0; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); box-shadow: var(--shadow); }
+.rooms-page form, .rooms-page .contact-picker { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 18px 0; }
+.rooms-page label { display: flex; flex-direction: column; gap: 8px; flex: 1 1 180px; min-width: 0; margin: 0; }
+.rooms-page input, .rooms-page select { width: 100%; min-width: 0; }
+.rooms-page .heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.rooms-page .heading h2 { margin: 0; }
+.rooms-page #error { color: var(--red); white-space: pre-wrap; }
+.rooms-page #members { padding: 0; list-style: none; }
+.rooms-page #members li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.rooms-page #members span { min-width: 0; }
+.rooms-page #members button { flex-shrink: 0; }
+.rooms-page #posts { max-height: 480px; overflow: auto; }
+.rooms-page article { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.rooms-page article p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; }
+.rooms-page article small { color: var(--muted); }
+.rooms-page #public-key { font-family: monospace; }
+.rooms-page #status { color: var(--muted); }
+.rooms-page #room-qr img { width: 280px; max-width: 100%; height: auto; background: white; border: 16px solid white; border-radius: 8px; }
+.rooms-page .contact-picker p { flex-basis: 100%; margin: 0; }
+@media (max-width: 700px) {
+    .rooms-page .room-shell { padding: 20px 12px; }
+    .rooms-page section { padding: 16px; }
+    .rooms-page form > button { flex: 1 1 auto; }
+}

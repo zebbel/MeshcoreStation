@@ -165,7 +165,7 @@ def test_dependency_preparation_fast_path_and_binary_download(area, monkeypatch)
         return ''
     monkeypatch.setattr(u,'run',run)
     assert u.prepare_dependencies('a','b') is None
-    assert any('--check-only' in c for c in calls)
+    assert calls == [('git','show','a:requirements.txt'), ('git','show','b:requirements.txt')]
     assert not any('download' in c or 'install' in c for c in calls)
     calls.clear()
     def changed(*args,**kwargs):
@@ -271,12 +271,12 @@ def test_two_way_branch_switch_with_real_git(area, monkeypatch):
     u.verify_target('feature/room-server',feature)
     u.restore_source(feature,'feature/room-server')
     assert u.local_branch()=='feature/room-server' and (area/'room.txt').exists()
-    # Stable is an ancestor, not a fast-forward from experimental.
+    # Stable is an ancestor, not a fast-forward from the room-server branch.
     checked=u.check('main')
     assert checked['available'] and checked['latest']==stable
     u.verify_target('main',stable);u.restore_source(stable,'main')
     assert u.local_branch()=='main' and not (area/'room.txt').exists()
-    with pytest.raises(RuntimeError,match='Choose Stable'):
+    with pytest.raises(RuntimeError,match='valid Git branch'):
         u.check('--upload-pack=evil')
 
 
@@ -300,3 +300,27 @@ def test_interrupted_switch_restores_branch_and_room_data(area,monkeypatch):
                    backup=str(backup),data=str(data),port=80,backup_complete=True,backup_venv=False))
     assert ('git','switch','-C','feature/room-server','a'*40) in calls
     assert (data/'rooms.db').read_text()=='saved rooms'
+
+
+def test_dynamic_branches_include_new_remote_heads(area, monkeypatch):
+    calls=[]
+    def run(*args,**kwargs):
+        calls.append((args,kwargs))
+        return '\n'.join([
+            'a'*40+'\trefs/heads/main',
+            'b'*40+'\trefs/heads/testing/new-version',
+            'c'*40+'\trefs/tags/v3',
+            'b'*40+'\trefs/heads/testing/new-version'])
+    monkeypatch.setattr(u,'run',run)
+    assert u.available_branches()=={'main':'main','testing/new-version':'testing/new-version'}
+    assert calls==[(('git','ls-remote','--heads',u.REMOTE),{'timeout':20})]
+
+
+@pytest.mark.parametrize('name',['--upload-pack=evil','../main','a//b','a.lock','a/.b','a@{1}','a:b','a b','a\\b','',None])
+def test_branch_ref_validation(name):
+    with pytest.raises(RuntimeError):u.branch_name(name)
+
+
+def test_branch_listing_failure_is_reported(area,monkeypatch):
+    monkeypatch.setattr(u,'run',lambda *a,**k:'')
+    with pytest.raises(RuntimeError,match='no project branches'):u.available_branches()
