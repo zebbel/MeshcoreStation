@@ -179,3 +179,19 @@ def test_usefulness_bot_replies_unique_and_completed(db):
             for i in range(2):
                 connection.execute('INSERT INTO reply_observations(reply_id,seen_at,latency,digest,path,route) VALUES(?,?,?,?,?,?)',(rid,now-offset+1,1,str(i),str(i),json.dumps([{'public_key':TARGET}])))
     assert s.snapshot(1)['usefulness']['replies']==dict(forwarded=1,total=1)
+
+
+def test_grouped_routes_preserve_duplicate_hops_and_renames(db):
+    s.select(TARGET)
+    known=s.known_repeaters()
+    p=s.normalize(packet(path='e59a769be59a769baaaa'))
+    insert(TARGET,p,known)
+    insert(TARGET,p,known)
+    renamed=[{**r,'name':'Renamed'} for r in known]
+    insert(TARGET,p,renamed)
+    data=s.snapshot(1)
+    assert data['copies']==3
+    assert sum(n['count'] for n in data['previous'])==6
+    assert sum(n['count'] for n in data['following'])==6
+    assert data['usefulness']['routes']==1
+    assert data['usefulness']['neighbors']==2

@@ -4,6 +4,14 @@
 .voltage-error { color: var(--red); }
 .voltage-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
 .voltage-wide { grid-column: 1 / -1; }
+.voltage-fields label { min-width: 0; margin: 0; }
+.voltage-repeater-choice { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.voltage-repeater-choice label { flex: 1 1 280px; }
+.voltage-repeater-choice button { flex: 0 1 auto; }
+.voltage-group { min-width: 0; margin: 4px 0 0; padding: 16px; border: 1px solid var(--border); border-radius: 10px; }
+.voltage-group legend { padding: 0 6px; font-size: 14px; font-weight: 600; }
+.voltage-fields .voltage-toggle { display: flex; align-items: center; gap: 8px; padding-bottom: 2px; }
+.voltage-toggle input[type=checkbox] { margin: 0; flex: 0 0 auto; }
 .voltage-fields input:not([type=checkbox]), .voltage-fields select, #voltage-search { display: block; width: 100%; margin-top: 6px; padding: var(--control-padding); background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--control-radius); }
 .voltage-fields input[type=checkbox] { width: auto; }
 .voltage-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }

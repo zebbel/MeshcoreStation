@@ -191,7 +191,7 @@ def snapshot(days):
         routes=[{'path':json.loads(row[0]),'count':row[1]} for row in db.execute('SELECT route,COUNT(*) AS n FROM observations WHERE '+where+' GROUP BY route ORDER BY n DESC LIMIT 20',params)]
         def neighbors(column):
             # Column is one of the two internal constants below, never user input.
-            query="SELECT json_extract(j.value,'$.key') AS key,json_extract(j.value,'$.name') AS name,json_extract(j.value,'$.status') AS status,COUNT(*) AS count FROM observations,json_each(observations."+column+") AS j WHERE "+where+" GROUP BY 1,2,3 ORDER BY count DESC LIMIT 30"
+            query="WITH grouped AS (SELECT "+column+" AS hops,COUNT(*) AS copies FROM observations WHERE "+where+" GROUP BY "+column+") SELECT json_extract(j.value,'$.key') AS key,json_extract(j.value,'$.name') AS name,json_extract(j.value,'$.status') AS status,SUM(grouped.copies) AS count FROM grouped,json_each(grouped.hops) AS j GROUP BY 1,2,3 ORDER BY count DESC LIMIT 30"
             return [dict(row) for row in db.execute(query,params)]
         previous,following=neighbors('previous'),neighbors('following')
         from meshcorestation.storage.repeater_usefulness import summarize

@@ -1,6 +1,6 @@
 #repeater-statistics-dialog { width: min(1100px, calc(100vw - 32px)); }
 .stats-controls { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
-.stats-controls label { display: grid; gap: 6px; max-width: 100%; }
+.stats-controls label { display: grid; gap: 6px; max-width: 100%; margin: 0; }
 .stats-controls select { max-width: 100%; padding: var(--control-padding); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--control-radius); }
 .stats-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; margin: 18px 0; }
 .stats-metric { border: 1px solid var(--border); border-radius: 10px; padding: 14px; }

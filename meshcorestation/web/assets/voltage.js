@@ -115,12 +115,16 @@
         dialog.innerHTML=`<div class="dialog-header"><h2 id="voltage-title">Repeater battery</h2><button type="button" id="voltage-close" aria-label="Close battery history">×</button></div>
         <p id="voltage-message" role="status" aria-live="polite"></p><p id="voltage-worker" class="muted"></p>
         <form id="voltage-form"><div class="voltage-fields">
-        <label class="voltage-wide">Repeater<select id="voltage-repeater"></select></label><button type="button" id="voltage-map">Select repeater on map</button>
-        <label><input type="checkbox" id="voltage-enabled"> Enable monitoring</label><label><input type="checkbox" id="voltage-reports"> Send two daily reports</label>
+        <div class="voltage-wide voltage-repeater-choice"><label>Repeater<select id="voltage-repeater"></select></label><button type="button" id="voltage-map">Select repeater on map</button></div>
+        <fieldset class="voltage-wide voltage-group"><legend>Monitoring</legend><div class="voltage-fields">
+        <label class="voltage-wide voltage-toggle"><input type="checkbox" id="voltage-enabled"> Enable monitoring</label>
         <label>Read every (minutes)<input id="voltage-interval" type="number" min="5" max="1440" required></label>
         <label>Voltage LPP channel<input id="voltage-lpp" type="number" min="1" max="255" required></label>
+        </div></fieldset>
+        <fieldset class="voltage-wide voltage-group"><legend>Daily reports</legend><div class="voltage-fields">
+        <label class="voltage-wide voltage-toggle"><input type="checkbox" id="voltage-reports"> Send two daily reports</label>
         <label>First report<input id="voltage-time1" type="time" required></label><label>Second report<input id="voltage-time2" type="time" required></label>
-        <label class="voltage-wide">Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label class="voltage-wide">Send battery reports to<select id="voltage-target" required></select></label></div>
+        <label>Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label>Send battery reports to<select id="voltage-target" required></select></label></div></fieldset></div>
         <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Reports may follow the bot or use a private chat or enabled room. Previous history is kept.</p>
         <div class="voltage-actions"><button id="voltage-save" type="submit">Save settings</button><button id="voltage-read" type="button">Read now</button><button id="voltage-refresh" type="button">Refresh</button></div></form>
         <details><summary>Select from repeater list</summary><input id="voltage-search" type="search" aria-label="Search repeaters" placeholder="Search name or public key"><ul id="voltage-repeaters"></ul></details>
