@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Repeater advisor · MeshcoreStation</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui}body{margin:0;background:#101923;color:#edf4fa}main{max-width:1080px;margin:auto;padding:24px}a{color:#82c6ff}h1{margin-bottom:5px}.muted,small{color:#b0c0cc}section{background:#1c2936;border:1px solid #364c5d;border-radius:12px;padding:20px;margin:20px 0}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:12px;border-bottom:1px solid #364c5d;vertical-align:top}input,select,button{font:inherit;background:#101923;color:#edf4fa;border:1px solid #607a8d;border-radius:6px;padding:9px}input[type=number]{width:85px}button{cursor:pointer;background:#20547a}button:hover{background:#2b709e}label{display:inline-flex;align-items:center;gap:8px;margin:8px 14px 8px 0}#message{min-height:1.5em}#results article{border-top:1px solid #364c5d;padding:14px 0}#results strong{display:block} .warning{border-left:4px solid #e3af51;padding:12px;background:#27303a} .scroll{overflow-x:auto}@media(max-width:650px){main{padding:12px}td,th{padding:7px;font-size:14px}}
+</style></head><body><main>
+<a href="/">← Dashboard</a><h1>Repeater recommendation advisor</h1>
+<p class="muted">Editable German community review baselines. This page never writes to a repeater or changes its radio settings.</p>
+<section><h2>Reference configuration</h2><p>Choose target values and enable only the rules relevant to your local mesh. These are review candidates, not regulatory limits or automatic optimization.</p>
+<div class="scroll"><table><thead><tr><th>Use</th><th>Setting</th><th>Review reference</th><th>Purpose</th></tr></thead><tbody id="rules"></tbody></table></div>
+<label>Observation period <select id="days"><option value="1">24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
+<label>Minimum observed copies <input type="number" min="0" max="100000" step="1" id="minimum"></label>
+<p><button id="save">Save advisor configuration</button> <button id="reset" type="button">Restore suggested baselines (unsaved)</button></p><p id="message" role="status"></p>
+</section>
+<section><h2>Selected repeater observations</h2><p id="stats">Loading…</p><p class="warning">Local passive statistics are incomplete network evidence. Repeated payloads do not establish loops, and heard advertisements are not necessarily transmitted by the selected repeater. A reference mismatch is not evidence of a faulty configuration.</p></section>
+<section><h2>Compare repeater settings</h2><p>Enter the current settings from the selected repeater's <strong>Configurations</strong> tab. Values are not saved or sent to the repeater.</p>
+<button id="compare">Generate review suggestions</button><div id="results" aria-live="polite"></div></section>
+</main><script>
+(()=>{'use strict';
+const defaults={'flood.max':16,'flood.max.unscoped':3,'flood.max.advert':6,'advert.interval':240,'flood.advert.interval':48,'loop.detect':'minimal'};
+const notes={'flood.max':'Overall flood hop ceiling','flood.max.unscoped':'Unscoped flood hop ceiling','flood.max.advert':'Advertisement flood hop ceiling','advert.interval':'Zero-hop local advert, minutes','flood.advert.interval':'Flood advert, hours','loop.detect':'Loop detection policy'};
+const limits={'flood.max':64,'flood.max.unscoped':64,'flood.max.advert':64,'advert.interval':240,'flood.advert.interval':168};
+const $=id=>document.getElementById(id);let stats={},config=null;
+function element(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n}
+function render(){const body=$('rules');body.replaceChildren();for(const [key,note] of Object.entries(notes)){
+const tr=element('tr'),td0=element('td'),td1=element('td',key),td2=element('td'),td3=element('td',note),check=element('input');check.type='checkbox';check.id='enable-'+key;check.checked=config.enabled[key];td0.append(check);
+const target=key==='loop.detect'?element('select'):element('input');target.id='target-'+key;
+if(key==='loop.detect'){for(const mode of ['off','minimal','moderate','strict']){const option=element('option',mode);option.value=mode;target.append(option)}}else{target.type='number';target.min=0;target.max=limits[key];target.step=key==='advert.interval'?2:1}
+target.value=config.targets[key];td2.append(target);const current=element('input');current.id='current-'+key;current.setAttribute('aria-label','Current '+key);current.placeholder='Current value';current.style.display='block';current.style.marginTop='8px';current.style.maxWidth='140px';td2.append(current);tr.append(td0,td1,td2,td3);body.append(tr)}
+$('days').value=config.min_days;$('minimum').value=config.min_copies}
+function collect(){const c={targets:{},enabled:{},min_days:Number($('days').value),min_copies:Number($('minimum').value)};for(const key of Object.keys(notes)){c.enabled[key]=$('enable-'+key).checked;c.targets[key]=key==='loop.detect'?$('target-'+key).value:Number($('target-'+key).value);if(key!=='loop.detect'&&(!Number.isInteger(c.targets[key])||c.targets[key]<0||c.targets[key]>limits[key]||(key==='advert.interval'&&c.targets[key]%2)))throw Error('Invalid '+key)}if(!Number.isInteger(c.min_copies)||c.min_copies<0||c.min_copies>100000)throw Error('Invalid minimum copies');return c}
+async function api(method,body){const res=await fetch('/api/repeater-advisor',{method,headers:{'X-Meshcore-Control':'1',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store'});const data=await res.json();if(!res.ok||!data.ok)throw Error(data.error||'Request failed');return data}
+function showStats(){const s=stats;$('stats').textContent='Selected-repeater observations: '+(s.copies??0)+' copies, '+(s.unique??0)+' unique payloads over '+(s.days??'?')+' day(s). '+(s.health?.error||'');}
+$('save').onclick=async()=>{try{const result=await api('POST',collect());config=result.settings;stats=result.statistics;showStats();$('message').textContent='Saved on MeshcoreStation server.'}catch(e){$('message').textContent=e.message}};
+$('reset').onclick=()=>{config={targets:{...defaults},enabled:Object.fromEntries(Object.keys(defaults).map(k=>[k,true])),min_days:7,min_copies:100};render();$('message').textContent='Defaults loaded; press Save to persist.'};
+$('compare').onclick=()=>{const out=$('results');out.replaceChildren();let c;try{c=collect()}catch(e){out.textContent=e.message;return}
+const sufficient=stats.copies>=c.min_copies&&!stats.health?.error;
+for(const key of Object.keys(notes)){if(!c.enabled[key])continue;const raw=$('current-'+key).value.trim(),target=c.targets[key],article=element('article');let verdict,detail;
+if(!raw){verdict='Not evaluated';detail='Enter the current value from repeater management.'}
+else if(key!=='loop.detect'&&(!/^\d+$/.test(raw)||Number(raw)>limits[key])){verdict='Invalid current value';detail='Check the value against the repeater configuration.'}
+else if(key==='loop.detect'&&!['off','minimal','moderate','strict'].includes(raw)){verdict='Invalid current value';detail='Use off, minimal, moderate or strict.'}
+else if(String(raw)===String(target)){verdict='Matches reference';detail='No difference from the editable baseline.'}
+else{verdict='Manual review';detail='Current value differs from the configured reference. Check scope usage, required paths, firmware support and local mesh agreement before any change.'}
+article.append(element('strong',key+' — '+verdict),element('p','Current: '+(raw||'unknown')+' · Reference: '+target),element('p',detail),element('small','Evidence: '+(sufficient?'limited local observations':'insufficient observations')+'. No automatic change.'));out.append(article)}
+};
+api('GET').then(data=>{config=data.settings;stats=data.statistics;render();showStats()}).catch(e=>{$('message').textContent=e.message});
+})();
+</script></body></html>
