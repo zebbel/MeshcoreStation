@@ -96,10 +96,14 @@ class RepeaterControl:
                 value = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
                 session['values'][field] = value
                 return {'ok': True, 'field': field, 'value': value}
-            if action == 'write':
+            if action in {'write', 'advisor_write'}:
                 field = request.get('field')
                 if field not in FIELDS:
                     raise ValueError('Unknown field.')
+                if action == 'advisor_write':
+                    from meshcorestation.advisor_rules import TARGETS
+                    if field not in TARGETS:
+                        raise ValueError('Unsupported advisor field.')
                 value = validate(field, request.get('value'))
                 if request.get('confirm') is not True:
                     raise ValueError('Review and confirm the change first.')
@@ -112,17 +116,28 @@ class RepeaterControl:
                         session['values'].pop(field, None)
                         raise ValueError('This setting changed on the repeater. Read the section again.')
                 prefix = FIELDS[field].get('write', 'set ' + field)
-                reply = await self.transport.cli(contact, prefix + ' ' + value)
-                # Admin password replies echo the password; never send that echo to HTTP.
-                accepted = reply.lower().startswith(('ok', '(ok')) or (field in {'gps', 'powersaving'} and reply.lower().startswith(('on', 'off'))) or (field == 'admin_password' and reply.startswith('password now:'))
-                if not accepted:
-                    raise ValueError('Repeater rejected the change.' if secret else 'Repeater reply: ' + reply[:200])
-                if secret:
-                    return {'ok': True, 'field': field, 'value': '', 'message': 'Password change acknowledged.'}
-                session['values'].pop(field, None)
-                actual = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
-                session['values'][field] = actual
-                return {'ok': True, 'field': field, 'value': actual, 'message': 'Saved and read back.' if actual == value else 'Repeater returned a different value. Review the applied value.', 'reboot_required': 'reboot' in reply.lower()}
+                history_id = None
+                if action == 'advisor_write':
+                    from meshcorestation.storage import advisor_history
+                    history_id = advisor_history.begin(key, field, current, value)
+                try:
+                    reply = await self.transport.cli(contact, prefix + ' ' + value)
+                    # Admin password replies echo the password; never send that echo to HTTP.
+                    accepted = reply.lower().startswith(('ok', '(ok')) or (field in {'gps', 'powersaving'} and reply.lower().startswith(('on', 'off'))) or (field == 'admin_password' and reply.startswith('password now:'))
+                    if not accepted:
+                        raise ValueError('Repeater rejected the change.' if secret else 'Repeater reply: ' + reply[:200])
+                    if secret:
+                        return {'ok': True, 'field': field, 'value': '', 'message': 'Password change acknowledged.'}
+                    session['values'].pop(field, None)
+                    actual = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
+                    session['values'][field] = actual
+                    if history_id is not None:
+                        advisor_history.finish(history_id, actual, 'verified' if actual == value else 'different value returned')
+                    return {'ok': True, 'field': field, 'value': actual, 'message': 'Saved and read back.' if actual == value else 'Repeater returned a different value. Review the applied value.', 'reboot_required': 'reboot' in reply.lower()}
+                except Exception:
+                    if history_id is not None:
+                        advisor_history.finish(history_id, None, 'unconfirmed; read before retrying')
+                    raise
             if action == 'action':
                 name = request.get('name')
                 if name not in {'advert', 'clock_sync', 'reboot'} or request.get('confirm') is not True:

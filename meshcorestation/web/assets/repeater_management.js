@@ -1,8 +1,19 @@
-/* Remote repeater management. Secrets and session tokens live only in this page. */
+/* Remote repeater management. Session tokens stay in this page; login passwords are saved only by opt-in. */
 (() => {
     let loginDialog, dialog, commandDialog, contact, session = '', admin = false, busy = false, schema = {}, selectedTab = 'status';
     const values = new Map(), inputs = new Map(), loaded = new Set();
     const $ = id => document.getElementById(id);
+    const passwordKey = () => 'meshcorestation.repeater.password.' + contact.public_key.toLowerCase();
+    function savedPassword() {
+        try { return localStorage.getItem(passwordKey()) || ''; } catch { return ''; }
+    }
+    function savePassword(password) {
+        try {
+            if (password) localStorage.setItem(passwordKey(), password);
+            else localStorage.removeItem(passwordKey());
+            return true;
+        } catch { return false; }
+    }
     function node(tag, text, cls) { const item = document.createElement(tag); if (text !== undefined) item.textContent = text; if (cls) item.className = cls; return item; }
     function button(text, handler, cls) { const item = node('button', text, cls); item.type = 'button'; item.addEventListener('click', handler); return item; }
     function message(text, error = false) { const box = $('repeater-message'); box.textContent = text; box.classList.toggle('repeater-error', error); }
@@ -91,9 +102,14 @@
             });
         };
         loginDialog = node('dialog'); loginDialog.id = 'repeater-login-dialog'; loginDialog.setAttribute('aria-labelledby', 'repeater-login-title');
-        loginDialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-login-title">Connect to repeater</h2><button type="button" id="repeater-login-close" aria-label="Close repeater login">×</button></div><div class="dialog-body"><p id="repeater-login-name"></p><form id="repeater-login-form"><label for="repeater-password">Admin password</label><div class="repeater-password"><input id="repeater-password" type="password" autocomplete="off"><button type="button" id="repeater-show-password" aria-label="Show password">Show</button></div><p class="muted">Leave blank to use existing permissions or guest access. Passwords are not saved.</p><p id="repeater-login-message" role="status" aria-live="polite"></p><button type="submit">Connect</button></form></div>`;
+        loginDialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-login-title">Connect to repeater</h2><button type="button" id="repeater-login-close" aria-label="Close repeater login">×</button></div><div class="dialog-body"><p id="repeater-login-name"></p><form id="repeater-login-form"><label for="repeater-password">Admin password</label><div class="repeater-password"><input id="repeater-password" type="password" autocomplete="off"><button type="button" id="repeater-show-password" aria-label="Show password">Show</button></div><label class="repeater-remember"><input id="repeater-remember-password" type="checkbox" aria-describedby="repeater-remember-help"> Remember password</label><p class="muted" id="repeater-remember-help">Leave blank to use existing permissions or guest access. Remembered passwords are stored in this browser on this device. Uncheck to forget.</p><p id="repeater-login-message" role="status" aria-live="polite"></p><button type="submit">Connect</button></form></div>`;
         document.body.append(loginDialog);
         const closeLogin = () => { if (!busy) { $('repeater-password').value = ''; loginDialog.close(); } };
+        $('repeater-remember-password').addEventListener('change', () => {
+            if (!$('repeater-remember-password').checked && !savePassword('')) {
+                $('repeater-login-message').textContent = 'Could not remove the saved password. Clear this site’s browser data to forget it.';
+            }
+        });
         $('repeater-login-close').addEventListener('click', closeLogin);
         loginDialog.addEventListener('cancel', event => { event.preventDefault(); closeLogin(); });
         $('repeater-show-password').addEventListener('click', () => { const input = $('repeater-password'), show = input.type === 'password'; input.type = show ? 'text' : 'password'; $('repeater-show-password').textContent = show ? 'Hide' : 'Show'; });
@@ -103,6 +119,7 @@
             const password = $('repeater-password').value; $('repeater-password').value = '';
             try {
                 const result = await request({action: 'login', password});
+                const remembered = savePassword($('repeater-remember-password').checked ? password : '');
                 session = result.session; admin = result.admin; schema = result.fields;
                 values.clear(); inputs.clear(); loaded.clear(); buildConfig(); buildExtras();
                 $('repeater-name').textContent = contact.name || '(unnamed repeater)';
@@ -110,6 +127,7 @@
                 $('repeater-status-cards').replaceChildren(); $('repeater-last-response').textContent = 'Not yet read';
                 loginDialog.close(); tab('status'); dialog.showModal();
                 await readStatus();
+                if (!remembered) message('Connected, but browser storage is unavailable. The remember-password choice could not be saved.', true);
             } catch (error) {
                 if (dialog.open) message(error.message, true); else $('repeater-login-message').textContent = error.message;
             } finally { busy = false; controls(); }
@@ -194,29 +212,52 @@
         const advisorButton = $('repeater-open-advisor'); if (advisorButton) advisorButton.hidden = !admin;
     }
 
-    // Read-only advisor bridge: session tokens never leave this management window.
+    // Authenticated bridge: credentials stay in the management window.
     const advisorFields = ['flood.max','flood.max.unscoped','flood.max.advert','advert.interval','flood.advert.interval','loop.detect'];
     let advisorWindow = null;
-    async function sendAdvisorValues(target) {
-        if (!session || !admin || !contact) return;
-        const current = {}, errors = {};
-        for (const field of advisorFields) {
-            if (!schema[field] || schema[field].kind === 'password') continue;
-            try {
-                const result = await request({action:'read',field});
-                current[field] = result.value;
-                setValue(field,result.value);
-            } catch (error) { errors[field] = error.message; if (!session) break; }
-        }
-        if (!target.closed) target.postMessage({type:'meshcorestation-advisor-values', public_key:contact.public_key, name:contact.name || contact.public_key.slice(0,12), current, errors}, window.location.origin);
-    }
     window.addEventListener('message', event => {
-        if (event.origin !== window.location.origin || event.source !== advisorWindow || event.data?.type !== 'meshcorestation-advisor-request') return;
-        if (busy || !session || !admin) {
-            advisorWindow.postMessage({type:'meshcorestation-advisor-values',error:'Connect as administrator and finish any pending repeater operation.'},window.location.origin);
-            return;
+        if (event.origin !== window.location.origin || event.source !== advisorWindow || !advisorWindow ||
+            !['meshcorestation-advisor-request','meshcorestation-advisor-apply'].includes(event.data?.type)) return;
+        const target=advisorWindow, payload=event.data;
+        const send=data=>{if(!target.closed)target.postMessage({type:'meshcorestation-advisor-values',request_id:payload.request_id,...data},window.location.origin);};
+        if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
+        const apply=payload.type==='meshcorestation-advisor-apply';
+        if(apply && (payload.public_key!==contact.public_key || dirty())) {
+            send({error:'Repeater changed or configuration edits are unsaved. Save or discard edits, then read again.'});return;
         }
-        run(async () => { message('Reading repeater settings for advisor…'); await sendAdvisorValues(advisorWindow); message('Advisor settings read.'); });
+        const changes=payload.changes;
+        if(apply && (!Array.isArray(changes) || !changes.length || changes.length>advisorFields.length ||
+            changes.some(item=>!item || !advisorFields.includes(item.field) || typeof item.expected!=='string' || typeof item.value!=='string') ||
+            new Set(changes.map(item=>item.field)).size!==changes.length)) {send({error:'Invalid change list.'});return;}
+        if(apply && !window.confirm('Apply to '+contact.name+' ('+contact.public_key.slice(0,12)+')?\n\n'+
+            changes.map(item=>item.field+': '+item.expected+' → '+item.value).join('\n')+'\n\nChanges can affect mesh connectivity. Stop on the first unconfirmed result.')) {send({error:'Changes cancelled.'});return;}
+        run(async()=>{
+            const current={}, errors={}, results=[];
+            try {
+                if(apply) {
+                    // Preflight every selected field before any write; write rechecks it again.
+                    for(const item of changes) {
+                        const read=await request({action:'read',field:item.field});
+                        if(String(read.value)!==item.expected)throw Error(item.field+' changed on the repeater. Read and review again.');
+                    }
+                    for(const item of changes) {
+                        values.delete(item.field);
+                        try {
+                            const result=await request({action:'advisor_write',field:item.field,value:item.value,expected:item.expected,confirm:true});
+                            current[item.field]=result.value;results.push({field:item.field,value:result.value});
+                            if(String(result.value)!==item.value)throw Error('Readback differs for '+item.field+'. Remaining changes stopped.');
+                        } catch(error) {errors[item.field]=error.message;break;}
+                    }
+                } else {
+                    for(const field of advisorFields) {
+                        try {current[field]=(await request({action:'read',field})).value;}
+                        catch(error) {errors[field]=error.message;if(!session || /timed out|two minutes|Administrator/i.test(error.message))break;}
+                    }
+                }
+                send({public_key:contact.public_key,name:contact.name,current,errors,results,applied:apply});
+                message(apply?'Advisor operation finished. Read affected configuration sections again.':'Advisor read finished; form edits preserved.');
+            } catch(error) {send({error:error.message,public_key:contact.public_key,results,applied:apply});}
+        });
     });
     function openAdvisor() {
         if (!contact || !session || !admin) { message('Connect as administrator to read repeater settings.',true); return; }
@@ -225,7 +266,8 @@
     }
     function openLogin() {
         $('repeater-login-name').textContent = contact.name || contact.public_key;
-        $('repeater-login-message').textContent = ''; $('repeater-password').value = ''; $('repeater-password').type = 'password'; $('repeater-show-password').textContent = 'Show';
+        $('repeater-login-message').textContent = ''; $('repeater-password').value = savedPassword();
+        $('repeater-remember-password').checked = $('repeater-password').value !== ''; $('repeater-password').type = 'password'; $('repeater-show-password').textContent = 'Show';
         controls(); loginDialog.showModal(); $('repeater-password').focus();
     }
     window.meshcorestationManageRepeater = selected => {

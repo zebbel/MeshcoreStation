@@ -1,6 +1,6 @@
 # Independent room server
 
-The room server is included in stable **MeshcoreStation 3.0.1** on `main`.
+The room server is included in stable **MeshcoreStation 3.0.2** on `main`.
 See [V3 release notes](v3-review.md) for changes and validation. Enabling a room
 does not flash the companion.
 

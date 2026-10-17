@@ -1,93 +1,64 @@
-"""Read-only repeater optimization advisor; locally configurable review baselines."""
+"""Advisor settings, fresh evidence and review API. Radio writes use management."""
 import json
-import sqlite3
-from contextlib import closing
 import os
+import re
+import tempfile
+import sqlite3
+import time
+from contextlib import closing
 from pathlib import Path
 from flask import request, Response
 from meshcorestation.config import DATA_DIR
-from meshcorestation.storage import passive_stats
+from meshcorestation.storage import passive_stats, advisor_history
+from meshcorestation.advisor_rules import DEFAULT, SOURCE, schema, validate, review
 from meshcorestation.web.http import control_request_error, json_response
 
 FILE = DATA_DIR / 'repeater-advisor.json'
-FIELDS = {
-    'flood.max': (0,64,16),
-    'flood.max.unscoped': (0,64,3),
-    'flood.max.advert': (0,64,6),
-    'advert.interval': (0,240,240),
-    'flood.advert.interval': (0,168,48),
-}
-LOOPS = ('off','minimal','moderate','strict')
-DEFAULT = {'targets': {k: bounds[2] for k,bounds in FIELDS.items()} | {'loop.detect':'minimal'},
-           'min_copies': 100, 'min_days': 7, 'enabled': {k:True for k in (*FIELDS,'loop.detect')}}
-NOTES = {
- 'flood.max': 'Overall flood ceiling; long rural routes may need more hops.',
- 'flood.max.unscoped': 'Unscoped forwarding ceiling; lowering it can disconnect unscoped users.',
- 'flood.max.advert': 'Flood advertisement ceiling; also subject to other applicable limits.',
- 'advert.interval': 'Zero-hop local advertisement interval in minutes (not forwarded).',
- 'flood.advert.interval': 'Flood advertisement interval in hours (0 disables).',
- 'loop.detect': 'Loop suppression policy; repeated payloads alone do not prove loops.',
-}
+
 
 def config():
     try:
-        saved=json.loads(FILE.read_text(encoding='utf-8'))
-        return validate(saved)
-    except (OSError,ValueError,TypeError,KeyError):
+        return validate(json.loads(FILE.read_text(encoding='utf-8')))
+    except (OSError, ValueError, TypeError, KeyError):
         return json.loads(json.dumps(DEFAULT))
 
-def validate(data):
-    if not isinstance(data,dict) or set(data)!={'targets','min_copies','min_days','enabled'}:
-        raise ValueError('Invalid advisor configuration.')
-    if not isinstance(data['targets'],dict) or set(data['targets'])!=set(DEFAULT['targets']):
-        raise ValueError('Invalid target fields.')
-    if not isinstance(data['enabled'],dict) or set(data['enabled'])!=set(DEFAULT['enabled']) or any(type(v) is not bool for v in data['enabled'].values()):
-        raise ValueError('Invalid enabled fields.')
-    for field,(low,high,_) in FIELDS.items():
-        value=data['targets'][field]
-        if type(value) is not int or not low<=value<=high:
-            raise ValueError('Invalid value for '+field)
-    if data['targets']['loop.detect'] not in LOOPS:
-        raise ValueError('Invalid loop detection mode.')
-    if type(data['min_copies']) is not int or not 0<=data['min_copies']<=100000:
-        raise ValueError('Invalid minimum copies.')
-    if data['min_days'] not in (1,7,30) or type(data['min_days']) is not int:
-        raise ValueError('Invalid observation period.')
-    return data
 
-def recommendations(current, settings, snapshot):
-    # Missing config is never interpreted as zero; passive counts are local evidence only.
-    copies=snapshot.get('copies',0)
-    healthy=copies>=settings['min_copies'] and not snapshot.get('health',{}).get('error')
-    output=[]
-    for field,target in settings['targets'].items():
-        if not settings['enabled'][field]:
-            continue
-        value=current.get(field)
-        if value is None or value=='':
-            status='Not evaluated'; explanation='Current repeater value not provided.'
-        elif str(value)==str(target):
-            status='Matches reference'; explanation='Current value matches the editable reference.'
-        else:
-            status='Review only'; explanation='Different from the editable community reference; do not apply without checking network topology and scope use.'
-        output.append({'field':field,'current':value,'reference':target,'status':status,
-                       'note':NOTES[field], 'explanation':explanation,
-                       'confidence':'limited' if healthy else 'insufficient observations'})
-    return output
+def save(settings):
+    FILE.parent.mkdir(parents=True,exist_ok=True)
+    name=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=FILE.parent,delete=False) as stream:
+            name=stream.name
+            json.dump(settings,stream,indent=2)
+        os.replace(name,FILE)
+    finally:
+        if name and os.path.exists(name): os.unlink(name)
 
-def evidence(snapshot, days):
-    selection=snapshot.get('selection') or {}
-    key=selection.get('public_key')
-    if not key:
-        return {}
-    import time
-    with closing(passive_stats.connect()) as db:
-        row=db.execute('''SELECT COUNT(*) AS copies, COALESCE(SUM(CASE WHEN scoped=0 THEN 1 ELSE 0 END),0) AS unscoped,
-            MAX(json_array_length(route)) AS max_hops,
-            MAX(CASE WHEN scoped=0 THEN json_array_length(route) END) AS max_unscoped_hops,
-            COALESCE(SUM(CASE WHEN kind=4 THEN 1 ELSE 0 END),0) AS adverts
-            FROM observations WHERE target=? AND at>=? AND ambiguous=0''',(key,time.time()-days*86400)).fetchone()
-    return {**dict(row),'repeated':snapshot.get('repeated',0)}
+
+def snapshot(days):
+    """One consistent, indexed aggregation; no dashboard routes or neighbor lists."""
+    from meshcorestation.bridge import bridge
+    now=time.time();cutoff=now-days*86400
+    try:
+        with closing(passive_stats.connect()) as db:
+            db.execute('BEGIN')
+            selected=db.execute('SELECT * FROM selection WHERE id=1').fetchone()
+            selection=dict(selected) if selected else {}
+            health=dict(db.execute('SELECT * FROM health WHERE id=1').fetchone())
+            row=db.execute("""SELECT COUNT(*) AS copies, COUNT(DISTINCT digest) AS unique_count,
+                COUNT(digest)-COUNT(DISTINCT digest) AS repeated,
+                COALESCE(SUM(scoped=0),0) AS unscoped, MAX(json_array_length(route)) AS max_hops,
+                MAX(CASE WHEN scoped=0 THEN json_array_length(route) END) AS max_unscoped_hops,
+                COALESCE(SUM(kind=4),0) AS adverts
+                FROM observations WHERE target=? AND at>=? AND at<=? AND ambiguous=0""",
+                (selection.get('public_key',''),cutoff,now)).fetchone()
+        collector=passive_stats.collector
+        return {'days':days,'selection':selection,'copies':row['copies'],'unique':row['unique_count'],
+                'evidence':dict(row),'usefulness':{'partial':selection.get('since',now)>cutoff or bool(health.get('trimmed_at') or health.get('dropped'))},
+                'health':{**health,'running':bool(collector.thread and collector.thread.is_alive()),
+                          'error':collector.error or health.get('error',''),'radio':bridge.status[0]}}
+    except (sqlite3.Error,OSError,TypeError):
+        return {'days':days,'health':{'error':'Statistics unavailable'}}
 
 
 def register_advisor_routes(server):
@@ -100,27 +71,35 @@ def register_advisor_routes(server):
     def advisor_api():
         if control_request_error():
             return json_response({'ok':False,'error':'Open advisor from this dashboard.'},403)
-        if request.method=='POST':
-            body=request.get_json(silent=True)
-            try:
-                if not isinstance(body,dict): raise ValueError('Expected JSON object.')
-                data=validate(body)
-                FILE.parent.mkdir(parents=True,exist_ok=True)
-                temp=FILE.with_suffix('.tmp')
-                with open(temp,'w',encoding='utf-8') as stream:
-                    json.dump(data,stream,indent=2)
-                os.replace(temp,FILE)
-            except (ValueError,TypeError,OSError) as exc:
-                return json_response({'ok':False,'error':str(exc)},400)
-        settings=config()
         try:
-            snapshot=passive_stats.snapshot(settings['min_days'])
-            # Snapshot is for the selected repeater only; never aggregate other repeaters.
-            summary={'copies':snapshot.get('copies',0),'unique':snapshot.get('unique',0),
-                     'scoped':snapshot.get('scoped'),'types':snapshot.get('types'),
-                     'health':snapshot.get('health'),'days':settings['min_days'],
-                     'selection_key':(snapshot.get('selection') or {}).get('public_key'),
-                     'evidence':evidence(snapshot,settings['min_days'])}
-        except Exception:
-            summary={'copies':0,'unique':0,'health':{'error':'Statistics unavailable'},'days':settings['min_days']}
-        return json_response({'ok':True,'settings':settings,'statistics':summary,'notes':NOTES})
+            settings=config()
+            if request.method=='POST':
+                if request.mimetype!='application/json': raise ValueError('Expected JSON.')
+                raw=request.stream.read(16385)
+                if len(raw)>16384: raise ValueError('Request too large.')
+                body=json.loads(raw)
+                if not isinstance(body,dict): raise ValueError('Expected object.')
+                action=body.get('action')
+                settings=validate(body.get('settings'))
+                if action not in ('save','review'): raise ValueError('Unknown advisor action.')
+                current=body.get('current',{})
+                if not isinstance(current,dict) or len(current)>6: raise ValueError('Invalid current values.')
+                key=body.get('public_key','')
+            else:
+                days=request.args.get('days')
+                if days is not None:
+                    settings={**settings,'min_days':int(days)}
+                    validate(settings)
+                key=request.args.get('public_key','')
+                current={}
+            if not isinstance(key,str) or (key and not re.fullmatch('[0-9a-f]{64}',key)): raise ValueError('Invalid repeater key.')
+            if request.method=='POST' and action=='save': save(settings)
+            data=snapshot(settings['min_days'])
+            summary={k:data.get(k) for k in ('copies','unique','days','health','selection','evidence')}
+            return json_response({'ok':True,'settings':settings,'schema':schema(),'defaults':DEFAULT,'source':SOURCE,
+                                  'statistics':summary,'review':review(current,settings,data,key),
+                                  'history':advisor_history.recent(key) if key else []})
+        except (ValueError,TypeError,KeyError) as exc:
+            return json_response({'ok':False,'error':str(exc)},400)
+        except (OSError, sqlite3.Error):
+            return json_response({'ok':False,'error':'Advisor storage unavailable.'},503)

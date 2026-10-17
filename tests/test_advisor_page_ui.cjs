@@ -1,0 +1,17 @@
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
+const html=fs.readFileSync('meshcorestation/web/repeater_advisor.html','utf8'),dom=new JSDOM(html,{runScripts:'outside-only',url:'http://localhost/repeater-advisor'}),w=dom.window;
+const key='ab'.repeat(32),posts=[],requests=[],settings={targets:{'flood.max':16},enabled:{'flood.max':true},min_days:7,min_copies:100};
+w.structuredClone=structuredClone;w.opener={closed:false,postMessage:data=>posts.push(data)};
+w.fetch=async(url,options)=>{requests.push({url,...options});return {ok:true,json:async()=>({ok:true,settings,defaults:settings,schema:{'flood.max':{label:'Flood max',kind:'number',low:0,high:64,step:1}},source:{url:'https://example.com',checked:'2026-10-17',status:'Provisional'},statistics:{days:new URL(url,'http://localhost').searchParams.get('days')||7,copies:100,unique:80,selection:{public_key:key}},history:[{at:1,field:'flood.max',before_value:'32',requested:'16',actual:'16',status:'verified'}],review:{rows:[{field:'flood.max',current:'32',reference:16,status:'Manual review',can_apply:true,explanation:'Review locally.'}],confidence:'insufficient observations',evidence_reasons:['Incomplete window'],evidence:{}}})};};
+w.eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+const $=id=>w.document.getElementById(id),settle=()=>new Promise(r=>setImmediate(r));
+(async()=>{await settle();assert.equal($('days').value,'7');assert(!requests[0].url.includes('days='));
+$('days').value='30';$('days').dispatchEvent(new w.Event('change'));await settle();assert(requests.at(-1).url.includes('days=30'));
+$('read-repeater').click();let message=posts.at(-1);assert.equal(message.type,'meshcorestation-advisor-request');
+w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:w.opener,data:{type:'meshcorestation-advisor-values',request_id:message.request_id,public_key:key,name:'Hill',current:{'flood.max':'32'},errors:{}}}));await settle();
+$('compare').click();await settle();assert.equal(JSON.parse(requests.at(-1).body).action,'review');assert.equal($('apply').disabled,false);
+$('apply-flood.max').checked=true;$('apply').click();message=posts.at(-1);assert.equal(message.type,'meshcorestation-advisor-apply');assert.equal(message.changes[0].expected,'32');
+w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:w.opener,data:{type:'meshcorestation-advisor-values',request_id:message.request_id,public_key:key,applied:true,results:[{}],current:{'flood.max':'16'},errors:{}}}));await settle();
+$('history').querySelector('button').click();assert.equal(posts.at(-1).changes[0].value,'32');assert.equal(posts.at(-1).changes[0].expected,'16');
+dom.window.close();console.log('Advisor page period refresh, live review, explicit selection and restore payload passed.');
+})().catch(e=>{console.error(e);process.exit(1)});

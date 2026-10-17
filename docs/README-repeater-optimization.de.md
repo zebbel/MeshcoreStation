@@ -1,6 +1,6 @@
 # Repeater-Optimierung: Messgrößen und fachliche Prüfbeispiele
 
-**Status:** Diskussions- und Review-Dokument, keine implementierte automatische Optimierung. **Datenquelle:** ausschließlich die in MeshcoreStation ausgewählten Repeater-Beobachtungen. Stand: 17.10.2026.
+**Status:** Advisor mit bestätigten manuellen Änderungen; keine automatische Optimierung. **Datenquelle:** ausschließlich die in MeshcoreStation ausgewählten Repeater-Beobachtungen. Stand: 17.10.2026.
 
 ## 1. Was MeshcoreStation tatsächlich aufzeichnet
 
@@ -37,3 +37,54 @@ Die Repeater-Verwaltung (`meshcorestation/radio/repeater_control.py`) unterstüt
 Die Verwaltung kann aktuelle Konfigurationswerte per `read` abrufen. Dazu gehören u. a. `repeat`, `flood.max`, `flood.max.unscoped`, `flood.max.advert`, `advert.interval`, `flood.advert.interval`, `loop.detect`, `path.hash.mode`, `txdelay`, `direct.txdelay`, `rxdelay`, `multi.acks`, `cad`, `int.thresh`, `dutycycle` und Funkparameter. Nicht unterstützte Werte bleiben unbekannt; sie dürfen nicht geraten werden. Remote-Konsole ist **kein** kontinuierliches serielles Log. Firmware-seitig nur seriell verfügbare Zähler dürfen nicht als remote verfügbar angenommen werden.
 
 **Nicht durch die passive Statistik belegt:** tatsächliche Sendezeit/Airtime, Kanalbelegung, interne TX-/RX-Paketzähler, CRC-/PHY-Fehler, Queue-Tiefe, kollisionsbedingte Verluste, vollständige RSSI-/SNR-Verteilungen, ACK-Erfolgsquote und Ende-zu-Ende-Zustellung. Daraus abgeleitete Aussagen sind ohne zusätzliche instrumentierte Daten unzulässig.
+
+## 3. Implementierter Advisor (3.0.2rc3)
+
+Der Advisor kann nach ausdrücklicher Bestätigung ausgewählte Einstellungen ändern.
+Er verwendet dieselbe Admin-Sitzung, Feldvalidierung und Schreib-/Leseprüfung wie
+Repeater Management. Die Sitzungsschlüssel verlassen das Verwaltungsfenster nicht.
+Vor jeder Änderung werden die Werte erneut gelesen. Abweichungen vom geprüften
+Ausgangswert verhindern die Änderung; bei einem unbestätigten Ergebnis stoppt die
+verbleibende Auswahl. Bereits bestätigte Änderungen werden nicht automatisch
+zurückgesetzt. Der Advisor überschreibt keine ungespeicherten Formulareingaben.
+
+Die Auswertung läuft zentral auf dem Server. Die Datenbankabfrage liest nur die
+benötigten Summen in einer konsistenten Transaktion, nicht die vollständige
+Statistikansicht. Ein Wechsel zwischen 24 Stunden, 7 und 30 Tagen aktualisiert die
+Daten sofort. Unvollständige Erfassungsfenster, verworfene Beobachtungen, gekürzte
+Historie, veralteter Collector-Heartbeat und eine getrennte Funkverbindung werden
+als Einschränkungen angezeigt. Auch ausreichende Beobachtungen sind kein Beweis
+für optimale Konfiguration oder erfolgreiche Ende-zu-Ende-Zustellung.
+
+### Referenzen und Herkunft
+
+Prüfdatum: **17.10.2026**. Die vorhandenen Werte 16 / 3 / 6 Hops, 240 Minuten,
+48 Stunden und `minimal` bleiben als **vorläufige, editierbare Referenzen** erhalten.
+Ihre ursprüngliche gemeinsame Herleitung als deutscher Community-Standard konnte
+nicht nachvollzogen werden. Daher werden sie nicht als allgemeine Empfehlung
+bezeichnet.
+
+- [Offizielle CLI-Dokumentation](https://github.com/meshcore-dev/MeshCore/blob/main/docs/cli_commands.md): Befehlssemantik und Wertebereiche; nennt 3 unscoped Hops als Beispiel, nicht als universelles Optimum.
+- [Offizieller Release-Beitrag zu 1.16](https://blog.meshcore.io/2026/06/06/release-1-16-0): erklärt getrennte Limits für unscoped Traffic und Adverts. Firmware-Defaults sind keine standortbezogenen Empfehlungen.
+
+### Historie und Wiederherstellen
+
+`data/repeater-advisor-history.db` speichert maximal 1000 Advisor-Änderungen,
+inklusive Ausgangswert, Zielwert, Rücklesewert und Status. Pro Repeater zeigt die UI
+die letzten 50 Einträge. Passwörter und Sitzungsschlüssel werden nicht gespeichert.
+Ein vor dem Senden angelegter Eintrag bleibt bei Prozessabbruch als unbekanntes
+Ergebnis sichtbar. Änderungen aus Android oder der normalen Konsole sind nicht
+Teil dieser Historie.
+
+„Review restore“ ist nur für verifizierte Änderungen verfügbar. Es setzt nach
+Bestätigung den früheren Wert zurück, sofern der aktuelle Wert noch dem damaligen
+Rücklesewert entspricht und der frühere Wert gültig ist. Bei späteren Änderungen
+muss neu gelesen und manuell geprüft werden. Ein Restore ist eine neue protokollierte
+Änderung, kein blindes Rollback.
+
+### Entwicklung und Veröffentlichung
+
+Vor Bearbeitung `main` abrufen und neue Änderungen in diesen Feature-Branch mergen.
+Versionsbasis wie `main` beibehalten, nur RC-Zähler erhöhen. Release `3.0.2rc3` enthält die Advisor-Verbesserungen und die Änderungen aus
+`main` 3.0.2 einschließlich optional gespeicherter Repeater-Passwörter.
+Weitere Veröffentlichungen nur nach ausdrücklicher Aufforderung.
