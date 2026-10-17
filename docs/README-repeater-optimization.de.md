@@ -99,3 +99,21 @@ zur Repeater-Verwaltung mit bestehender Sitzung. Der separate Advisor-Link unter
 ### Integrierter Advisor (3.0.3rc1)
 
 Der Advisor öffnet als vierter Tab innerhalb von Repeater Management. Er verwendet denselben Administratorzugang und dieselben bestätigten Read/Write-Vorgänge. Die Ansicht befindet sich in einem gleichoriginigen iFrame, statt in einem eigenen Browser-Tab; die bestehende Nachrichtenschnittstelle prüft Origin und Frame-Identität. Bei neuer Anmeldung und nach dem Schließen wird der eingebettete Inhalt zurückgesetzt. Die Referenzen, die Änderungsprüfung, die Historie und das Wiederherstellen bleiben bestehen.
+
+### Statistikbasierte Handlungsempfehlungen (3.0.3rc1, Entwurf)
+
+Die Empfehlungslogik wertet die gespeicherten passiven Beobachtungen des ausgewählten
+Repeaters aus: Kopien, identifizierbare Digest-Wiederholungen, unscoped- und
+Advertisement-Anteile, unterschiedliche beobachtete Pfade und aktive Tage.
+Je nach Muster liefert sie unterschiedliche, begründete Prüfaufträge. Die
+vorläufigen Referenzen bleiben sichtbar, gelten aber **nicht** automatisch als
+Verbesserungen und werden nicht mehr als solche zum Anwenden angeboten.
+
+Nur bei stabiler Datengrundlage, ausreichender Beobachtungszahl und aktivierter
+Admin-Sitzung kann bei hoher Digest-Wiederholung und derzeit ausgeschalteter
+Loop-Erkennung ein explizit als **experimentell** gekennzeichneter Wechsel
+`loop.detect: off → minimal` zur Prüfung angeboten werden. Wiederholte Payloads
+beweisen keine Loops, und es gibt keine automatischen Hop-Limit-Vorschläge:
+beobachtete Pfade sind keine Messung des notwendigen Hop-Limits. Jeder Versuch
+braucht manuelle Bestätigung und die vorhandene Rücklese-/Historienkontrolle.
+Passiver Empfang belegt keine vollständige RF-/TX-/RX-Last oder Zustellquote.

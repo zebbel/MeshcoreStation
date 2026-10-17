@@ -193,3 +193,13 @@ def test_snapshot_aggregates_activity_and_route_diversity(tmp_path,monkeypatch):
     assert data['evidence']['repeated']==1
     assert data['evidence']['routes']==2
     assert data['evidence']['active_days']>=2
+
+
+
+def test_unidentified_payloads_do_not_trigger_trial(settings):
+    snap=healthy(settings)
+    snap['copies']=1000
+    snap['evidence']={'identified':160,'repeated':120,'routes':5,
+                      'active_days':7,'unscoped':550,'adverts':100}
+    result=rules.review({'loop.detect':'off'},settings,snap,KEY)
+    assert not any(r['can_apply'] for r in result['recommendations'])

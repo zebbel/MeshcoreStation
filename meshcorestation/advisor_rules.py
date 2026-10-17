@@ -66,7 +66,7 @@ def review(current, settings, snapshot, public_key, now=None):
         reasons.append('Companion radio is not connected.')
 
     active_days = evidence.get('active_days') or 0
-    if copies >= settings['min_copies'] and days >= 7 and active_days < 3:
+    if copies >= settings['min_copies'] and days >= 7 and 'active_days' in evidence and active_days < 3:
         reasons.append('Observations cover fewer than three active days.')
 
     recommendations = []
@@ -103,7 +103,8 @@ def review(current, settings, snapshot, public_key, now=None):
             # Offer a reversible experiment only with diverse routes and a
             # healthy, complete observation window; not a claimed optimum.
             if (mode == 'off' and not reasons and copies >= 200 and
-                    identified >= 150 and route_count >= 2 and active_days >= 3):
+                    identified >= 150 and identified / copies >= .70 and
+                    route_count >= 2 and active_days >= 3):
                 suggest(
                     'loop-trial', 'Consider a minimal loop-detection trial',
                     f'{repeated} of {identified} identified observations repeat a payload digest ({repeat_ratio:.0%}); {route_count} observed routes.',
