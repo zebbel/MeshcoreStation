@@ -1,5 +1,7 @@
 """Read-only repeater optimization advisor; locally configurable review baselines."""
 import json
+import sqlite3
+from contextlib import closing
 import os
 from pathlib import Path
 from flask import request, Response
@@ -73,6 +75,21 @@ def recommendations(current, settings, snapshot):
                        'confidence':'limited' if healthy else 'insufficient observations'})
     return output
 
+def evidence(snapshot, days):
+    selection=snapshot.get('selection') or {}
+    key=selection.get('public_key')
+    if not key:
+        return {}
+    import time
+    with closing(passive_stats.connect()) as db:
+        row=db.execute('''SELECT COUNT(*) AS copies, COALESCE(SUM(CASE WHEN scoped=0 THEN 1 ELSE 0 END),0) AS unscoped,
+            MAX(json_array_length(route)) AS max_hops,
+            MAX(CASE WHEN scoped=0 THEN json_array_length(route) END) AS max_unscoped_hops,
+            COALESCE(SUM(CASE WHEN kind=4 THEN 1 ELSE 0 END),0) AS adverts
+            FROM observations WHERE target=? AND at>=? AND ambiguous=0''',(key,time.time()-days*86400)).fetchone()
+    return {**dict(row),'repeated':snapshot.get('repeated',0)}
+
+
 def register_advisor_routes(server):
     @server.route('/repeater-advisor')
     def advisor_page():
@@ -101,7 +118,9 @@ def register_advisor_routes(server):
             # Snapshot is for the selected repeater only; never aggregate other repeaters.
             summary={'copies':snapshot.get('copies',0),'unique':snapshot.get('unique',0),
                      'scoped':snapshot.get('scoped'),'types':snapshot.get('types'),
-                     'health':snapshot.get('health'),'days':settings['min_days']}
+                     'health':snapshot.get('health'),'days':settings['min_days'],
+                     'selection_key':(snapshot.get('selection') or {}).get('public_key'),
+                     'evidence':evidence(snapshot,settings['min_days'])}
         except Exception:
             summary={'copies':0,'unique':0,'health':{'error':'Statistics unavailable'},'days':settings['min_days']}
         return json_response({'ok':True,'settings':settings,'statistics':summary,'notes':NOTES})
