@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.0.2** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.0.3** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -67,6 +67,10 @@ Every published application update must increment `meshcorestation.__version__`
 and update the current-version references in the README and guides. Queue several
 changes under one release version; do not publish changed application code with
 the same version as the previous release.
+
+### 3.0.3
+
+Improved first-install reliability across Raspberry Pi Zero W (ARMv6) and Pi 3 B+ (32/64-bit OS): show detected Python architecture, unmask a previously masked service before installing its unit, and verify the dashboard responds after service startup. Failure now shows systemd diagnostics instead of reporting a successful installation.
 
 ### 3.0.2
 

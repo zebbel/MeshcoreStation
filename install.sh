@@ -33,6 +33,20 @@ check_host() {
     [[ -z "$installed_dir" || "$installed_dir" == "$project_dir" ]] || fail "MeshcoreStation is installed at $installed_dir; use its setup menu."
 }
 
+show_platform() {
+    python3 - <<'PY'
+import platform
+import struct
+from pathlib import Path
+
+try:
+    model = Path('/proc/device-tree/model').read_bytes().rstrip(b'\0').decode(errors='replace')
+except OSError:
+    model = platform.node() or 'unknown'
+print(f"Hardware: {model} | architecture: {platform.machine()} | Python: {platform.python_version()} ({struct.calcsize('P') * 8}-bit)")
+PY
+}
+
 require_installation() {
     [[ -f "$project_dir/meshcorestation.env" ]] || fail 'MeshcoreStation is not installed in this directory.'
     [[ -x "$project_dir/.venv/bin/python3" ]] || fail 'MeshcoreStation virtual environment is missing. Run Install / repair.'
@@ -108,14 +122,25 @@ WantedBy=multi-user.target
 UNIT
 }
 
+unmask_service_if_needed() {
+    local state
+    state="$(systemctl is-enabled "$service" 2>/dev/null || true)"
+    if [[ "$state" == masked* ]]; then
+        echo "MeshcoreStation service is $state; removing its systemd mask."
+        sudo systemctl unmask "$service"
+    fi
+}
+
 install_service_files() {
     local work_dir="$1" service_user="$2" service_group="$3"
     write_service_unit "$work_dir/$service" "$service_user" "$service_group"
     systemd-analyze verify "$work_dir/$service"
+    unmask_service_if_needed
     sudo install -o root -g root -m 0644 "$work_dir/$service" "/etc/systemd/system/$service"
     sudo install -o root -g root -m 0755 scripts/meshcorestation /usr/local/bin/meshcorestation
     install_web_updater "$work_dir" "$service_user" "$service_group"
     sudo systemctl daemon-reload
+    [[ "$(systemctl show "$service" -p LoadState --value)" == loaded ]] || fail "MeshcoreStation service unit did not load after installation."
     sudo systemctl enable meshcorestation-update.service
     sudo systemctl enable --now meshcorestation-update.path
 }
@@ -166,8 +191,51 @@ UNIT
     done
 }
 
+verify_station_startup() {
+    local port="$1"
+    if ! systemctl is-enabled --quiet "$service"; then
+        sudo systemctl status "$service" --no-pager -l || true
+        fail 'MeshcoreStation service is not enabled after installation.'
+    fi
+    # systemctl can report a successful start before the dashboard is ready.
+    # Test the actual HTTP endpoint and catch an immediately crashing service.
+    if ! python3 - "$port" <<'PY'
+import sys
+import time
+from urllib.error import URLError
+from urllib.request import urlopen
+
+url = f'http://127.0.0.1:{int(sys.argv[1])}/'
+deadline = time.monotonic() + 90
+last_error = 'not ready'
+while time.monotonic() < deadline:
+    try:
+        with urlopen(url, timeout=3) as response:
+            if 200 <= response.status < 400:
+                sys.exit(0)
+            last_error = f'HTTP {response.status}'
+    except (OSError, URLError) as exc:
+        last_error = str(exc)
+    time.sleep(1)
+print(f'MeshcoreStation dashboard did not become ready at {url}: {last_error}', file=sys.stderr)
+sys.exit(1)
+PY
+    then
+        sudo systemctl status "$service" --no-pager -l || true
+        sudo journalctl -u "$service" -n 60 --no-pager || true
+        fail 'MeshcoreStation startup validation failed; see service logs above.'
+    fi
+    if ! systemctl is-active --quiet "$service"; then
+        sudo systemctl status "$service" --no-pager -l || true
+        sudo journalctl -u "$service" -n 60 --no-pager || true
+        fail 'MeshcoreStation stopped during startup validation.'
+    fi
+    echo 'MeshcoreStation service and local dashboard passed startup validation.'
+}
+
 install_project() (
     check_host
+    show_platform
     choose_port
     local service_user service_group work_dir was_active=0 completed=0
     service_user="$(id -un)"; service_group="$(id -gn)"
@@ -200,6 +268,7 @@ ENV
     install -m 0600 "$work_dir/meshcorestation.env" meshcorestation.env
     install_service_files "$work_dir" "$service_user" "$service_group"
     sudo systemctl enable --now "$service"
+    verify_station_startup "$web_port"
     completed=1
     printf '\nMeshcoreStation installed; web port %s. Use the Pi hostname or IP in your browser.\n' "$web_port"
     echo 'In Settings, select the serial port and then select your bot channel.'
