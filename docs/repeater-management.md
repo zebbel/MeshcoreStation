@@ -2,6 +2,12 @@
 
 Open a repeater on the map and choose management. Connect using its admin
 password, or leave the password blank to use existing permissions or guest access.
+**Remember password** optionally saves the login password for this repeater in
+this browser on this device and fills it in on the next login. It is off by
+default; only a successful login saves the entered password. Uncheck it to
+remove the saved password. Browser storage is not encrypted by MeshcoreStation;
+use this option only on a trusted device. Session tokens are never saved.
+
 Status is available to guests where the repeater permits it. Configuration and
 console operations require administrator rights, checked again for each request.
 

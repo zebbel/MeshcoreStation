@@ -1,8 +1,19 @@
-/* Remote repeater management. Secrets and session tokens live only in this page. */
+/* Remote repeater management. Session tokens stay in this page; login passwords are saved only by opt-in. */
 (() => {
     let loginDialog, dialog, commandDialog, contact, session = '', admin = false, busy = false, schema = {}, selectedTab = 'status';
     const values = new Map(), inputs = new Map(), loaded = new Set();
     const $ = id => document.getElementById(id);
+    const passwordKey = () => 'meshcorestation.repeater.password.' + contact.public_key.toLowerCase();
+    function savedPassword() {
+        try { return localStorage.getItem(passwordKey()) || ''; } catch { return ''; }
+    }
+    function savePassword(password) {
+        try {
+            if (password) localStorage.setItem(passwordKey(), password);
+            else localStorage.removeItem(passwordKey());
+            return true;
+        } catch { return false; }
+    }
     function node(tag, text, cls) { const item = document.createElement(tag); if (text !== undefined) item.textContent = text; if (cls) item.className = cls; return item; }
     function button(text, handler, cls) { const item = node('button', text, cls); item.type = 'button'; item.addEventListener('click', handler); return item; }
     function message(text, error = false) { const box = $('repeater-message'); box.textContent = text; box.classList.toggle('repeater-error', error); }
@@ -90,9 +101,14 @@
             });
         };
         loginDialog = node('dialog'); loginDialog.id = 'repeater-login-dialog'; loginDialog.setAttribute('aria-labelledby', 'repeater-login-title');
-        loginDialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-login-title">Connect to repeater</h2><button type="button" id="repeater-login-close" aria-label="Close repeater login">×</button></div><div class="dialog-body"><p id="repeater-login-name"></p><form id="repeater-login-form"><label for="repeater-password">Admin password</label><div class="repeater-password"><input id="repeater-password" type="password" autocomplete="off"><button type="button" id="repeater-show-password" aria-label="Show password">Show</button></div><p class="muted">Leave blank to use existing permissions or guest access. Passwords are not saved.</p><p id="repeater-login-message" role="status" aria-live="polite"></p><button type="submit">Connect</button></form></div>`;
+        loginDialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-login-title">Connect to repeater</h2><button type="button" id="repeater-login-close" aria-label="Close repeater login">×</button></div><div class="dialog-body"><p id="repeater-login-name"></p><form id="repeater-login-form"><label for="repeater-password">Admin password</label><div class="repeater-password"><input id="repeater-password" type="password" autocomplete="off"><button type="button" id="repeater-show-password" aria-label="Show password">Show</button></div><label class="repeater-remember"><input id="repeater-remember-password" type="checkbox" aria-describedby="repeater-remember-help"> Remember password</label><p class="muted" id="repeater-remember-help">Leave blank to use existing permissions or guest access. Remembered passwords are stored in this browser on this device. Uncheck to forget.</p><p id="repeater-login-message" role="status" aria-live="polite"></p><button type="submit">Connect</button></form></div>`;
         document.body.append(loginDialog);
         const closeLogin = () => { if (!busy) { $('repeater-password').value = ''; loginDialog.close(); } };
+        $('repeater-remember-password').addEventListener('change', () => {
+            if (!$('repeater-remember-password').checked && !savePassword('')) {
+                $('repeater-login-message').textContent = 'Could not remove the saved password. Clear this site’s browser data to forget it.';
+            }
+        });
         $('repeater-login-close').addEventListener('click', closeLogin);
         loginDialog.addEventListener('cancel', event => { event.preventDefault(); closeLogin(); });
         $('repeater-show-password').addEventListener('click', () => { const input = $('repeater-password'), show = input.type === 'password'; input.type = show ? 'text' : 'password'; $('repeater-show-password').textContent = show ? 'Hide' : 'Show'; });
@@ -102,6 +118,7 @@
             const password = $('repeater-password').value; $('repeater-password').value = '';
             try {
                 const result = await request({action: 'login', password});
+                const remembered = savePassword($('repeater-remember-password').checked ? password : '');
                 session = result.session; admin = result.admin; schema = result.fields;
                 values.clear(); inputs.clear(); loaded.clear(); buildConfig(); buildExtras();
                 $('repeater-name').textContent = contact.name || '(unnamed repeater)';
@@ -109,6 +126,7 @@
                 $('repeater-status-cards').replaceChildren(); $('repeater-last-response').textContent = 'Not yet read';
                 loginDialog.close(); tab('status'); dialog.showModal();
                 await readStatus();
+                if (!remembered) message('Connected, but browser storage is unavailable. The remember-password choice could not be saved.', true);
             } catch (error) {
                 if (dialog.open) message(error.message, true); else $('repeater-login-message').textContent = error.message;
             } finally { busy = false; controls(); }
@@ -193,7 +211,8 @@
     }
     function openLogin() {
         $('repeater-login-name').textContent = contact.name || contact.public_key;
-        $('repeater-login-message').textContent = ''; $('repeater-password').value = ''; $('repeater-password').type = 'password'; $('repeater-show-password').textContent = 'Show';
+        $('repeater-login-message').textContent = ''; $('repeater-password').value = savedPassword();
+        $('repeater-remember-password').checked = $('repeater-password').value !== ''; $('repeater-password').type = 'password'; $('repeater-show-password').textContent = 'Show';
         controls(); loginDialog.showModal(); $('repeater-password').focus();
     }
     window.meshcorestationManageRepeater = selected => {

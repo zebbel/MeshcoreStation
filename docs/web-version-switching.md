@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.0.1** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.0.2** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -67,6 +67,12 @@ Every published application update must increment `meshcorestation.__version__`
 and update the current-version references in the README and guides. Queue several
 changes under one release version; do not publish changed application code with
 the same version as the previous release.
+
+### 3.0.2
+
+Added an optional Remember password checkbox to repeater management login.
+Passwords are saved per repeater in this browser after successful login;
+unchecking removes the saved password.
 
 ### 3.0.1
 

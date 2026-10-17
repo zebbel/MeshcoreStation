@@ -46,3 +46,6 @@
 .repeater-command-choice { display: grid; gap: 6px; text-align: left; padding: 12px; white-space: normal; overflow-wrap: anywhere; }
 .repeater-command-choice code { color: var(--accent); }
 .repeater-command-choice span { color: var(--muted); font-weight: normal; }
+
+.repeater-remember { display: flex; align-items: center; gap: 8px; }
+#repeater-login-dialog #repeater-remember-password { width: auto; padding: 0; flex: 0 0 auto; }

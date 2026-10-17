@@ -1,12 +1,13 @@
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
-const dom=new JSDOM('<body></body>',{runScripts:'outside-only'}),w=dom.window;
+const dom=new JSDOM('<body></body>',{runScripts:'outside-only',url:'https://station.test'}),w=dom.window;
 w.TextEncoder=TextEncoder;
 w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
 w.HTMLDialogElement.prototype.close=function(){this.open=false;};
 w.confirm=()=>true;
-const key='ab'.repeat(32),posts=[];let admin=true;
+const key='ab'.repeat(32),posts=[];let admin=true,failLogin=false;
 w.fetch=async(url,options)=>{
  const body=JSON.parse(options.body);posts.push(body);
+ if(body.action==='login' && failLogin)return {ok:false,json:async()=>({ok:false,error:'Login failed'})};
  const result=body.action==='login'?{session:'token',admin,fields:{},contact:{public_key:key}}:
  body.action==='console'?{reply:body.command.startsWith('password')?'Sensitive command response hidden.':'<img src=x onerror=alert(1)>'}:
  {data:{},contact:{public_key:key},sampled_at:1};
@@ -41,5 +42,26 @@ const submit=id=>$(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelab
  assert.equal($('repeater-console-command').disabled,true);
  $('repeater-tab-console').click();$('repeater-console-command').value='reboot';submit('repeater-console-form');await settle();
  assert.equal(posts.filter(p=>p.action==='console').length,2);
+ $('repeater-close').click();
+ const open=(public_key=key)=>w.meshcorestationManageRepeater({public_key,name:'Hill',type:2});
+ const storageKey='meshcorestation.repeater.password.'+key;
+ admin=true;open();assert.equal($('repeater-remember-password').checked,false);
+ $('repeater-password').value='unsaved';submit('repeater-login-form');await settle();
+ assert.equal(w.localStorage.getItem(storageKey),null);$('repeater-close').click();
+ open();$('repeater-password').value='saved-secret';$('repeater-remember-password').checked=true;
+ submit('repeater-login-form');await settle();assert.equal(w.localStorage.getItem(storageKey),'saved-secret');
+ $('repeater-close').click();open();assert.equal($('repeater-password').value,'saved-secret');
+ assert.equal($('repeater-remember-password').checked,true);assert.equal($('repeater-password').type,'password');
+ $('repeater-login-close').click();open('cd'.repeat(32));assert.equal($('repeater-password').value,'');
+ assert.equal($('repeater-remember-password').checked,false);$('repeater-login-close').click();open();
+ failLogin=true;$('repeater-password').value='wrong';submit('repeater-login-form');await settle();
+ assert.equal(w.localStorage.getItem(storageKey),'saved-secret');failLogin=false;
+ $('repeater-remember-password').checked=false;$('repeater-remember-password').dispatchEvent(new w.Event('change'));
+ assert.equal(w.localStorage.getItem(storageKey),null);$('repeater-login-close').click();open();
+ assert.equal($('repeater-password').value,'');
+ Object.defineProperty(w,'localStorage',{get(){throw new Error('Storage blocked');}});
+ $('repeater-login-close').click();open();$('repeater-password').value='secret';$('repeater-remember-password').checked=true;
+ submit('repeater-login-form');await settle();assert.equal($('repeater-manage-dialog').open,true);
+ assert($('repeater-message').textContent.includes('storage is unavailable'));
  dom.window.close();console.log('Repeater console tabs, safe output, secret hiding, session cleanup and guest restrictions passed.');
 })().catch(e=>{console.error(e);process.exit(1)});
