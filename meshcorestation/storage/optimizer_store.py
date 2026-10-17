@@ -140,10 +140,17 @@ def save_neighbors(key, data, source='manual'):
         raise ValueError('Repeater reported neighbors, but no usable neighbor entries were decoded.')
     at=time.time()
     with closing(connect()) as db, db:
-        row=db.execute('INSERT INTO snapshots(public_key,at,source,reported,complete) VALUES(?,?,?,?,?)',
+        snapshot_id=db.execute('INSERT INTO snapshots(public_key,at,source,reported,complete) VALUES(?,?,?,?,?)',
                        (key,at,source,count,int(count is not None and count<=len(parsed)))).lastrowid
-        db.executemany('INSERT INTO neighbors VALUES(?,?,?,?)',[(row,*item) for item in parsed])
-    return {'at':at,'neighbors':len(parsed),'reported':count,'complete':count is not None and count<=len(parsed)}
+        db.executemany('INSERT INTO neighbors VALUES(?,?,?,?)',[(snapshot_id,*item) for item in parsed])
+    # Re-open the database to verify the saved count that the optimizer's
+    # separate HTTP worker will read. Do not claim success without persistence.
+    with closing(connect()) as check:
+        stored=check.execute('SELECT COUNT(*) FROM neighbors WHERE snapshot_id=?',(snapshot_id,)).fetchone()[0]
+    if stored!=len(parsed):
+        raise sqlite3.DatabaseError('Neighbor snapshot verification failed.')
+    return {'id':snapshot_id,'at':at,'neighbors':stored,'received':len(rows),
+            'reported':count,'complete':count is not None and count<=stored}
 
 
 def snapshots(key, limit=15):

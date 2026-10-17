@@ -9,6 +9,8 @@ w.fetch=async(url,options)=>{
  const body=JSON.parse(options.body);posts.push(body);
  if(body.action==='login' && failLogin)return {ok:false,json:async()=>({ok:false,error:'Login failed'})};
  const result=body.action==='login'?{session:'token',admin,fields:{},contact:{public_key:key}}:
+ body.action==='neighbors'?{data:{neighbours:[{pubkey:'aabb1234',secs_ago:23,snr:2.5}],neighbours_count:1},
+ neighbor_snapshot:{id:23,neighbors:1,received:1,reported:1}}:
  body.action==='console'?{reply:body.command.startsWith('password')?'Sensitive command response hidden.':'<img src=x onerror=alert(1)>'}:
  {data:{},contact:{public_key:key},sampled_at:1};
  return {ok:true,json:async()=>({ok:true,...result})};
@@ -23,6 +25,22 @@ assert.equal($('repeater-tab-advisor').hidden,false);
 $('repeater-tab-advisor').click();assert.equal($('repeater-advisor').hidden,false);
 assert.equal($('repeater-advisor-frame').getAttribute('src'),'/repeater-optimizer');
 $('repeater-tab-console').click();
+ const frame=$('repeater-advisor-frame'), iframeMessages=[];
+ frame.contentWindow.postMessage=data=>iframeMessages.push(data);
+ const previousRequests=posts.length;
+ $('repeater-tab-status').click();
+ const neighborsPanel=[...$('repeater-extras').querySelectorAll('details')]
+    .find(x=>x.querySelector('summary')?.textContent.includes('Neighbors'));
+ assert(neighborsPanel);
+ neighborsPanel.open=true;
+ neighborsPanel.dispatchEvent(new w.Event('toggle'));
+ await settle();
+ assert($('repeater-neighbors-message').textContent.includes('Snapshot #23: 1 of 1 returned entries saved'));
+ $('repeater-tab-advisor').click();
+ assert.equal(iframeMessages.at(-1).type,'meshcorestation-optimizer-refresh');
+ assert.equal(posts.filter(p=>p.action==='neighbors').length,1,'Only the explicitly opened Status neighbors panel may poll the repeater');
+ assert.equal(posts.length,previousRequests+1,'Returning to Optimizer must not send another request');
+ $('repeater-tab-console').click();
  $('repeater-console-commands').click();assert.equal($('repeater-command-dialog').open,true);
  const before=posts.length;
  $('repeater-command-search').value='firmware version';$('repeater-command-search').dispatchEvent(new w.Event('input'));

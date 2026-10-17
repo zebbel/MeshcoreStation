@@ -109,3 +109,19 @@ flags old zero-entry snapshots as unreliable when the repeater reported
 a nonzero count. Re-reading is never triggered automatically by this
 fix; it requires the existing manual button or separately opted-in
 scheduled polling. Existing old snapshots remain unchanged in storage.
+
+
+## Neighbor persistence visibility and stale embedded view (unpublished fix)
+
+The Status and Repeater Optimizer tabs use the same LoRa neighbor request.
+Previously the optimizer iframe only fetched local snapshot history on its
+initial load. A later Status read could store new neighbor entries without
+refreshing the still-loaded optimizer, leaving "0 listed" in view.
+
+Returning to Optimizer now triggers a local HTTP-only snapshot refresh. A
+"Refresh stored snapshots" button also re-reads the local database without
+LoRa. Each manual remote neighbor read returns a persisted snapshot receipt
+(ID, received entries, stored entries, repeater-reported total) verified by
+reopening the SQLite database. Status displays this receipt; Optimizer
+checks it against its new GET response and warns on a mismatch. Neither
+local refresh nor receipt verification transmits any additional LoRa requests.

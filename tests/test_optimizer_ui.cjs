@@ -37,6 +37,16 @@ assert($('neighbors').textContent.includes('SNR 2.5 dB'));
 assert($('neighbors').textContent.includes('2 saved / 2 reported'));
 assert($('neighbors').textContent.includes('Repeater reported no neighbors'));
 assert.equal(posts.length,1); // no LoRa on opening
+const beforeLocalRefresh=reqs.length;
+w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,
+ data:{type:'meshcorestation-optimizer-refresh'}}));
+await settle();
+assert.equal(reqs.length,beforeLocalRefresh+1);
+assert.equal(reqs.at(-1).method,'GET');
+assert.equal(posts.length,1,'Switching tabs must not request LoRa');
+$('refresh-neighbors').click();await settle();
+assert.equal(reqs.at(-1).method,'GET');
+assert.equal(posts.length,1,'Refresh stored snapshots is local only');
 $('analyze').click();await settle();
 assert.equal(reqs.at(-1).method,'POST');
 assert.equal(posts.length,1); // analysis stays local
@@ -103,6 +113,18 @@ w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:p
 await settle();
 $('read-neighbors').click();
 assert.equal(posts.at(-1).type,'meshcorestation-optimizer-neighbors');
+const neighborRequest=posts.at(-1).request_id;
+sample.neighbor_snapshots.unshift({id:42,at:Date.now()/1000,source:'manual',
+ reported:2,complete:1,neighbors:[
+ {neighbor_key:'00ffaa11',snr:3.5,secs_ago:12},
+ {neighbor_key:'ffcc2211',snr:1.5,secs_ago:14}
+]});
+w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,
+ data:{type:'meshcorestation-advisor-values',request_id:neighborRequest,
+ snapshot:{id:42,neighbors:2,received:2,reported:2,complete:true}}}));
+await settle();
+assert($('neighbors').textContent.includes('2 saved / 2 reported'));
+assert($('neighbors').textContent.includes('Prefix 00ffaa11'));
 dom.window.close();
 console.log('Optimizer passive GET/analysis, explicit polling opt-in and manual LoRa button passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -77,6 +77,7 @@ table{overflow-wrap:anywhere}.scroll{overflow-x:auto}.result{margin:8px 0}
 </section>
 
 <section><h2>Neighbor snapshots</h2><p class="muted">One stored snapshot contains at most 15 reported neighbors. Missing entries do not prove lost links. Scheduled sampling never loads extra pages.</p>
+<button id="refresh-neighbors" type="button">Refresh stored snapshots</button>
 <div id="neighbors"></div></section>
 
 <section><h2>Storage and retention</h2>
@@ -231,6 +232,7 @@ $('days').onchange=()=>refresh();
 $('analyze').onclick=()=>refresh(false,'review');
 $('read-settings').onclick=()=>send('meshcorestation-advisor-request');
 $('read-neighbors').onclick=()=>send('meshcorestation-optimizer-neighbors');
+$('refresh-neighbors').onclick=()=>refresh();
 $('save-profile').onclick=()=>{
  const role=$('role').value,polling=$('polling').value;
  if(polling!=='manual'&&!confirm('Enable scheduled LoRa neighbor reads every '+(polling==='12h'?'12':'24')+' hours for this repeater?'))return;
@@ -263,6 +265,12 @@ $('clear-history').onclick=()=>{
 window.addEventListener('message',async event=>{
  if(event.origin!==origin||event.source!==manager)return;
  const data=event.data||{};
+ if(data.type==='meshcorestation-optimizer-refresh'){
+   // Local HTTP/database refresh when switching back from Status;
+   // never initiate a LoRa request.
+   if(key&&!busy)await refresh();
+   return;
+ }
  if(data.type==='meshcorestation-optimizer-context'){
   if(key&&key!==data.public_key){current={};readAt=0;}
   key=data.public_key;name=data.name||'Repeater';
@@ -277,6 +285,7 @@ window.addEventListener('message',async event=>{
  clearTimeout(pending.timer);
  const type=pending.type;pending=null;lock(false);
  if(data.error){notice(data.error);return;}
+ const storedSnapshot=data.snapshot;
  if(type==='meshcorestation-advisor-request'){
   current=data.current||{};readAt=Date.now();
   notice('Read settings from repeater. Analysis can now compare them.');
@@ -286,13 +295,22 @@ window.addEventListener('message',async event=>{
    notice('Readback received. Read settings again before another trial.');
   }
  }else if(type==='meshcorestation-optimizer-neighbors'){
-  notice('Neighbor snapshot received and stored.');
+  notice(storedSnapshot
+    ? 'Snapshot #'+storedSnapshot.id+': '+storedSnapshot.neighbors+' of '+
+      storedSnapshot.received+' returned entries saved.'
+    : 'Neighbor response received, but no saved snapshot confirmation was returned.');
  }else if(type==='meshcorestation-optimizer-clear-history'){
   notice((data.removed??0)+' verified flood-limit change record(s) deleted. Comparisons removed. Passive observations unchanged.');
  }else if(type==='meshcorestation-optimizer-profile'||type==='meshcorestation-optimizer-storage'){
   notice('Settings saved.');
  }
  await refresh(['meshcorestation-optimizer-profile','meshcorestation-optimizer-storage'].includes(type),'review');
+ if(type==='meshcorestation-optimizer-neighbors'&&storedSnapshot){
+   const visible=latest?.neighbor_snapshots?.find(item=>item.id===storedSnapshot.id);
+   if(!visible || visible.neighbors.length!==storedSnapshot.neighbors)
+     notice('Warning: Snapshot #'+storedSnapshot.id+' saved '+storedSnapshot.neighbors+
+       ' entries, but they are not visible in this optimizer view. Check the selected repeater and database.');
+ }
 });
 if(manager)manager.postMessage({type:'meshcorestation-optimizer-ready'},origin);
 })();

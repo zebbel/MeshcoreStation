@@ -192,3 +192,53 @@ def test_clear_verified_changes_scoped_to_selected_repeater(tmp_path, monkeypatc
     assert passive_stats.network_snapshot(KEY,1)['copies']==1
     # Repeating the clearing operation does not damage unrelated records.
     assert client.post('/api/repeater-optimizer',json=request_data,headers=headers).json['removed']==0
+
+
+
+def test_neighbor_status_read_returns_persisted_snapshot_receipt(tmp_path, monkeypatch):
+    """The same remote read used by Status must show up in Optimizer's DB."""
+    import asyncio
+    import sqlite3
+    from types import SimpleNamespace
+    from meshcorestation.radio.repeater_control import RepeaterControl
+    setup(tmp_path, monkeypatch)
+
+    direct=sqlite3.connect(':memory:')
+    direct.execute('CREATE TABLE repeaters(public_key TEXT,name TEXT)')
+    direct.execute('INSERT INTO repeaters VALUES(?,?)',('deaf1234'+'00'*28,'Neighbor Hill'))
+
+    response={'neighbours':[{'pubkey':'deaf1234','snr':5.75,'secs_ago':110},
+                            {'pubkey':'beef0022','snr':-0.5,'secs_ago':30}],
+              'results_count':2,'neighbours_count':2}
+    calls=[]
+    class Commands:
+        async def req_neighbours_sync(self, contact, count, offset, timeout):
+            calls.append((count,offset))
+            return response
+    class Transport:
+        async def contact(self, key):
+            return {'public_key':key,'adv_name':'Test','out_path_len':1}
+        async def login(self, contact, password):
+            return {'is_admin':True}
+    companion=SimpleNamespace(mc=SimpleNamespace(commands=Commands()),
+                              database=SimpleNamespace(db=direct))
+    controller=RepeaterControl(companion)
+    controller.transport=Transport()
+    controller.sessions['token']={'key':KEY,'expires':time.monotonic()+600,
+                                  'admin':True,'values':{}}
+    try:
+        result=asyncio.run(controller.execute({
+            'action':'neighbors','session':'token','public_key':KEY,'offset':0}))
+        assert result['ok'] and calls==[(15,0)]
+        assert len(result['data']['neighbours'])==2
+        assert result['data']['neighbours'][0]['name']=='Neighbor Hill'
+        receipt=result['neighbor_snapshot']
+        assert receipt['id']>0 and receipt['neighbors']==2
+        assert receipt['received']==receipt['reported']==2
+        stored=optimizer_store.snapshots(KEY)[0]
+        assert stored['id']==receipt['id']
+        assert len(stored['neighbors'])==2
+        assert {r['neighbor_key'] for r in stored['neighbors']}=={'deaf1234','beef0022'}
+        assert stored['complete']
+    finally:
+        direct.close()

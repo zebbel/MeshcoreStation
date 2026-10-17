@@ -56,9 +56,15 @@
     }
     function tab(name) {
         if (name === 'advisor') {
-            if (!admin || !session) { message('Connect as administrator to use the recommendation advisor.', true); return; }
+            if (!admin || !session) { message('Connect as administrator to use Repeater Optimizer.', true); return; }
             const frame = $('repeater-advisor-frame');
             if (!frame.hasAttribute('src')) frame.src = '/repeater-optimizer';
+            else if (selectedTab !== 'advisor') {
+                // The Status tab can save fresh neighbor data while the
+                // embedded optimizer stays loaded. Refresh locally on return.
+                // A refresh does NOT send a LoRa request.
+                frame.contentWindow.postMessage({type:'meshcorestation-optimizer-refresh'},window.location.origin);
+            }
         }
         selectedTab = name;
         for (const value of ['status', 'config', 'console', 'advisor']) {
@@ -269,7 +275,8 @@
                 try {
                     progress('Reading one neighbor page over LoRa…');
                     const data=await request({action:'neighbors',offset:0});
-                    send({public_key:contact.public_key,neighbors:data.data,neighbor_read:true});
+                    send({public_key:contact.public_key,neighbors:data.data,
+                        snapshot:data.neighbor_snapshot,neighbor_read:true});
                     message('Neighbor snapshot received and stored.');
                 }catch(error){send({error:error.message});message(error.message,true);}
             });
@@ -384,7 +391,17 @@
                     if (Array.isArray(result.data)) content.append(result.data.length ? table(['Channel', 'Sensor', 'Value'], result.data.map(row => [row.channel, row.type, Number.isFinite(row.value) && row.type === 'voltage' ? row.value.toFixed(2) + ' V' : Number.isFinite(row.value) && row.type === 'temperature' ? row.value.toFixed(1) + ' °C' : row.value])) : node('p', 'The repeater returned no sensor readings.'));
                     else content.append(node('pre', JSON.stringify(result.data, null, 2), 'repeater-data'));
                 }
-                loaded.add(action); report(label + ' received.');
+                loaded.add(action);
+                if (action === 'neighbors') {
+                    const snap = result.neighbor_snapshot;
+                    report(snap
+                        ? label + ' received. Snapshot #' + snap.id + ': ' +
+                          snap.neighbors + ' of ' + snap.received +
+                          ' returned entries saved (' +
+                          (snap.reported==null?'total unknown':snap.reported+' reported total') + ').'
+                        : 'Neighbor response received, but no saved snapshot confirmation was returned.',
+                        !snap);
+                } else report(label + ' received.');
             };
             const refresh = button('↻ Refresh', () => run(() => load(), report)), next = button('Load more', () => run(() => load(true), report)); next.hidden = true;
             box.append(refresh); if (action === 'neighbors') box.append(localMessage); box.append(content); if (action === 'neighbors') box.append(next);

@@ -68,13 +68,16 @@ class RepeaterControl:
                     data = await commands.req_acl_sync(contact, timeout=TIMEOUT)
                 if data is None:
                     raise ValueError('No response. The repeater may be unreachable or this feature may be unsupported.')
+                saved_snapshot = None
                 if action == 'neighbors':
                     from meshcorestation.storage import optimizer_store
                     optimizer_store.initialize()
                     # This read was explicitly requested in management.
-                    optimizer_store.save_neighbors(key,data,'manual')
+                    saved_snapshot = optimizer_store.save_neighbors(key,data,'manual')
                     data = with_neighbor_names(self.companion.database.db, data)
-                return {'ok': True, 'data': data, 'sampled_at': time.time(), 'admin': admin, 'contact': self.identity(contact), 'firmware_level': login.get('fw_ver_level'),
+                return {'ok': True, 'data': data, 'neighbor_snapshot': saved_snapshot,
+                        'sampled_at': time.time(), 'admin': admin,
+                        'contact': self.identity(contact), 'firmware_level': login.get('fw_ver_level'),
                         'repeater_time': self.clock_timestamp(login)}
             if not admin:
                 raise ValueError('Administrator access is required to read or change configurations.')
