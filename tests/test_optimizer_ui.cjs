@@ -13,11 +13,11 @@ partial:true,collector_error:'',first_at:null,storage:{bytes:0,free_bytes:20e9}}
 analysis:{recommendations:[{field:'flood.max',suggested:null,current:null,confidence:'insufficient',
 observed:0,matching:0,p90:null,max:null,can_apply:false,reasons:['missing'],explanation:'Not enough evidence.'}],
 notes:[]},neighbor_snapshots:[
- {id:1,at:1,source:'manual',reported:3,complete:0,neighbors:[]},
- {id:2,at:2,source:'manual',reported:2,complete:1,neighbors:[
+ {id:3,at:3,source:'manual',reported:2,complete:1,neighbors:[
   {neighbor_key:'1234abcd',snr:2.5,secs_ago:120},
   {neighbor_key:'eeff0011',snr:-3.25,secs_ago:90}]},
- {id:3,at:3,source:'manual',reported:0,complete:1,neighbors:[]}
+ {id:2,at:2,source:'manual',reported:3,complete:0,neighbors:[]},
+ {id:1,at:1,source:'manual',reported:0,complete:1,neighbors:[]}
  ],history:[],comparisons:{}};
 w.fetch=async (url,opts)=>{reqs.push({url,method:opts.method,body:opts.body});return {
 ok:true,json:async()=>sample}};
@@ -30,12 +30,12 @@ w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:p
  data:{type:'meshcorestation-optimizer-context',public_key:key,name:'Hill'}}));
 await settle();
 assert.equal(reqs.length,1);assert.equal(reqs[0].method,'GET');
-assert($('neighbors').textContent.includes('0 saved / 3 reported'));
-assert($('neighbors').textContent.includes('This snapshot is unreliable'));
+assert.equal($('neighbors').querySelectorAll('article').length,1,'Only the most recent read is displayed');
 assert($('neighbors').textContent.includes('Prefix 1234abcd'));
 assert($('neighbors').textContent.includes('SNR 2.5 dB'));
 assert($('neighbors').textContent.includes('2 saved / 2 reported'));
-assert($('neighbors').textContent.includes('Repeater reported no neighbors'));
+assert(!$('neighbors').textContent.includes('0 saved / 3 reported'),'Older reads are hidden');
+assert(!$('neighbors').textContent.includes('Repeater reported no neighbors'),'Old empty reads are hidden');
 assert.equal(posts.length,1); // no LoRa on opening
 const beforeLocalRefresh=reqs.length;
 w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,
@@ -125,6 +125,8 @@ w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:p
 await settle();
 assert($('neighbors').textContent.includes('2 saved / 2 reported'));
 assert($('neighbors').textContent.includes('Prefix 00ffaa11'));
+assert.equal($('neighbors').querySelectorAll('article').length,1,'A new read replaces the previous entry');
+assert(!$('neighbors').textContent.includes('Prefix 1234abcd'),'Previous neighbor read is hidden');
 dom.window.close();
 console.log('Optimizer passive GET/analysis, explicit polling opt-in and manual LoRa button passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

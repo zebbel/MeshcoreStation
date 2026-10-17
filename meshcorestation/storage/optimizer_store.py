@@ -156,7 +156,7 @@ def save_neighbors(key, data, source='manual'):
 def snapshots(key, limit=15):
     valid_key(key)
     with closing(connect()) as db:
-        result=[dict(r) for r in db.execute('SELECT * FROM snapshots WHERE public_key=? ORDER BY at DESC LIMIT ?',(key,limit))]
+        result=[dict(r) for r in db.execute('SELECT * FROM snapshots WHERE public_key=? ORDER BY at DESC,id DESC LIMIT ?',(key,limit))]
         for row in result:
             row['neighbors']=[dict(r) for r in db.execute('SELECT neighbor_key,snr,secs_ago FROM neighbors WHERE snapshot_id=?',(row['id'],))]
         return result

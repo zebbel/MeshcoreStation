@@ -76,7 +76,7 @@ table{overflow-wrap:anywhere}.scroll{overflow-x:auto}.result{margin:8px 0}
 <p class="muted">Each write requires confirmation in Repeater Management, a fresh value check, and readback verification. No automatic configuration changes.</p>
 </section>
 
-<section><h2>Neighbor snapshots</h2><p class="muted">One stored snapshot contains at most 15 reported neighbors. Missing entries do not prove lost links. Scheduled sampling never loads extra pages.</p>
+<section><h2>Latest neighbor snapshot</h2><p class="muted">Only the most recent read is shown. One read contains at most 15 neighbors. Missing entries do not prove lost links. Scheduled sampling never loads extra pages.</p>
 <button id="refresh-neighbors" type="button">Refresh stored snapshots</button>
 <div id="neighbors"></div></section>
 
@@ -173,7 +173,7 @@ function render(data,replaceSettings=false){
  for(const warning of data.analysis.notes)area.append(el('p',warning));
  const neighbors=$('neighbors');neighbors.replaceChildren();
  if(!data.neighbor_snapshots.length)neighbors.append(el('p','No neighbor snapshots saved.'));
- for(const snap of data.neighbor_snapshots.slice(0,10)){
+ for(const snap of data.neighbor_snapshots.slice(0,1)){
   const block=el('article');block.className='finding';
   const saved=snap.neighbors.length,reported=snap.reported;
   const known=Number.isInteger(reported)&&reported>=0;

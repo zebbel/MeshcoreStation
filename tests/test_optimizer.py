@@ -36,6 +36,9 @@ def test_opt_in_polling_defaults_and_snapshots(tmp_path,monkeypatch):
         'results_count':1,'neighbours_count':1},'manual')
     assert eight['neighbors']==1 and eight['complete']
     assert optimizer_store.snapshots(KEY)[0]['neighbors'][0]['neighbor_key']=='12ab34cd'
+    assert len(optimizer_store.snapshots(KEY,limit=1))==1
+    assert len(optimizer_store.snapshots(KEY,limit=2))==2
+    assert optimizer_store.snapshots(KEY,limit=1)[0]['neighbors'][0]['neighbor_key']=='12ab34cd'
     # A mixed response is partial until all reported entries parse successfully.
     mixed=optimizer_store.save_neighbors(KEY,{
         'neighbours':[{'pubkey':'0011aabb','snr':4,'secs_ago':25},
@@ -131,9 +134,17 @@ def test_api_never_uses_radio_for_analysis(tmp_path,monkeypatch):
     client=app.test_client()
     headers={'X-Meshcore-Control':'1'}
     assert client.get('/api/repeater-optimizer?public_key='+KEY).status_code==403
+    previous=optimizer_store.save_neighbors(KEY,{'neighbours':[{'pubkey':'11223344'}],
+                                                       'neighbours_count':1})
+    latest=optimizer_store.save_neighbors(KEY,{'neighbours':[{'pubkey':'aabbccdd'}],
+                                                     'neighbours_count':1})
     response=client.get('/api/repeater-optimizer?public_key='+KEY,headers=headers)
     assert response.status_code==200
     assert response.json['profile']['polling']=='manual'
+    assert len(response.json['neighbor_snapshots'])==1
+    assert response.json['neighbor_snapshots'][0]['id']==latest['id']
+    assert response.json['neighbor_snapshots'][0]['neighbors'][0]['neighbor_key']=='aabbccdd'
+    assert len(optimizer_store.snapshots(KEY,limit=10))==2
     assert response.json['analysis']['recommendations'][0]['suggested'] is None
     monkeypatch.setattr(optimizer_api.bridge,'request',lambda payload,timeout=5: {'ok':True})
     stored=client.post('/api/repeater-optimizer',headers=headers,json={

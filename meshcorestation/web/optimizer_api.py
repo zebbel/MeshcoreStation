@@ -71,7 +71,7 @@ def register_optimizer_routes(server):
             optimizer_store.initialize()
             stats=passive_stats.network_snapshot(key,days)
             profile=optimizer_store.profile(key)
-            snapshots=optimizer_store.snapshots(key)
+            snapshots=optimizer_store.snapshots(key, limit=1)
             # Do not return every individual path to the browser.
             findings=analyze(stats,profile,snapshots,current)
             summary={k:v for k,v in stats.items() if k not in ('daily','scope')}
