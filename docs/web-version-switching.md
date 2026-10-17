@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.0.0** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.0.1** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -60,3 +60,15 @@ and data together. Never copy SQLite files while the station is writing them.
 Switching to main does not disable rooms or remove their database. To stop room
 traffic, disable the rooms in the room-server page. Application updates do not
 flash the companion; companion firmware updates are a separate operation.
+
+## Release version policy
+
+Every published application update must increment `meshcorestation.__version__`
+and update the current-version references in the README and guides. Queue several
+changes under one release version; do not publish changed application code with
+the same version as the previous release.
+
+### 3.0.1
+
+Expanded repeater configuration, an authenticated remote Console tab, and a
+searchable command-picker popup with purpose explanations and editable placeholders.
