@@ -36,6 +36,19 @@ w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:p
  data:{type:'meshcorestation-advisor-values',request_id:requestId,saved:true}}));
 await settle();
 assert.equal($('back'),null);
+assert.equal(w.document.querySelectorAll('.scope-field').length,2);
+assert.equal(w.document.querySelectorAll('.period-field').length,1);
+assert.equal(w.document.querySelectorAll('.storage-field').length,5);
+assert.equal(w.document.querySelectorAll('.storage-grid .storage-field').length,5);
+for(const id of ['role','polling','days','retention_days','neighbor_days','summary_days','budget_gb','reserve_gb']){
+  assert(w.document.querySelector('label[for="'+id+'"]'),'Control needs its own label: '+id);
+}
+assert.equal($('polling').options[0].textContent,'Manual (default)');
+assert.equal($('polling').options[2].textContent,'Every 12 hours');
+assert(html.includes('.scope-field select{display:block;width:100%;max-width:none}'));
+assert(html.includes('.storage-field input{display:block;width:100%;max-width:none}'));
+assert(html.includes('@media(max-width:600px)'));
+assert(html.includes('.storage-grid,.kpis{grid-template-columns:1fr}'));
 assert(!w.document.body.textContent.includes('Passive by default. Analysis never sends'));
 assert.equal($('budget_gb').value,'3');
 assert.equal($('reserve_gb').value,'4');
