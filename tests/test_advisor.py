@@ -126,3 +126,70 @@ def test_lightweight_snapshot_is_target_and_period_bound(tmp_path,monkeypatch):
     assert data['copies']==2 and data['unique']==1
     assert data['evidence']['repeated']==1 and data['evidence']['max_hops']==2
     assert web.snapshot(7)['copies']==3
+
+
+def test_references_never_become_statistical_recommendations(settings):
+    snap=healthy(settings)
+    report=rules.review({'flood.max':'32','loop.detect':'off'},settings,snap,KEY)
+    assert report['rows'][0]['status']=='Differs from reference'
+    assert not any(row['can_apply'] for row in report['rows'])
+    assert not any(r['can_apply'] for r in report['recommendations'])
+
+
+def test_statistics_drive_trials_and_preserve_conservative_gate(settings):
+    snap=healthy(settings)
+    snap['copies']=400
+    snap['evidence']={'identified':300,'repeated':150,'routes':6,'active_days':7,
+                      'unscoped':260,'adverts':160}
+    current={'loop.detect':'off','flood.max':'32','flood.max.unscoped':'16'}
+    report=rules.review(current,settings,snap,KEY)
+    recommendations={r['id']:r for r in report['recommendations']}
+    assert 'loop-trial' in recommendations
+    trial=recommendations['loop-trial']
+    assert trial['proposed']=='minimal' and trial['field']=='loop.detect'
+    assert trial['can_apply'] and trial['confidence']=='experimental'
+    assert 'unscoped' in recommendations and 'adverts' in recommendations
+    assert not recommendations['unscoped']['can_apply']
+    assert not recommendations['adverts']['can_apply']
+    assert not any(row['can_apply'] for row in report['rows'])
+    # Different real observations should produce different recommendations
+    snap['evidence']={'identified':300,'repeated':5,'routes':6,'active_days':7,
+                      'unscoped':10,'adverts':10}
+    quieter=rules.review(current,settings,snap,KEY)
+    assert not any(r['can_apply'] for r in quieter['recommendations'])
+    assert not any(r['id']=='loop-trial' for r in quieter['recommendations'])
+
+
+@pytest.mark.parametrize('change',[
+    {'health':{'radio':'Offline'}},
+    {'selection':{'public_key':'cd'*32,'since':0}},
+    {'usefulness':{'partial':True}},
+    {'evidence':{'identified':300,'repeated':150,'routes':6,'active_days':1,'unscoped':250,'adverts':200}},
+    {'evidence':{'identified':300,'repeated':150,'routes':1,'active_days':7,'unscoped':250,'adverts':200}},
+])
+def test_incomplete_or_inconclusive_data_cannot_offer_loop_trial(settings,change):
+    snap=healthy(settings)
+    snap['copies']=400
+    snap['evidence']={'identified':300,'repeated':150,'routes':6,'active_days':7,
+                      'unscoped':250,'adverts':200}
+    snap.update(change)
+    result=rules.review({'loop.detect':'off'},settings,snap,KEY)
+    assert not any(r['can_apply'] for r in result['recommendations'])
+
+
+def test_snapshot_aggregates_activity_and_route_diversity(tmp_path,monkeypatch):
+    from meshcorestation.storage import passive_stats
+    monkeypatch.setattr(passive_stats,'STATS_PATH',tmp_path/'stats.db')
+    passive_stats.initialize()
+    now=time.time()
+    with passive_stats.connect() as db:
+        db.execute('INSERT INTO selection VALUES(1,?,?)',(KEY,now-9*86400))
+        for days,route,digest in [(0,'[{},{}]','a'),(0,'[{},{}]','a'),
+                                  (1,'[{},{}]','b'),(2,'[{}]','c')]:
+            db.execute('INSERT INTO observations(target,at,digest,kind,scoped,ambiguous,first_hop,middle_hop,last_hop,route,previous,following) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                       (KEY,now-days*86400-600,digest,4,0,0,1,0,0,route,'[]','[]'))
+    data=web.snapshot(7)
+    assert data['evidence']['identified']==4
+    assert data['evidence']['repeated']==1
+    assert data['evidence']['routes']==2
+    assert data['evidence']['active_days']>=2

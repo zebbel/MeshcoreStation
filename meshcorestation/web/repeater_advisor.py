@@ -47,6 +47,8 @@ def snapshot(days):
             health=dict(db.execute('SELECT * FROM health WHERE id=1').fetchone())
             row=db.execute("""SELECT COUNT(*) AS copies, COUNT(DISTINCT digest) AS unique_count,
                 COUNT(digest)-COUNT(DISTINCT digest) AS repeated,
+                COUNT(digest) AS identified, COUNT(DISTINCT route) AS routes,
+                COUNT(DISTINCT CAST(at / 86400 AS INTEGER)) AS active_days,
                 COALESCE(SUM(scoped=0),0) AS unscoped, MAX(json_array_length(route)) AS max_hops,
                 MAX(CASE WHEN scoped=0 THEN json_array_length(route) END) AS max_unscoped_hops,
                 COALESCE(SUM(kind=4),0) AS adverts
@@ -95,7 +97,7 @@ def register_advisor_routes(server):
             if not isinstance(key,str) or (key and not re.fullmatch('[0-9a-f]{64}',key)): raise ValueError('Invalid repeater key.')
             if request.method=='POST' and action=='save': save(settings)
             data=snapshot(settings['min_days'])
-            summary={k:data.get(k) for k in ('copies','unique','days','health','selection','evidence')}
+            summary={k:data.get(k) for k in ('copies','unique','days','health','selection','evidence','usefulness')}
             return json_response({'ok':True,'settings':settings,'schema':schema(),'defaults':DEFAULT,'source':SOURCE,
                                   'statistics':summary,'review':review(current,settings,data,key),
                                   'history':advisor_history.recent(key) if key else []})
