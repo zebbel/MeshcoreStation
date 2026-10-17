@@ -88,3 +88,10 @@ Vor Bearbeitung `main` abrufen und neue Änderungen in diesen Feature-Branch mer
 Versionsbasis wie `main` beibehalten, nur RC-Zähler erhöhen. Release `3.0.2rc3` enthält die Advisor-Verbesserungen und die Änderungen aus
 `main` 3.0.2 einschließlich optional gespeicherter Repeater-Passwörter.
 Weitere Veröffentlichungen nur nach ausdrücklicher Aufforderung.
+
+### 3.0.2rc4
+
+Fortschritt pro Einstellungsabfrage und zeitnahe Meldung bei fehlender Verbindung
+zum Verwaltungsfenster. Der Advisor öffnet in einem frischen Fenster. Zurück führt
+zur Repeater-Verwaltung mit bestehender Sitzung. Der separate Advisor-Link unter
+„My repeater statistics“ wurde entfernt.

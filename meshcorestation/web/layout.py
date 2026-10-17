@@ -22,7 +22,7 @@ def build_layout():
         html.Section([html.Div([html.Div([html.H2("Room server"), html.P("Independent private message boards", className="muted")]), html.A("Open room server ↗", href="/rooms", className="info-button")], className="toolbar")], className="history"),
         html.Section([html.Div([html.Div([html.H2("Repeater battery"), html.P("Voltage history and scheduled channel reports", className="muted")]), html.Div([html.Button("Select repeater", id="select-voltage-repeater", className="info-button"), html.Button("Battery history / settings", id="open-voltage", className="info-button")], className="voltage-actions")], className="toolbar"), html.Div(id="battery-overview")], className="history"),
         html.Section([html.Details([
-            html.Summary(html.H2("My repeater statistics")), html.A("Recommendation advisor ↗", href="/repeater-advisor", className="info-button", style={"display":"inline-block","margin":"12px 0"}),
+            html.Summary(html.H2("My repeater statistics")),
             html.Div(id="repeater-statistics-inline")
         ], id="repeater-statistics-disclosure", className="panel-disclosure")], className="history"),
         html.Section([html.Details([

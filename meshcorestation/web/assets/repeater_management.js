@@ -217,10 +217,19 @@
     let advisorWindow = null;
     window.addEventListener('message', event => {
         if (event.origin !== window.location.origin || event.source !== advisorWindow || !advisorWindow ||
-            !['meshcorestation-advisor-request','meshcorestation-advisor-apply'].includes(event.data?.type)) return;
+            !['meshcorestation-advisor-request','meshcorestation-advisor-apply','meshcorestation-advisor-return'].includes(event.data?.type)) return;
+        if(event.data.type==='meshcorestation-advisor-return') {
+            window.focus();
+            if(contact && !dialog.open && !loginDialog.open) {
+                if(session && admin) dialog.showModal(); else openLogin();
+            }
+            return;
+        }
         const target=advisorWindow, payload=event.data;
         const send=data=>{if(!target.closed)target.postMessage({type:'meshcorestation-advisor-values',request_id:payload.request_id,...data},window.location.origin);};
         if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
+        const progress=text=>{if(!target.closed)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
+        progress('Management connected. Checking administrator session…');
         const apply=payload.type==='meshcorestation-advisor-apply';
         if(apply && (payload.public_key!==contact.public_key || dirty())) {
             send({error:'Repeater changed or configuration edits are unsaved. Save or discard edits, then read again.'});return;
@@ -237,10 +246,12 @@
                 if(apply) {
                     // Preflight every selected field before any write; write rechecks it again.
                     for(const item of changes) {
+                        progress('Checking current '+item.field+' before changes…');
                         const read=await request({action:'read',field:item.field});
                         if(String(read.value)!==item.expected)throw Error(item.field+' changed on the repeater. Read and review again.');
                     }
                     for(const item of changes) {
+                        progress('Applying and verifying '+item.field+'…');
                         values.delete(item.field);
                         try {
                             const result=await request({action:'advisor_write',field:item.field,value:item.value,expected:item.expected,confirm:true});
@@ -250,7 +261,9 @@
                     }
                 } else {
                     for(const field of advisorFields) {
-                        try {current[field]=(await request({action:'read',field})).value;}
+                        progress('Reading '+field+' ('+(advisorFields.indexOf(field)+1)+'/'+advisorFields.length+')… Waiting for repeater reply.');
+                        try {current[field]=(await request({action:'read',field})).value;
+                            if(!target.closed)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text:'Received '+field+'.',field,value:current[field]},window.location.origin);}
                         catch(error) {errors[field]=error.message;if(!session || /timed out|two minutes|Administrator/i.test(error.message))break;}
                     }
                 }
@@ -261,7 +274,7 @@
     });
     function openAdvisor() {
         if (!contact || !session || !admin) { message('Connect as administrator to read repeater settings.',true); return; }
-        advisorWindow = window.open('/repeater-advisor', 'meshcorestation-repeater-advisor');
+        advisorWindow = window.open('/repeater-advisor', '_blank');
         if (!advisorWindow) message('Allow popups to open the recommendation advisor.',true);
     }
     function openLogin() {

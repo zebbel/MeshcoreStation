@@ -15,7 +15,7 @@ const $=id=>w.document.getElementById(id),settle=()=>new Promise(r=>setImmediate
 const send=(type,extra={})=>w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:popup,data:{type:'meshcorestation-advisor-'+type,request_id:1,...extra}}));
 (async()=>{
 w.meshcorestationManageRepeater({public_key:key,name:'Hill',type:2});$('repeater-login-form').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();$('repeater-open-advisor').click();
-send('request');await settle();assert.equal(replies.at(-1).current['flood.max'],'32');assert(!JSON.stringify(replies).includes('token'));
+send('request');await settle();assert.equal(replies.at(-1).current['flood.max'],'32');assert(replies.some(r=>r.type==='meshcorestation-advisor-progress'&&r.text.includes('(1/6)')));assert(replies.some(r=>r.field==='flood.max'&&r.value==='32')); assert(!JSON.stringify(replies).includes('token'));
 send('apply',{public_key:'cd'.repeat(32),changes:[{field:'flood.max',value:'16',expected:'32'}]});await settle();assert(replies.at(-1).error.includes('Repeater changed'));
 send('apply',{public_key:key,changes:[{field:'flood.max',value:'16',expected:'64'}]});await settle();assert(replies.at(-1).error.includes('changed on the repeater'));assert.equal(posts.filter(p=>p.action==='advisor_write').length,0);
 send('apply',{public_key:key,changes:[{field:'flood.max',value:'16',expected:'32'}]});await settle();assert.equal(values['flood.max'],'16');assert.equal(replies.at(-1).results.length,1);
