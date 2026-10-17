@@ -9,6 +9,7 @@ from meshcore import MeshCore, EventType
 from meshcorestation.radio.clock import synchronize_clock
 from meshcorestation.radio.bot import Bot
 from meshcorestation.radio.repeater_sync import RepeaterSync
+from meshcorestation.radio.neighbor_poller import NeighborPoller
 
 BAUDRATE = 115200
 MAX_RECENT_RX_LOGS = 20
@@ -19,6 +20,7 @@ class Companion:
         self.logger = logger
         self.mc = None
         self.repeater_sync = None
+        self.neighbor_poller = None
         self.database = database
         settings = database.get_bot_settings()
         self.serial_port = settings["serial_port"]
@@ -90,6 +92,9 @@ class Companion:
         return True
 
     async def disconnect(self):
+        if self.neighbor_poller is not None:
+            await self.neighbor_poller.close()
+            self.neighbor_poller=None
         if self.repeater_sync is not None:
             await self.repeater_sync.close()
             self.repeater_sync = None
@@ -103,6 +108,8 @@ class Companion:
         self.mc.subscribe(EventType.CHANNEL_MSG_RECV, self._handle_channel_message)
         self.repeater_sync = RepeaterSync(self)
         self.repeater_sync.start()
+        self.neighbor_poller = NeighborPoller(self)
+        self.neighbor_poller.start()
         await self.mc.start_auto_message_fetching()
 
 ################################################

@@ -4,6 +4,8 @@ import hashlib
 import json
 import logging
 import queue
+import os
+import shutil
 import re
 import sqlite3
 import threading
@@ -11,8 +13,8 @@ import time
 from meshcorestation.config import DATA_DIR, DB_PATH
 
 STATS_PATH = DATA_DIR / 'repeater-statistics.db'
-RETENTION = 30 * 86400
-MAX_ROWS = 200000
+RETENTION = 60 * 86400
+SUMMARY_RETENTION = 365 * 86400
 KINDS = {0:'Request',1:'Response',2:'Direct text',3:'ACK',4:'Advertisement',5:'Group text',6:'Group data',7:'Anonymous request',8:'Path',9:'Trace',10:'Multipart',11:'Control'}
 
 
@@ -35,14 +37,25 @@ def initialize():
                 route TEXT NOT NULL, previous TEXT NOT NULL, following TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS observations_target_at ON observations(target, at);
             CREATE INDEX IF NOT EXISTS observations_at ON observations(at);
+            CREATE TABLE IF NOT EXISTS network_observations(
+              id INTEGER PRIMARY KEY, at REAL NOT NULL, kind INTEGER NOT NULL,
+              scoped INTEGER NOT NULL, path_len INTEGER NOT NULL, hash_size INTEGER NOT NULL,
+              route TEXT NOT NULL, digest TEXT, rssi REAL, snr REAL);
+            CREATE INDEX IF NOT EXISTS network_at ON network_observations(at);
+            CREATE TABLE IF NOT EXISTS network_daily (
+              day INTEGER NOT NULL, kind INTEGER NOT NULL, scoped INTEGER NOT NULL,
+              copies INTEGER NOT NULL, PRIMARY KEY(day,kind,scoped));
             CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL, dropped INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '', trimmed_at REAL);
             INSERT OR IGNORE INTO health(id) VALUES(1);
         ''')
 
 
 def known_repeaters():
-    with closing(sqlite3.connect(DB_PATH.as_uri()+'?mode=ro', uri=True, timeout=2)) as db:
-        return [{'public_key':r[0].lower(),'name':r[1] or r[0][:12]} for r in db.execute('SELECT public_key,name FROM repeaters ORDER BY name COLLATE NOCASE') if re.fullmatch('[0-9a-fA-F]{64}',r[0] or '')]
+    try:
+        with closing(sqlite3.connect(DB_PATH.as_uri()+'?mode=ro', uri=True, timeout=2)) as db:
+            return [{'public_key':r[0].lower(),'name':r[1] or r[0][:12]} for r in db.execute('SELECT public_key,name FROM repeaters ORDER BY name COLLATE NOCASE') if re.fullmatch('[0-9a-fA-F]{64}',r[0] or '')]
+    except (sqlite3.Error,OSError):
+        return []
 
 
 def select(key):
@@ -65,13 +78,18 @@ def normalize(rx):
         raw=rx['path']
         if not isinstance(raw,(str,bytes,bytearray)): return None
         raw=bytes.fromhex(raw) if isinstance(raw,str) else bytes(raw)
-        if size not in (1,2,3) or not 1<=count<=63 or len(raw)!=count*size or len(raw)>64:
+        if size not in (1,2,3) or not 0<=count<=63 or len(raw)!=count*size or len(raw)>64:
             return None
         payload=rx.get('pkt_payload')
         digest=None
         if isinstance(payload,(bytes,bytearray)) and 0<len(payload)<=1024:
             digest=hashlib.sha256(bytes([kind])+bytes(payload)).hexdigest()
-        return {'path':[raw[i:i+size].hex() for i in range(0,len(raw),size)],'kind':kind,'scoped':int(route_type==0),'digest':digest}
+        rssi = rx.get('rssi', rx.get('last_rssi'))
+        snr = rx.get('snr', rx.get('last_snr'))
+        return {'path':[raw[i:i+size].hex() for i in range(0,len(raw),size)],
+                'hash_size':size,'kind':kind,'scoped':int(route_type==0),'digest':digest,
+                'rssi':float(rssi) if type(rssi) in (int,float) and -300<rssi<50 else None,
+                'snr':float(snr) if type(snr) in (int,float) and -100<snr<100 else None}
     except (KeyError,TypeError,ValueError,OverflowError):
         return None
 
@@ -127,6 +145,8 @@ class Collector:
 
     def run(self):
         repeaters=[]; refresh=0; prune=0; persisted_drops=0; heartbeat=0
+        from meshcorestation.storage import optimizer_store
+        optimizer_store.initialize()
         while not self.stop.is_set() or not self.queue.empty():
             # Batch writes once per second; idle health updates only every five seconds.
             self.stop.wait(1)
@@ -140,26 +160,65 @@ class Collector:
                     continue
                 if now-refresh>=10:
                     repeaters=known_repeaters(); refresh=now
+                limits=optimizer_store.config()
+                # Budget covers this detailed-statistics SQLite file and its WAL.
+                # When the safety threshold is reached, stop inserting rather than
+                # risk filling the Pi SD card. Old records are still pruned.
+                used=sum(os.path.getsize(p) for p in (str(STATS_PATH),str(STATS_PATH)+'-wal')
+                         if os.path.exists(p))
+                free=shutil.disk_usage(STATS_PATH.parent).free
+                logical_used=used
+                if used>=limits['budget_mb']*1048576:
+                    # SQLite can reuse freed pages without shrinking the physical file.
+                    # Let collection resume after time-based cleanup has freed enough.
+                    with closing(connect()) as check:
+                        freed=check.execute('PRAGMA freelist_count').fetchone()[0]
+                        page_size=check.execute('PRAGMA page_size').fetchone()[0]
+                    logical_used=max(0,used-freed*page_size)
+                writable=(logical_used < limits['budget_mb']*1048576 and
+                          free > limits['reserve_mb']*1048576)
                 with closing(connect()) as db, db:
                     selection=db.execute('SELECT * FROM selection WHERE id=1').fetchone()
-                    if selection and selection['public_key']:
+                    if not writable:
+                        self.dropped+=len(batch)
+                        self.error='Passive collection paused: storage budget or free-space reserve reached.'
+                    else:
+                        for at,packet in batch:
+                            db.execute("""INSERT INTO network_observations
+                              (at,kind,scoped,path_len,hash_size,route,digest,rssi,snr)
+                              VALUES(?,?,?,?,?,?,?,?,?)""",
+                              (at,packet['kind'],packet['scoped'],len(packet['path']),
+                               packet['hash_size'],'|'.join(packet['path']),
+                               packet['digest'],packet['rssi'],packet['snr']))
+                            day=int(at//86400)
+                            db.execute("""INSERT INTO network_daily VALUES(?,?,?,1)
+                                ON CONFLICT(day,kind,scoped) DO UPDATE SET copies=copies+1""",
+                                (day,packet['kind'],packet['scoped']))
+                    if writable and selection and selection['public_key']:
                         for at,packet in batch:
                             if at<selection['since']: continue
                             values=attribute(packet,selection['public_key'],repeaters)
                             if values:
                                 db.execute('INSERT INTO observations(target,at,digest,kind,scoped,ambiguous,first_hop,middle_hop,last_hop,route,previous,following) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(selection['public_key'],at,*values))
                     if now-prune>=60:
-                        db.execute('DELETE FROM observations WHERE at<?',(now-RETENTION,))
-                        boundary=db.execute('SELECT id,at FROM observations ORDER BY id DESC LIMIT 1 OFFSET ?',(MAX_ROWS,)).fetchone()
-                        if boundary:
-                            db.execute('DELETE FROM observations WHERE id<=?',(boundary['id'],))
+                        cutoff=now-limits['retention_days']*86400
+                        db.execute('DELETE FROM observations WHERE at<?',(cutoff,))
+                        db.execute('DELETE FROM network_observations WHERE at<?',(cutoff,))
+                        db.execute('DELETE FROM network_daily WHERE day<?',
+                                   (int((now-limits['summary_days']*86400)//86400),))
+                        # If data is still over budget, discard oldest chunks.
+                        if logical_used>=limits['budget_mb']*1048576 or free<=limits['reserve_mb']*1048576:
+                            db.execute('DELETE FROM network_observations WHERE id IN (SELECT id FROM network_observations ORDER BY at LIMIT 10000)')
+                            db.execute('DELETE FROM observations WHERE id IN (SELECT id FROM observations ORDER BY at LIMIT 10000)')
                             db.execute('UPDATE health SET trimmed_at=? WHERE id=1',(now,))
                         prune=now
+                        optimizer_store.cleanup(now)
                     drops=self.dropped
                     db.execute("UPDATE health SET heartbeat=?,dropped=dropped+?,error='' WHERE id=1",(now,drops-persisted_drops))
                 persisted_drops=drops
                 heartbeat=now
-                self.error=''
+                if writable:
+                    self.error=''
             except Exception as exc:
                 self.dropped+=len(batch)
                 self.error=str(exc)
@@ -208,3 +267,63 @@ def snapshot(days):
             'health':{**health,'running':bool(collector.thread and collector.thread.is_alive()),'error':collector.error,'radio':bridge.status[0]},
             'timeline':timeline,'types':types,'roles':{'First':totals['first'],'Middle':totals['middle'],'Final':totals['final']},
             'usefulness':usefulness,'scoped':totals['scoped'],'routes':routes,'previous':previous,'following':following}
+
+
+def network_snapshot(key, days=7):
+    """SQL-filtered radio observations; all repeaters are collected independently.
+
+    Matches a repeater against path prefixes with collision-aware confidence.
+    Packet lengths are observed route lengths, not required destination hops.
+    """
+    if days not in (1,7,14,30,60):
+        raise ValueError('Choose 1, 7, 14, 30 or 60 days.')
+    if not isinstance(key,str) or not re.fullmatch('[0-9a-f]{64}', key):
+        raise ValueError('Invalid repeater public key.')
+    now=time.time(); cutoff=now-days*86400
+    with closing(connect()) as db:
+        db.execute('BEGIN')
+        from meshcorestation.storage import optimizer_store
+        other_keys={r['public_key'] for r in known_repeaters()}
+        other_keys.add(key)
+        prefixes=[key[:n] for n in (2,4,6)]
+        # Use a complete route segment match, not a substring of another hash.
+        predicates=' OR '.join("('|' || route || '|') LIKE ?" for _ in prefixes)
+        parameters=['%|'+p+'|%' for p in prefixes]
+        query=f"""SELECT at,kind,scoped,path_len,hash_size,route,digest,rssi,snr
+                    FROM network_observations WHERE at>=? AND ({predicates})"""
+        selected=db.execute(query,(cutoff,*parameters))
+        scope={label:{'count':0,'target':0,'hist':{}} for label in ('scoped','unscoped')}
+        matches=0;ambiguous=0;active=set()
+        for item in selected:
+            size=item['hash_size'];prefix=key[:size*2]
+            route=item['route'].split('|') if item['route'] else []
+            if prefix not in route:
+                continue
+            label='scoped' if item['scoped'] else 'unscoped'
+            scope[label]['count']+=1
+            # Known hash collision is a hard ambiguity; unknown contacts remain
+            # an uncertainty that prevents claiming complete mesh visibility.
+            collision=sum(other.startswith(prefix) for other in other_keys)>1
+            if collision:
+                ambiguous+=1
+            else:
+                matches+=1;scope[label]['target']+=1
+                hops=item['path_len']
+                hist=scope[label]['hist']
+                hist[hops]=hist.get(hops,0)+1
+            active.add(int(item['at']//86400))
+        totals=db.execute("""SELECT COUNT(*) copies,COUNT(DISTINCT digest) unique_digests,
+                          COALESCE(SUM(scoped=0),0) unscoped
+                          FROM network_observations WHERE at>=?""",(cutoff,)).fetchone()
+        health=db.execute('SELECT * FROM health WHERE id=1').fetchone()
+        first=db.execute('SELECT MIN(at) FROM network_observations').fetchone()[0]
+        days_daily=[dict(r) for r in db.execute('SELECT day,kind,scoped,copies FROM network_daily WHERE day>=? ORDER BY day',(int(cutoff//86400),))]
+    used=sum(os.path.getsize(p) for p in (str(STATS_PATH),str(STATS_PATH)+'-wal') if os.path.exists(p))
+    free=shutil.disk_usage(STATS_PATH.parent).free
+    return {'now':now,'days':days,'copies':totals['copies'],
+            'unique_digests':totals['unique_digests'],'unscoped':totals['unscoped'],
+            'matching_copies':matches,'ambiguous':ambiguous,'active_days':len(active),
+            'scope':scope,'daily':days_daily,'first_at':first,
+            'partial':first is None or first>cutoff or bool(health['trimmed_at'] and health['trimmed_at']>=cutoff),
+            'collector_error':collector.error or health['error'],
+            'storage':{'bytes':used,'free_bytes':free}}

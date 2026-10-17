@@ -21,7 +21,7 @@ const submit=id=>$(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelab
  $('repeater-tab-console').click();assert.equal($('repeater-console').hidden,false);assert.equal($('repeater-status').hidden,true);
 assert.equal($('repeater-tab-advisor').hidden,false);
 $('repeater-tab-advisor').click();assert.equal($('repeater-advisor').hidden,false);
-assert.equal($('repeater-advisor-frame').getAttribute('src'),'/repeater-advisor');
+assert.equal($('repeater-advisor-frame').getAttribute('src'),'/repeater-optimizer');
 $('repeater-tab-console').click();
  $('repeater-console-commands').click();assert.equal($('repeater-command-dialog').open,true);
  const before=posts.length;

@@ -21,7 +21,7 @@ def begin(key,field,before,value):
     with database() as db:
         ident=db.execute('INSERT INTO changes(at,public_key,field,before_value,requested,status) VALUES(?,?,?,?,?,?)',
                          (time.time(),key,field,str(before),str(value),'pending / outcome unknown')).lastrowid
-        db.execute('DELETE FROM changes WHERE id NOT IN (SELECT id FROM changes ORDER BY id DESC LIMIT 1000)')
+        db.execute('DELETE FROM changes WHERE at<?',(time.time()-365*86400,))
         return ident
 
 

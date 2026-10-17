@@ -58,7 +58,7 @@
         if (name === 'advisor') {
             if (!admin || !session) { message('Connect as administrator to use the recommendation advisor.', true); return; }
             const frame = $('repeater-advisor-frame');
-            if (!frame.hasAttribute('src')) frame.src = '/repeater-advisor';
+            if (!frame.hasAttribute('src')) frame.src = '/repeater-optimizer';
         }
         selectedTab = name;
         for (const value of ['status', 'config', 'console', 'advisor']) {
@@ -72,11 +72,11 @@
         dialog = node('dialog'); dialog.id = 'repeater-manage-dialog'; dialog.setAttribute('aria-labelledby', 'repeater-title');
         dialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-title">Repeater management</h2><button type="button" id="repeater-close" aria-label="Close repeater management">×</button></div>
             <div class="repeater-fixed"><strong id="repeater-name"></strong><p id="repeater-identity" class="muted"></p><div class="repeater-tabs" role="tablist" aria-label="Repeater management">
-            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button><button type="button" id="repeater-tab-advisor" role="tab" aria-controls="repeater-advisor" hidden>Recommendation advisor</button></div></div>
+            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button><button type="button" id="repeater-tab-advisor" role="tab" aria-controls="repeater-advisor" hidden>Repeater Optimizer</button></div></div>
             <div class="dialog-body"><p id="repeater-message" role="status" aria-live="polite"></p><button type="button" id="repeater-reconnect" hidden>Connect again</button>
             <section id="repeater-status" role="tabpanel" aria-labelledby="repeater-tab-status"><div class="repeater-toolbar"><span id="repeater-last-response" class="muted">Not yet read</span><button type="button" id="repeater-refresh">↻ Refresh</button></div><div id="repeater-status-cards"></div><div id="repeater-extras"></div></section>
             <section id="repeater-config" role="tabpanel" aria-labelledby="repeater-tab-config" hidden></section>
-            <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section><section id="repeater-advisor" role="tabpanel" aria-labelledby="repeater-tab-advisor" hidden><iframe id="repeater-advisor-frame" title="Repeater recommendation advisor" loading="lazy" referrerpolicy="same-origin"></iframe></section></div>`;
+            <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section><section id="repeater-advisor" role="tabpanel" aria-labelledby="repeater-tab-advisor" hidden><iframe id="repeater-advisor-frame" title="Repeater Optimizer" loading="lazy" referrerpolicy="same-origin"></iframe></section></div>`;
         document.body.append(dialog);
         $('repeater-close').addEventListener('click', close);
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
@@ -221,11 +221,18 @@
     }
 
     // Same-origin embedded advisor; credentials and radio session stay in management.
-    const advisorFields = ['flood.max','flood.max.unscoped','flood.max.advert','advert.interval','flood.advert.interval','loop.detect'];
+    const advisorFields = ['flood.max','flood.max.unscoped'];
     window.addEventListener('message', event => {
         const frame=$('repeater-advisor-frame');
         if(!frame || event.origin!==window.location.origin || event.source!==frame.contentWindow ||
-            !['meshcorestation-advisor-request','meshcorestation-advisor-apply','meshcorestation-advisor-return'].includes(event.data?.type)) return;
+            !['meshcorestation-advisor-request','meshcorestation-advisor-apply','meshcorestation-advisor-return',
+              'meshcorestation-optimizer-neighbors','meshcorestation-optimizer-ready',
+              'meshcorestation-optimizer-profile','meshcorestation-optimizer-storage'].includes(event.data?.type)) return;
+        if(event.data.type==='meshcorestation-optimizer-ready'){
+            if(dialog.open && admin && session)
+                frame.contentWindow.postMessage({type:'meshcorestation-optimizer-context',public_key:contact.public_key,name:contact.name},window.location.origin);
+            return;
+        }
         if(event.data.type==='meshcorestation-advisor-return'){
             if(dialog.open){tab('config');$('repeater-tab-config').focus();}
             return;
@@ -235,6 +242,36 @@
         if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
         const progress=text=>{if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
         progress('Management connected. Checking administrator session…');
+        const options=payload.type==='meshcorestation-optimizer-profile'||payload.type==='meshcorestation-optimizer-storage';
+        if(options){
+            run(async()=>{
+                try {
+                    const body={action:payload.type==='meshcorestation-optimizer-profile'?'profile':'storage',
+                        public_key:contact.public_key,session};
+                    if(body.action==='profile'){
+                        body.role=payload.role;body.polling=payload.polling;
+                    }else body.settings=payload.settings;
+                    const res=await fetch('/api/repeater-optimizer',{method:'POST',cache:'no-store',
+                        headers:{'Content-Type':'application/json','X-Meshcore-Control':'1'},body:JSON.stringify(body)});
+                    const data=await res.json();
+                    if(!res.ok||!data.ok)throw Error(data.error||'Saving optimizer settings failed.');
+                    send({saved:true,profile:data.profile,settings:data.settings});
+                }catch(error){send({error:error.message});}
+            });
+            return;
+        }
+        const neighbors=payload.type==='meshcorestation-optimizer-neighbors';
+        if(neighbors) {
+            run(async()=>{
+                try {
+                    progress('Reading one neighbor page over LoRa…');
+                    const data=await request({action:'neighbors',offset:0});
+                    send({public_key:contact.public_key,neighbors:data.data,neighbor_read:true});
+                    message('Neighbor snapshot received and stored.');
+                }catch(error){send({error:error.message});message(error.message,true);}
+            });
+            return;
+        }
         const apply=payload.type==='meshcorestation-advisor-apply';
         if(apply && (payload.public_key!==contact.public_key || dirty())) {
             send({error:'Repeater changed or configuration edits are unsaved. Save or discard edits, then read again.'});return;

@@ -51,6 +51,15 @@ class Runtime:
             async with companion.control_lock:
                 if control is not self.control:
                     return {'ok': False, 'error': 'Companion reconnected; refresh before retrying.'}
+                if payload.get('operation') == 'optimizer_authorize':
+                    token=payload.get('session','')
+                    key=payload.get('public_key')
+                    entry=control.repeaters.sessions.get(token) if isinstance(token,str) else None
+                    if not entry or entry['expires'] <= time.monotonic() or entry['key'] != key:
+                        return {'ok':False}
+                    # Administrator state is explicit from the original login.
+                    # No LoRa traffic is issued to authenticate a local setting save.
+                    return {'ok':entry.get('admin') is True}
                 if payload.get('operation') == 'room_restart':
                     started = await self.start_rooms()
                     return {'ok': started, 'error': '' if started else 'Room worker could not start; check station logs.'}

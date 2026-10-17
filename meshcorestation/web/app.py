@@ -32,6 +32,6 @@ def create_app():
     register_reply_routes(app.server)
     from meshcorestation.web.rooms_api import register_room_routes
     register_room_routes(app.server)
-    from meshcorestation.web.repeater_advisor import register_advisor_routes
-    register_advisor_routes(app.server)
+    from meshcorestation.web.optimizer_api import register_optimizer_routes
+    register_optimizer_routes(app.server)
     return app

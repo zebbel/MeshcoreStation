@@ -39,7 +39,8 @@ class RepeaterControl:
             token = secrets.token_urlsafe(32)
             if len(self.sessions) >= 16:
                 self.sessions.pop(next(iter(self.sessions)))
-            self.sessions[token] = {'key': key, 'expires': now + 900, 'values': {}}
+            self.sessions[token] = {'key': key, 'expires': now + 900,
+                                    'admin': login.get('is_admin') is True, 'values': {}}
             return {'ok': True, 'session': token, 'admin': login.get('is_admin') is True, 'contact': self.identity(contact), 'fields': FIELDS}
         token = request.get('session', '')
         session = self.sessions.get(token)
@@ -68,6 +69,10 @@ class RepeaterControl:
                 if data is None:
                     raise ValueError('No response. The repeater may be unreachable or this feature may be unsupported.')
                 if action == 'neighbors':
+                    from meshcorestation.storage import optimizer_store
+                    optimizer_store.initialize()
+                    # This read was explicitly requested in management.
+                    optimizer_store.save_neighbors(key,data,'manual')
                     data = with_neighbor_names(self.companion.database.db, data)
                 return {'ok': True, 'data': data, 'sampled_at': time.time(), 'admin': admin, 'contact': self.identity(contact), 'firmware_level': login.get('fw_ver_level'),
                         'repeater_time': self.clock_timestamp(login)}
@@ -101,8 +106,7 @@ class RepeaterControl:
                 if field not in FIELDS:
                     raise ValueError('Unknown field.')
                 if action == 'advisor_write':
-                    from meshcorestation.advisor_rules import TARGETS
-                    if field not in TARGETS:
+                    if field not in {'flood.max', 'flood.max.unscoped'}:
                         raise ValueError('Unsupported advisor field.')
                 value = validate(field, request.get('value'))
                 if request.get('confirm') is not True:
