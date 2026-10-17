@@ -55,7 +55,7 @@
         dialog = node('dialog'); dialog.id = 'repeater-manage-dialog'; dialog.setAttribute('aria-labelledby', 'repeater-title');
         dialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-title">Repeater management</h2><button type="button" id="repeater-close" aria-label="Close repeater management">×</button></div>
             <div class="repeater-fixed"><strong id="repeater-name"></strong><p id="repeater-identity" class="muted"></p><div class="repeater-tabs" role="tablist" aria-label="Repeater management">
-            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button></div></div>
+            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button></div><button type="button" id="repeater-open-advisor" hidden>Recommendation advisor ↗</button><div hidden></div></div>
             <div class="dialog-body"><p id="repeater-message" role="status" aria-live="polite"></p><button type="button" id="repeater-reconnect" hidden>Connect again</button>
             <section id="repeater-status" role="tabpanel" aria-labelledby="repeater-tab-status"><div class="repeater-toolbar"><span id="repeater-last-response" class="muted">Not yet read</span><button type="button" id="repeater-refresh">↻ Refresh</button></div><div id="repeater-status-cards"></div><div id="repeater-extras"></div></section>
             <section id="repeater-config" role="tabpanel" aria-labelledby="repeater-tab-config" hidden></section>
@@ -64,6 +64,7 @@
         $('repeater-close').addEventListener('click', close);
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
         $('repeater-refresh').addEventListener('click', () => run(readStatus));
+        $('repeater-open-advisor').addEventListener('click', openAdvisor);
         $('repeater-reconnect').addEventListener('click', () => { if (dirty() && !window.confirm('Discard unsaved edits and reconnect?')) return; forget(); dialog.close(); openLogin(); });
         for (const name of ['status', 'config', 'console']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
         dialog.querySelector('[role="tablist"]').addEventListener('keydown', event => {
@@ -190,6 +191,37 @@
         const hops = info.out_path_len;
         $('repeater-identity').textContent = contact.public_key.slice(0, 12) + '… · ' + (hops === 0 ? 'Direct' : hops > 0 ? hops + ' hops' : 'Flood route') + (admin ? '' : ' · Guest access');
         $('repeater-identity').title = contact.public_key;
+        const advisorButton = $('repeater-open-advisor'); if (advisorButton) advisorButton.hidden = !admin;
+    }
+
+    // Read-only advisor bridge: session tokens never leave this management window.
+    const advisorFields = ['flood.max','flood.max.unscoped','flood.max.advert','advert.interval','flood.advert.interval','loop.detect'];
+    let advisorWindow = null;
+    async function sendAdvisorValues(target) {
+        if (!session || !admin || !contact) return;
+        const current = {}, errors = {};
+        for (const field of advisorFields) {
+            if (!schema[field] || schema[field].kind === 'password') continue;
+            try {
+                const result = await request({action:'read',field});
+                current[field] = result.value;
+                setValue(field,result.value);
+            } catch (error) { errors[field] = error.message; if (!session) break; }
+        }
+        if (!target.closed) target.postMessage({type:'meshcorestation-advisor-values', public_key:contact.public_key, name:contact.name || contact.public_key.slice(0,12), current, errors}, window.location.origin);
+    }
+    window.addEventListener('message', event => {
+        if (event.origin !== window.location.origin || event.source !== advisorWindow || event.data?.type !== 'meshcorestation-advisor-request') return;
+        if (busy || !session || !admin) {
+            advisorWindow.postMessage({type:'meshcorestation-advisor-values',error:'Connect as administrator and finish any pending repeater operation.'},window.location.origin);
+            return;
+        }
+        run(async () => { message('Reading repeater settings for advisor…'); await sendAdvisorValues(advisorWindow); message('Advisor settings read.'); });
+    });
+    function openAdvisor() {
+        if (!contact || !session || !admin) { message('Connect as administrator to read repeater settings.',true); return; }
+        advisorWindow = window.open('/repeater-advisor', 'meshcorestation-repeater-advisor');
+        if (!advisorWindow) message('Allow popups to open the recommendation advisor.',true);
     }
     function openLogin() {
         $('repeater-login-name').textContent = contact.name || contact.public_key;
