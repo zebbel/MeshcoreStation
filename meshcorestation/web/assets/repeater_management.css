@@ -37,3 +37,12 @@
 #repeater-location-dialog { width: min(1400px, calc(100vw - 24px)); max-height: 95vh; padding: 0; overflow: hidden; }
 #repeater-location-map { height: 60vh; min-height: 280px; }
 #repeater-choose-map { margin-bottom: 16px; }
+
+#repeater-console-log { min-height: 200px; max-height: 45vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+#repeater-console-command { flex: 1 1 240px; min-width: 0; }
+#repeater-command-dialog { width: min(720px, calc(100vw - 24px)); max-height: 88vh; padding: 0; overflow: hidden; }
+#repeater-command-search { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; margin: 8px 0 16px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 7px; }
+#repeater-command-list { display: grid; gap: 8px; }
+.repeater-command-choice { display: grid; gap: 6px; text-align: left; padding: 12px; white-space: normal; overflow-wrap: anywhere; }
+.repeater-command-choice code { color: var(--accent); }
+.repeater-command-choice span { color: var(--muted); font-weight: normal; }

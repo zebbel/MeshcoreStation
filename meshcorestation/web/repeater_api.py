@@ -3,7 +3,7 @@ import json
 import re
 from meshcorestation.bridge import bridge
 
-ACTIONS = {'login', 'logout', 'status', 'telemetry', 'neighbors', 'acl', 'read', 'write', 'action', 'regions_read', 'region', 'permission'}
+ACTIONS = {'login', 'logout', 'status', 'telemetry', 'neighbors', 'acl', 'read', 'write', 'action', 'regions_read', 'region', 'permission', 'console'}
 
 
 def repeater_request(request):

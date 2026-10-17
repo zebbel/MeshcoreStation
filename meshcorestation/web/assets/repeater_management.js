@@ -1,6 +1,6 @@
 /* Remote repeater management. Secrets and session tokens live only in this page. */
 (() => {
-    let loginDialog, dialog, contact, session = '', admin = false, busy = false, schema = {}, selectedTab = 'status';
+    let loginDialog, dialog, commandDialog, contact, session = '', admin = false, busy = false, schema = {}, selectedTab = 'status';
     const values = new Map(), inputs = new Map(), loaded = new Set();
     const $ = id => document.getElementById(id);
     function node(tag, text, cls) { const item = document.createElement(tag); if (text !== undefined) item.textContent = text; if (cls) item.className = cls; return item; }
@@ -9,9 +9,9 @@
     function controls() {
         for (const root of [dialog, loginDialog]) if (root) {
             root.setAttribute('aria-busy', String(busy));
-            root.querySelectorAll('button,input,select,textarea').forEach(item => { item.disabled = busy || item.dataset.unavailable === 'true' || (item.closest('#repeater-config') && !admin); });
+            root.querySelectorAll('button,input,select,textarea').forEach(item => { item.disabled = busy || item.dataset.unavailable === 'true' || ((item.closest('#repeater-config') || item.closest('#repeater-console-form')) && (!admin || !session)); });
         }
-        inputs.forEach((input, field) => { input.disabled = busy || !admin || (schema[field].kind !== 'password' && !values.has(field)); });
+        inputs.forEach((input, field) => { input.disabled = busy || !admin || !session || (schema[field].kind !== 'password' && !values.has(field)); });
         if ($('repeater-choose-map')) $('repeater-choose-map').disabled = !canPickLocation();
     }
     async function request(payload) {
@@ -35,6 +35,7 @@
             // Retire the server token on close; no remote logout that would disturb monitoring.
             fetch('/api/repeater', {method: 'POST', keepalive: true, headers: {'Content-Type': 'application/json', 'X-Meshcore-Control': '1'}, body: JSON.stringify({action: 'logout', public_key: contact.public_key, session})}).catch(() => {});
         }
+        $('repeater-console-log').textContent='';$('repeater-console-command').value='';
         session = ''; inputs.forEach(input => { if (input.type === 'password') input.value = ''; });
     }
     function close() {
@@ -43,7 +44,7 @@
     }
     function tab(name) {
         selectedTab = name;
-        for (const value of ['status', 'config']) {
+        for (const value of ['status', 'config', 'console']) {
             const active = value === name;
             $('repeater-tab-' + value).setAttribute('aria-selected', String(active));
             $('repeater-tab-' + value).tabIndex = active ? 0 : -1;
@@ -54,20 +55,40 @@
         dialog = node('dialog'); dialog.id = 'repeater-manage-dialog'; dialog.setAttribute('aria-labelledby', 'repeater-title');
         dialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-title">Repeater management</h2><button type="button" id="repeater-close" aria-label="Close repeater management">×</button></div>
             <div class="repeater-fixed"><strong id="repeater-name"></strong><p id="repeater-identity" class="muted"></p><div class="repeater-tabs" role="tablist" aria-label="Repeater management">
-            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button></div></div>
+            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button></div></div>
             <div class="dialog-body"><p id="repeater-message" role="status" aria-live="polite"></p><button type="button" id="repeater-reconnect" hidden>Connect again</button>
             <section id="repeater-status" role="tabpanel" aria-labelledby="repeater-tab-status"><div class="repeater-toolbar"><span id="repeater-last-response" class="muted">Not yet read</span><button type="button" id="repeater-refresh">↻ Refresh</button></div><div id="repeater-status-cards"></div><div id="repeater-extras"></div></section>
-            <section id="repeater-config" role="tabpanel" aria-labelledby="repeater-tab-config" hidden></section></div>`;
+            <section id="repeater-config" role="tabpanel" aria-labelledby="repeater-tab-config" hidden></section>
+            <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section></div>`;
         document.body.append(dialog);
         $('repeater-close').addEventListener('click', close);
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
         $('repeater-refresh').addEventListener('click', () => run(readStatus));
         $('repeater-reconnect').addEventListener('click', () => { if (dirty() && !window.confirm('Discard unsaved edits and reconnect?')) return; forget(); dialog.close(); openLogin(); });
-        for (const name of ['status', 'config']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
+        for (const name of ['status', 'config', 'console']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
         dialog.querySelector('[role="tablist"]').addEventListener('keydown', event => {
             if (busy || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-            event.preventDefault(); tab(event.key === 'Home' ? 'status' : event.key === 'End' ? 'config' : selectedTab === 'status' ? 'config' : 'status'); $('repeater-tab-' + selectedTab).focus();
+            event.preventDefault(); const tabs=['status','config','console']; tab(event.key==='Home'?'status':event.key==='End'?'console':tabs[(tabs.indexOf(selectedTab)+(event.key==='ArrowRight'?1:2))%3]); $('repeater-tab-' + selectedTab).focus();
         });
+        $('repeater-console-commands').onclick = openCommandPicker;
+        $('repeater-console-clear').onclick=()=>{$('repeater-console-log').textContent='';};
+        $('repeater-console-form').onsubmit=event=>{
+            event.preventDefault();if(busy || !admin || !session)return;
+            const input=$('repeater-console-command'),command=input.value.trim();
+            if(!command)return;
+            if(/<[^>]+>/.test(command)){message('Replace the command placeholders before sending.',true);return;}
+            if(dirty() && !window.confirm('Discard unsaved configuration edits before sending a console command?'))return;
+            if(new TextEncoder().encode(command).length>147){message('Use at most 147 UTF-8 bytes.',true);return;}
+            const secret=/^(password(?: |$)|(?:get|set) (?:guest\.password|bridge\.secret|prv\.key)(?: |$))/.test(command);
+            if(!/^(get |ver$|board$|clock$|neighbors$|region$|sensor (list|get)\b|gps$|powersaving$)/.test(command) && !window.confirm('Send this command to '+contact.name+'? It may change repeater settings or interrupt connectivity.'))return;
+            input.value='';
+            run(async()=>{
+                consoleLine('> '+(secret?'[sensitive command]':command));
+                values.clear();loaded.clear();inputs.forEach(entry=>{entry.value='';const hint=$(entry.id+'-hint');if(hint)hint.textContent='Read again after console command.';});
+                try{const result=await request({action:'console',command,confirm:true});consoleLine(result.reply);message('Console command finished. Read configuration sections again before editing.');}
+                catch(error){consoleLine('Error: '+error.message);throw error;}
+            });
+        };
         loginDialog = node('dialog'); loginDialog.id = 'repeater-login-dialog'; loginDialog.setAttribute('aria-labelledby', 'repeater-login-title');
         loginDialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-login-title">Connect to repeater</h2><button type="button" id="repeater-login-close" aria-label="Close repeater login">×</button></div><div class="dialog-body"><p id="repeater-login-name"></p><form id="repeater-login-form"><label for="repeater-password">Admin password</label><div class="repeater-password"><input id="repeater-password" type="password" autocomplete="off"><button type="button" id="repeater-show-password" aria-label="Show password">Show</button></div><p class="muted">Leave blank to use existing permissions or guest access. Passwords are not saved.</p><p id="repeater-login-message" role="status" aria-live="polite"></p><button type="submit">Connect</button></form></div>`;
         document.body.append(loginDialog);
@@ -92,6 +113,78 @@
                 if (dialog.open) message(error.message, true); else $('repeater-login-message').textContent = error.message;
             } finally { busy = false; controls(); }
         });
+    }
+    function consoleCommands() {
+        const commands = [
+            ['ver', 'Show the repeater firmware version.'],
+            ['board', 'Show the repeater board model.'],
+            ['clock', 'Read the repeater clock.'],
+            ['time <unix-seconds>', 'Set the repeater clock to a Unix timestamp.'],
+            ['advert', 'Transmit an advertisement so nearby nodes can discover this repeater.'],
+            ['neighbors', 'List neighboring nodes heard by the repeater.'],
+            ['region', 'List the forwarding regions.'],
+            ['region put <name> <parent>', 'Create a region or change its parent; use * for the root.'],
+            ['region remove <name>', 'Remove a forwarding region.'],
+            ['region allowf <name>', 'Allow flood forwarding in a region.'],
+            ['region denyf <name>', 'Block flood forwarding in a region.'],
+            ['region home <name>', 'Select the home region.'],
+            ['region default <name>', 'Select the default outgoing scope.'],
+            ['region save', 'Save region changes so they survive a restart.'],
+            ['setperm <public-key> <permission>', 'Set companion access: 0 guest, 1 read-only, 2 read-write, 3 admin.'],
+            ['sensor list', 'List sensors supported by this firmware.'],
+            ['sensor get <name>', 'Read a sensor setting; names depend on the firmware.'],
+            ['sensor set <name> <value>', 'Change a sensor setting supported by this firmware.'],
+            ['get extra.sf', 'Read extra spreading factors on supported radios.'],
+            ['set extra.sf <values>', 'Configure extra spreading factors on supported radios; use a comma-separated list.'],
+            ['reboot', 'Restart the repeater. The management connection will end.'],
+            ['powersaving', 'Show whether power saving is enabled.'],
+            ['gps', 'Show GPS state and fix information on supported boards.'],
+        ];
+        for (const [field, spec] of Object.entries(schema)) {
+            const label = spec.label;
+            if (spec.kind !== 'password') {
+                const read = spec.read || 'get ' + field;
+                if (!commands.some(([command]) => command === read)) commands.push([read, 'Read ' + label + '.']);
+            }
+            const choices = spec.options ? ' Allowed values: ' + spec.options.join(', ') + '.' :
+                spec.kind === 'number' ? ` Range: ${spec.low}–${spec.high}${spec.step ? ', step ' + spec.step : ''}.` : '';
+            const argument = spec.kind === 'radio' ? '<frequency>,<bandwidth>,<sf>,<cr>' : '<value>';
+            commands.push([(spec.write || 'set ' + field) + ' ' + argument, 'Change ' + label + '.' + choices]);
+        }
+        return commands;
+    }
+    function openCommandPicker() {
+        if (busy || !admin || !session) return;
+        if (!commandDialog) {
+            commandDialog = node('dialog'); commandDialog.id = 'repeater-command-dialog';
+            commandDialog.setAttribute('aria-labelledby', 'repeater-command-title');
+            commandDialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-command-title">Console commands</h2><button type="button" id="repeater-command-close" aria-label="Close command picker">×</button></div><div class="dialog-body"><p class="muted">Choose a command to insert it without sending. Replace values in &lt;angle brackets&gt; before pressing Send. Availability depends on repeater firmware and hardware.</p><label for="repeater-command-search">Find a command</label><input id="repeater-command-search" type="search" placeholder="Search commands or descriptions" autocomplete="off"><div id="repeater-command-list"></div></div>`;
+            document.body.append(commandDialog);
+            $('repeater-command-close').onclick = () => commandDialog.close();
+        }
+        const search = $('repeater-command-search'), list = $('repeater-command-list');
+        const render = () => {
+            list.replaceChildren();
+            const query = search.value.trim().toLowerCase();
+            for (const [command, purpose] of consoleCommands()) {
+                if (!(command + ' ' + purpose).toLowerCase().includes(query)) continue;
+                const choice = button('', () => {
+                    const input = $('repeater-console-command');
+                    input.value = command;
+                    commandDialog.close(); input.focus();
+                    const placeholder = /<[^>]+>/.exec(command);
+                    if (placeholder) input.setSelectionRange(placeholder.index, placeholder.index + placeholder[0].length);
+                }, 'repeater-command-choice');
+                choice.append(node('code', command), node('span', purpose)); list.append(choice);
+            }
+            if (!list.children.length) list.append(node('p', 'No matching commands.', 'muted'));
+        };
+        search.value = ''; search.oninput = render; render(); commandDialog.showModal(); search.focus();
+    }
+    function consoleLine(text) {
+        const log=$('repeater-console-log');
+        log.textContent=(log.textContent+new Date().toLocaleTimeString()+' '+text+'\n').slice(-24000);
+        log.scrollTop=log.scrollHeight;
     }
     function identity(info) {
         const hops = info.out_path_len;
@@ -205,7 +298,7 @@
         label.append(input); const hint = node('small', spec.kind === 'password' ? 'Write-only; not saved in MeshcoreStation.' : 'Read this section to load the current value.', 'muted'); hint.id = input.id + '-hint'; label.append(hint);
         return label;
     }
-    const sections = [['basic', 'Basic settings', ''], ['radio', 'Radio', 'Frequency, bandwidth, SF, CR, TX power'], ['location', 'Location', 'Latitude and longitude'], ['advertisements', 'Advertisements', 'Local and flood intervals'], ['routing', 'Routing and regions', 'Forwarding, hop limits and regions'], ['access', 'Access', 'Guest access and permissions'], ['owner', 'Owner information', ''], ['advanced', 'Advanced', '']];
+    const sections = [['basic', 'Basic settings', ''], ['radio', 'Radio', 'Frequency, bandwidth, SF, CR, TX power'], ['location', 'Location', 'Latitude and longitude'], ['advertisements', 'Advertisements', 'Local and flood intervals'], ['routing', 'Routing and regions', 'Forwarding, hop limits and regions'], ['access', 'Access', 'Guest access and permissions'], ['owner', 'Owner information', ''], ['advanced', 'Advanced', ''], ['gps', 'GPS', 'Requires GPS support'], ['bridge', 'Bridge', 'Requires a bridge-enabled firmware build']];
     function canPickLocation() { return !busy && admin && !!session && values.has('lat') && values.has('lon'); }
     function buildConfig() {
         const root = $('repeater-config'); root.replaceChildren();

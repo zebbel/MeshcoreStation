@@ -73,11 +73,27 @@ class RepeaterControl:
                         'repeater_time': self.clock_timestamp(login)}
             if not admin:
                 raise ValueError('Administrator access is required to read or change configurations.')
+            if action == 'console':
+                command = request.get('command')
+                if (not isinstance(command, str) or not command.strip()
+                        or len(command.encode()) > 147 or re.search(r'[\x00-\x1f\x7f]', command)):
+                    raise ValueError('Enter one command, at most 147 UTF-8 bytes, without control characters.')
+                if request.get('confirm') is not True:
+                    raise ValueError('Confirm sending the console command.')
+                command = command.strip()
+                no_reply = command in {'reboot', 'clkreboot', 'poweroff', 'shutdown'}
+                session['values'].clear()
+                reply = await self.transport.cli(contact, command, expect_reply=not no_reply)
+                secret = re.match(r'^(?:password(?: |$)|(?:get|set) (?:guest\.password|bridge\.secret|prv\.key)(?: |$))', command)
+                if no_reply:
+                    self.sessions.pop(token, None)
+                return {'ok': True, 'reply': 'Sensitive command response hidden.' if secret else reply,
+                        'expired': no_reply, 'admin': admin}
             if action == 'read':
                 field = request.get('field')
                 if field not in FIELDS or FIELDS[field]['kind'] == 'password':
                     raise ValueError('This field cannot be read.')
-                value = parse_value(field, await self.transport.cli(contact, 'get ' + field))
+                value = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
                 session['values'][field] = value
                 return {'ok': True, 'field': field, 'value': value}
             if action == 'write':
@@ -91,20 +107,20 @@ class RepeaterControl:
                 if not secret:
                     if field not in session['values'] or request.get('expected') != session['values'][field]:
                         raise ValueError('Read this section before saving.')
-                    current = parse_value(field, await self.transport.cli(contact, 'get ' + field))
+                    current = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
                     if current != request['expected']:
                         session['values'].pop(field, None)
                         raise ValueError('This setting changed on the repeater. Read the section again.')
                 prefix = FIELDS[field].get('write', 'set ' + field)
                 reply = await self.transport.cli(contact, prefix + ' ' + value)
                 # Admin password replies echo the password; never send that echo to HTTP.
-                accepted = reply.lower().startswith(('ok', '(ok')) or (field == 'admin_password' and reply.startswith('password now:'))
+                accepted = reply.lower().startswith(('ok', '(ok')) or (field in {'gps', 'powersaving'} and reply.lower().startswith(('on', 'off'))) or (field == 'admin_password' and reply.startswith('password now:'))
                 if not accepted:
                     raise ValueError('Repeater rejected the change.' if secret else 'Repeater reply: ' + reply[:200])
                 if secret:
                     return {'ok': True, 'field': field, 'value': '', 'message': 'Password change acknowledged.'}
                 session['values'].pop(field, None)
-                actual = parse_value(field, await self.transport.cli(contact, 'get ' + field))
+                actual = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
                 session['values'][field] = actual
                 return {'ok': True, 'field': field, 'value': actual, 'message': 'Saved and read back.' if actual == value else 'Repeater returned a different value. Review the applied value.', 'reboot_required': 'reboot' in reply.lower()}
             if action == 'action':

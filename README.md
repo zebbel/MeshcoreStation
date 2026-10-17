@@ -49,3 +49,5 @@ installation, follow the [version switching guide](docs/web-version-switching.md
 No new Python runtime dependencies are introduced by this V3 refactor. Existing
 station and room databases remain in place. Keep a stopped-service backup before
 upgrading, and retain it until the station is working correctly on your hardware.
+
+See [Repeater management](docs/repeater-management.md) for supported configuration controls and the remote Console tab.

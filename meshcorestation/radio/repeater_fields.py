@@ -21,11 +21,28 @@ FIELDS = {
     'path.hash.mode': dict(section='advanced', label='Path hash size', kind='select', options=['0', '1', '2'], labels=['1 byte', '2 bytes', '3 bytes']),
     'loop.detect': dict(section='advanced', label='Loop detection', kind='select', options=['off', 'minimal', 'moderate', 'strict']),
     'dutycycle': dict(section='advanced', label='Duty cycle limit (%)', kind='number', low=1, high=100),
-    'multi.acks': dict(section='advanced', label='Multi-ACKs', kind='number', low=0, high=2, step=1),
+    'multi.acks': dict(section='advanced', label='Multi-ACKs', kind='number', low=0, high=1, step=1),
     'txdelay': dict(section='advanced', label='Flood TX delay factor', kind='number', low=0, high=2),
     'direct.txdelay': dict(section='advanced', label='Direct TX delay factor', kind='number', low=0, high=2),
     'int.thresh': dict(section='advanced', label='Interference threshold', kind='number', low=0, high=255, step=1),
-    'agc.reset.interval': dict(section='advanced', label='AGC reset interval (seconds)', kind='number', low=0, high=240, step=4),
+    'agc.reset.interval': dict(section='advanced', label='AGC reset interval (seconds)', kind='number', low=0, high=1020, step=4),
+    'radio.fem.rxgain': dict(section='radio', label='External FEM receive gain', kind='select', options=['off', 'on']),
+    'radio.fem.txgain': dict(section='radio', label='External FEM transmit gain', kind='select', options=['off', 'on']),
+    'cad': dict(section='radio', label='Channel activity detection', kind='select', options=['off', 'on']),
+    'flood.max.unscoped': dict(section='routing', label='Maximum unscoped flood hops', kind='number', low=0, high=64, step=1),
+    'flood.max.advert': dict(section='routing', label='Maximum advert flood hops', kind='number', low=0, high=64, step=1),
+    'rxdelay': dict(section='advanced', label='Receive delay (experimental)', kind='number', low=0, high=20),
+    'adc.multiplier': dict(section='advanced', label='Battery ADC multiplier (0 = board default)', kind='number', low=0, high=10),
+    'powersaving': dict(section='advanced', label='Power saving', kind='select', options=['off', 'on'], read='powersaving', write='powersaving'),
+    'gps': dict(section='gps', label='GPS enabled', kind='select', options=['off', 'on'], read='gps', write='gps'),
+    'gps.advert': dict(section='gps', label='Advert location source', kind='select', options=['none', 'prefs', 'share'], read='gps advert', write='gps advert'),
+    'bridge.enabled': dict(section='bridge', label='Bridge enabled', kind='select', options=['off', 'on']),
+    'bridge.delay': dict(section='bridge', label='Bridge delay (ms)', kind='number', low=0, high=10000, step=1),
+    'bridge.source': dict(section='bridge', label='Bridge packet source', kind='select', options=['tx', 'rx'], labels=['Transmitted packets', 'Received packets']),
+    'bridge.baud': dict(section='bridge', label='Serial bridge baud rate', kind='number', low=9600, high=115200, step=1),
+    'bridge.channel': dict(section='bridge', label='ESP-NOW bridge channel', kind='number', low=1, high=14, step=1),
+    'bridge.secret': dict(section='bridge', label='ESP-NOW bridge secret', kind='password', limit=15),
+
 }
 
 
@@ -72,9 +89,13 @@ def validate(field, value):
 
 
 def parse_value(field, reply):
+    if field in {'gps', 'powersaving'} and re.match(r'^(on|off)(?:$|[ ,])', reply):
+        return re.match(r'^(on|off)', reply)[0]
     if not reply.startswith('>'):
         raise ValueError('Setting is unsupported or its response was not recognized: ' + reply[:160])
     value = reply[1:].strip()
+    if field == 'bridge.source':
+        value = {'logRx': 'rx', 'logTx': 'tx'}.get(value, value)
     if field == 'dutycycle':
         value = value.rstrip('%')
     if FIELDS[field]['kind'] == 'number':

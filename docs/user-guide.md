@@ -94,3 +94,5 @@ Use the participant's **Read / Write** dropdown to change permission: Read allow
 receiving messages, while Write also allows posting. Changes save immediately.
 **Remove** disconnects a participant, but they can rejoin if they still know the
 room password. Change the password to prevent that.
+
+For configuration coverage and the remote Console tab, see [Repeater management](repeater-management.md).
