@@ -117,3 +117,25 @@ beweisen keine Loops, und es gibt keine automatischen Hop-Limit-Vorschläge:
 beobachtete Pfade sind keine Messung des notwendigen Hop-Limits. Jeder Versuch
 braucht manuelle Bestätigung und die vorhandene Rücklese-/Historienkontrolle.
 Passiver Empfang belegt keine vollständige RF-/TX-/RX-Last oder Zustellquote.
+
+
+### Vergleich vor und nach verifizierten Änderungen (3.0.3rc1)
+
+Der Advisor wertet für die zehn jüngsten **verifizierten** Änderungen je
+24 Stunden vor dem Schreibvorgang und 24 Stunden nach einer Stunde Einschwingzeit
+aus. Nach frühestens 25 Stunden können vollständige Ergebnisse über „Refresh
+history“ abgerufen werden. Nur Daten des durchgehend ausgewählten Repeaters
+werden verglichen; die 30-Tage-Aufbewahrung und eine mögliche Kürzung der
+Statistik werden berücksichtigt.
+
+Verglichen werden Prozentanteile wiederholter Payload-Digests an erkennbaren
+Paketen, unscoped- und Advertisement-Anteile sowie beobachtete Pfadvielfalt.
+Unter 100 Kopien oder 70 erkennbaren Paketen je Fenster, unter 70 Prozent
+identifizierbaren Kopien oder mehr als Faktor zwei unterschiedlichen erkennbaren
+Traffic-Mengen wird kein vergleichbares Ergebnis behauptet.
+
+Andere Advisor-Änderungen im Beobachtungszeitraum werden als mögliche
+Verwechslung der Effekte markiert. Der lokale Companion sieht nur Teile des
+Netzverkehrs; auch ein statistisch günstiger Wert ist **kein Beleg** für
+verbesserte Ende-zu-Ende-Zustellung oder kausale Wirkung einer Änderung.
+Es werden keine weiteren Einstellungen automatisch geändert.

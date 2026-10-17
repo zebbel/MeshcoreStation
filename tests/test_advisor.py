@@ -107,6 +107,7 @@ def test_api_refreshes_requested_window_and_uses_shared_validation(tmp_path,monk
     settings['min_days']=1
     result=client.post('/api/repeater-advisor',json={'action':'review','settings':settings,'current':{'flood.max':'32'},'public_key':KEY},headers=headers)
     assert result.status_code==200 and days==[30,1]
+    assert 'evaluations' in result.json
     assert not web.FILE.exists()
     settings['targets']['advert.interval']=2
     assert client.post('/api/repeater-advisor',json={'action':'save','settings':settings},headers=headers).status_code==400

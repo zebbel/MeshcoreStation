@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import request, Response
 from meshcorestation.config import DATA_DIR
 from meshcorestation.storage import passive_stats, advisor_history
+from meshcorestation import advisor_evaluation
 from meshcorestation.advisor_rules import DEFAULT, SOURCE, schema, validate, review
 from meshcorestation.web.http import control_request_error, json_response
 
@@ -98,9 +99,11 @@ def register_advisor_routes(server):
             if request.method=='POST' and action=='save': save(settings)
             data=snapshot(settings['min_days'])
             summary={k:data.get(k) for k in ('copies','unique','days','health','selection','evidence','usefulness')}
+            changes=advisor_history.recent(key) if key else []
+            evaluations=advisor_evaluation.evaluate_recent(key,changes) if changes else {}
             return json_response({'ok':True,'settings':settings,'schema':schema(),'defaults':DEFAULT,'source':SOURCE,
                                   'statistics':summary,'review':review(current,settings,data,key),
-                                  'history':advisor_history.recent(key) if key else []})
+                                  'history':changes,'evaluations':evaluations})
         except (ValueError,TypeError,KeyError) as exc:
             return json_response({'ok':False,'error':str(exc)},400)
         except (OSError, sqlite3.Error):

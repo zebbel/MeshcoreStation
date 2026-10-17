@@ -1,6 +1,10 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Repeater advisor · MeshcoreStation</title><style>
 :root{color-scheme:dark;font:16px system-ui}body{margin:0;background:#101923;color:#edf4fa}main{max-width:1080px;margin:auto;padding:24px}a{color:#82c6ff}h1{margin-bottom:5px}.muted,small{color:#b0c0cc}section{background:#1c2936;border:1px solid #364c5d;border-radius:12px;padding:20px;margin:20px 0}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:12px;border-bottom:1px solid #364c5d;vertical-align:top}input,select,button{font:inherit;background:#101923;color:#edf4fa;border:1px solid #607a8d;border-radius:6px;padding:9px}input[type=number]{width:85px}button{cursor:pointer;background:#20547a}button:hover{background:#2b709e}label{display:inline-flex;align-items:center;gap:8px;margin:8px 14px 8px 0}#message{min-height:1.5em}#results article{border-top:1px solid #364c5d;padding:14px 0}#results strong{display:block} .warning{border-left:4px solid #e3af51;padding:12px;background:#27303a} .scroll{overflow-x:auto}@media(max-width:650px){main{padding:12px}td,th{padding:7px;font-size:14px}}
 @media(max-width:840px){main{padding:10px}section{padding:12px;margin:12px 0}td,th{padding:6px}table{font-size:13px}}
+
+.advisor-comparison{margin:12px 0;padding:12px;border-left:3px solid #82c6ff;background:#182633}
+.advisor-comparison p{margin:8px 0;overflow-wrap:anywhere}
+.advisor-comparison small{display:block;margin:8px 0;line-height:1.45}
 </style></head><body><main>
 <button type="button" id="back-management">← Configurations</button><h1>Repeater recommendation advisor</h1>
 <p>Analyze observed traffic and routing behavior, review evidence-based guidance, then optionally confirm a controlled configuration trial. Reference values are for comparison, not optimization targets.</p>
@@ -10,7 +14,7 @@
 <label>Observation period <select id="days"><option value="1">24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
 <label>Minimum copies <input type="number" id="minimum" min="0" max="100000" step="1"></label>
 <p><button id="save">Save references</button> <button id="reset">Restore provisional references</button></p></section>
-<section><h2>Change history</h2><p>Last 50 entries for this repeater. Restore is available only for verified changes and checks that the current value still matches the recorded result. Unconfirmed changes must be read again.</p><button id="history-refresh">Refresh history</button><div id="history"></div></section>
+<section><h2>Change history and before/after observations</h2><p>For verified changes, compare equal 24-hour windows before and after, separated by one hour for settling. A complete comparison requires at least 25 hours after a change, continuous collection and sufficient comparable traffic. This measures observations, not proof of improved delivery. Restore still requires a verified change and readback.</p><button id="history-refresh">Refresh history</button><div id="history"></div></section>
 </main><script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
@@ -27,7 +31,42 @@ for(const item of [enabled,el('span',spec.label),target,live]){const cell=el('td
 function collect(){return {targets:Object.fromEntries(Object.keys(schema).map(f=>[f,schema[f].kind==='number'?Number($('target-'+f).value):$('target-'+f).value])),enabled:Object.fromEntries(Object.keys(schema).map(f=>[f,$('enable-'+f).checked])),min_days:Number($('days').value),min_copies:Number($('minimum').value)};}
 async function api(action){const url='/api/repeater-advisor'+(!action?'?'+(Object.keys(schema).length?'days='+$('days').value+'&':'')+(key?'public_key='+key:''):'');const res=await fetch(url,{method:action?'POST':'GET',cache:'no-store',headers:{'X-Meshcore-Control':'1',...(action?{'Content-Type':'application/json'}:{})},body:action?JSON.stringify({action,settings:collect(),current,public_key:key}):undefined});const data=await res.json();if(!res.ok||!data.ok)throw Error(data.error||'Advisor request failed.');return data;}
 function observations(data){const s=data.statistics||{};$('stats').textContent=(s.selection?.public_key? s.selection.public_key.slice(0,12)+'…':'No repeater selected')+' · '+(s.copies||0)+' copies · '+(s.unique||0)+' unique payloads · '+s.days+' day(s).';}
-function history(rows){const box=$('history');box.replaceChildren();if(!rows.length)box.append(el('p','No recorded advisor changes for this repeater.'));for(const row of rows){const article=el('article');article.append(el('p',new Date(row.at*1000).toLocaleString()+' · '+row.field+': '+row.before_value+' → '+row.requested+' · '+row.status+(row.actual!==null?' · Read back: '+row.actual:'')));if(row.status==='verified'&&schema[row.field]){const button=el('button','Review restore');button.onclick=()=>send('apply',[{field:row.field,expected:row.actual,value:row.before_value}]);article.append(button);}box.append(article);}}
+function history(rows,evaluations={}){
+ const box=$('history');box.replaceChildren();
+ if(!rows.length)box.append(el('p','No recorded advisor changes for this repeater.'));
+ for(const row of rows){
+  const article=el('article');
+  article.append(el('p',new Date(row.at*1000).toLocaleString()+' · '+row.field+': '+row.before_value+' → '+row.requested+' · '+row.status+(row.actual!==null?' · Read back: '+row.actual:'')));
+  if(row.status==='verified'&&schema[row.field]){
+   const button=el('button','Review restore');
+   button.onclick=()=>send('apply',[{field:row.field,expected:row.actual,value:row.before_value}]);
+   article.append(button);
+  }
+  const comparison=evaluations[String(row.id)];
+  if(comparison){
+   const detail=el('div');detail.className='advisor-comparison';
+   detail.append(el('strong','Before / after · '+comparison.status),el('p',comparison.message));
+   if(comparison.next_at){
+    detail.append(el('p','Full after-window available after '+new Date(comparison.next_at*1000).toLocaleString()+'. Refresh history to evaluate.'));
+   }
+   if(comparison.before&&comparison.after){
+    detail.append(el('p','Equal 24-hour windows, separated by 1 settling hour. Packet copies: '+
+      comparison.before.copies+' → '+comparison.after.copies+
+      ' · Identifiable: '+comparison.before.identified+' → '+comparison.after.identified));
+    for(const [label,field] of [['Repeated payload share','repeat_pct'],['Unscoped traffic share','unscoped_pct'],['Advertisements share','advert_pct']]){
+     const start=comparison.before[field],end=comparison.after[field];
+     const diff=comparison.delta_percentage_points?.[field];
+     detail.append(el('p',label+': '+(start??'n/a')+'% → '+(end??'n/a')+'%'+
+       (typeof diff==='number'?' ('+(diff>0?'+':'')+diff+' percentage points)':'')));
+    }
+    detail.append(el('p','Distinct observed routes: '+comparison.before.routes+' → '+comparison.after.routes));
+   }
+   for(const note of comparison.notes||[])detail.append(el('small',note));
+   article.append(detail);
+  }
+  box.append(article);
+ }
+}
 async function task(work){if(busy)return;lock(true);try{await work();}catch(error){$('message').textContent=error.message;}finally{lock(false);}}
 function renderReview(data){
 invalidate();
@@ -65,7 +104,7 @@ for(const row of data.review.rows||[]){
 }
 $('apply').disabled=!suggestions.some(r=>r.can_apply);
 }
-async function refresh(){const data=await api();observations(data);history(data.history);return data;}
+async function refresh(){const data=await api();observations(data);history(data.history,data.evaluations);return data;}
 function management(){return window.parent!==window?window.parent:null;}
 function send(operation,changes){if(busy)return;const manager=management();if(!manager||manager.closed){$('message').textContent='Open this tab from Repeater management while logged in as administrator.';return;}if(operation==='apply'&&!key){$('message').textContent='Read current settings first.';return;}
 lock(true);invalidate();const id=++serial;
@@ -91,13 +130,13 @@ if(!manager||manager.closed){$('message').textContent='Open the advisor from Rep
 manager.postMessage({type:'meshcorestation-advisor-return'},location.origin);
 };
 $('read-repeater').onclick=()=>send('read');
-$('compare').onclick=()=>task(async()=>{if(!key||!readAt||Date.now()-readAt>300000)throw Error('Read current repeater settings again before reviewing.');const data=await api('review');observations(data);history(data.history);renderReview(data);});
+$('compare').onclick=()=>task(async()=>{if(!key||!readAt||Date.now()-readAt>300000)throw Error('Read current repeater settings again before reviewing.');const data=await api('review');observations(data);history(data.history,data.evaluations);renderReview(data);});
 $('apply').onclick=()=>{const changes=suggestions.filter(r=>r.can_apply&&$('trial-'+r.id)?.checked).map(r=>({field:r.field,expected:String(current[r.field]),value:String(r.proposed)}));if(!changes.length){$('message').textContent='Select an eligible statistics-based trial first.';return;}send('apply',changes);};
 $('save').onclick=()=>task(async()=>{const data=await api('save');settings=data.settings;observations(data);invalidate();$('message').textContent='References saved. Repeater settings unchanged.';});
 $('reset').onclick=()=>{settings=structuredClone(defaults);fields();invalidate();task(refresh);$('message').textContent='Provisional references loaded, not saved.';};
 $('history-refresh').onclick=()=>task(refresh);
 $('rules').addEventListener('change',invalidate);$('minimum').addEventListener('input',invalidate);
 $('days').onchange=()=>{invalidate();task(refresh);};
-task(async()=>{const data=await api();schema=data.schema;defaults=data.defaults;settings=data.settings;fields();observations(data);history(data.history);const a=el('a','Command documentation');a.href=data.source.url;$('source').append(a,el('span',' · Checked '+data.source.checked+'. '+data.source.status));});
+task(async()=>{const data=await api();schema=data.schema;defaults=data.defaults;settings=data.settings;fields();observations(data);history(data.history,data.evaluations);const a=el('a','Command documentation');a.href=data.source.url;$('source').append(a,el('span',' · Checked '+data.source.checked+'. '+data.source.status));});
 })();
 </script></body></html>
