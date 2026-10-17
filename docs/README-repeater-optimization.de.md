@@ -95,3 +95,7 @@ Fortschritt pro Einstellungsabfrage und zeitnahe Meldung bei fehlender Verbindun
 zum Verwaltungsfenster. Der Advisor öffnet in einem frischen Fenster. Zurück führt
 zur Repeater-Verwaltung mit bestehender Sitzung. Der separate Advisor-Link unter
 „My repeater statistics“ wurde entfernt.
+
+### Integrierter Advisor (3.0.3rc1)
+
+Der Advisor öffnet als vierter Tab innerhalb von Repeater Management. Er verwendet denselben Administratorzugang und dieselben bestätigten Read/Write-Vorgänge. Die Ansicht befindet sich in einem gleichoriginigen iFrame, statt in einem eigenen Browser-Tab; die bestehende Nachrichtenschnittstelle prüft Origin und Frame-Identität. Bei neuer Anmeldung und nach dem Schließen wird der eingebettete Inhalt zurückgesetzt. Die Referenzen, die Änderungsprüfung, die Historie und das Wiederherstellen bleiben bestehen.

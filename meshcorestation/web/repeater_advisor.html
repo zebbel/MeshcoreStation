@@ -1,14 +1,15 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Repeater advisor · MeshcoreStation</title><style>
 :root{color-scheme:dark;font:16px system-ui}body{margin:0;background:#101923;color:#edf4fa}main{max-width:1080px;margin:auto;padding:24px}a{color:#82c6ff}h1{margin-bottom:5px}.muted,small{color:#b0c0cc}section{background:#1c2936;border:1px solid #364c5d;border-radius:12px;padding:20px;margin:20px 0}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:12px;border-bottom:1px solid #364c5d;vertical-align:top}input,select,button{font:inherit;background:#101923;color:#edf4fa;border:1px solid #607a8d;border-radius:6px;padding:9px}input[type=number]{width:85px}button{cursor:pointer;background:#20547a}button:hover{background:#2b709e}label{display:inline-flex;align-items:center;gap:8px;margin:8px 14px 8px 0}#message{min-height:1.5em}#results article{border-top:1px solid #364c5d;padding:14px 0}#results strong{display:block} .warning{border-left:4px solid #e3af51;padding:12px;background:#27303a} .scroll{overflow-x:auto}@media(max-width:650px){main{padding:12px}td,th{padding:7px;font-size:14px}}
+@media(max-width:840px){main{padding:10px}section{padding:12px;margin:12px 0}td,th{padding:6px}table{font-size:13px}}
 </style></head><body><main>
-<button type="button" id="back-management">← Repeater management</button><h1>Repeater recommendation advisor</h1>
+<button type="button" id="back-management">← Configurations</button><h1>Repeater recommendation advisor</h1>
 <p>Compare editable references with current settings, then review and confirm selected changes.</p>
 <section><h2>Reference configuration</h2><p id="source"></p><div class="scroll"><table><thead><tr><th>Use</th><th>Setting</th><th>Reference</th><th>Current read value</th></tr></thead><tbody id="rules"></tbody></table></div>
 <label>Observation period <select id="days"><option value="1">24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
 <label>Minimum copies <input type="number" id="minimum" min="0" max="100000" step="1"></label>
 <p><button id="save">Save references</button> <button id="reset">Restore provisional references</button></p></section>
 <section><h2>Selected repeater observations</h2><p id="stats"></p><p class="warning">Local observations are incomplete evidence. Repeated payloads do not prove loops. Observed path length does not establish the required hop limit. Reference differences are not proof of faulty configuration.</p></section>
-<section><h2>Review and apply</h2><p id="identity">Open from repeater management and connect as administrator to read and apply settings.</p><button id="read-repeater">Read current settings</button> <button id="compare">Generate review</button><p id="message" role="status"></p><div id="results" aria-live="polite"></div><button id="apply" disabled>Review and apply selected changes</button></section>
+<section><h2>Review and apply</h2><p id="identity">Use the administrator connection in Repeater management to read and apply settings.</p><button id="read-repeater">Read current settings</button> <button id="compare">Generate review</button><p id="message" role="status"></p><div id="results" aria-live="polite"></div><button id="apply" disabled>Review and apply selected changes</button></section>
 <section><h2>Change history</h2><p>Last 50 entries for this repeater. Restore is available only for verified changes and checks that the current value still matches the recorded result. Unconfirmed changes must be read again.</p><button id="history-refresh">Refresh history</button><div id="history"></div></section>
 </main><script>
 (()=>{'use strict';
@@ -31,13 +32,14 @@ async function task(work){if(busy)return;lock(true);try{await work();}catch(erro
 function renderReview(data){invalidate();reviewRows=data.review.rows;$('results').append(el('p','Evidence: '+data.review.confidence+'. '+data.review.evidence_reasons.join(' ')));const evidence=data.review.evidence||{};if(Object.keys(evidence).length)$('results').append(el('p','Observed unscoped copies: '+(evidence.unscoped??'unknown')+' · Longest path: '+(evidence.max_hops??'unknown')+' · Advertisement copies: '+(evidence.adverts??'unknown')+' · Repeated digests: '+(evidence.repeated??'unknown')));
 for(const row of reviewRows){const article=el('article'),label=el('label'),check=el('input');check.type='checkbox';check.id='apply-'+row.field;check.disabled=!row.can_apply;check.dataset.unavailable=String(!row.can_apply);label.append(check,el('strong',row.field+' — '+row.status));article.append(label,el('p',String(row.current??'unknown')+' → '+row.reference),el('p',row.explanation));$('results').append(article);}}
 async function refresh(){const data=await api();observations(data);history(data.history);return data;}
-function send(operation,changes){if(busy)return;if(!window.opener||window.opener.closed){$('message').textContent='Open from repeater management while logged in as administrator.';return;}if(operation==='apply'&&!key){$('message').textContent='Read current settings first.';return;}
+function management(){return window.parent!==window?window.parent:null;}
+function send(operation,changes){if(busy)return;const manager=management();if(!manager||manager.closed){$('message').textContent='Open this tab from Repeater management while logged in as administrator.';return;}if(operation==='apply'&&!key){$('message').textContent='Read current settings first.';return;}
 lock(true);invalidate();const id=++serial;
-pending={id,operation,timer:null};watchdog(8000,'The management window did not acknowledge the request. Reload the dashboard, reconnect to the repeater, and open a new advisor from Repeater management.');
+pending={id,operation,timer:null};watchdog(8000,'Repeater management did not acknowledge the request. Reconnect and reopen the Advisor tab.');
 $('message').textContent=operation==='apply'?'Review the confirmation in the management window.':'Reading repeater settings…';
-window.opener.postMessage({type:'meshcorestation-advisor-'+(operation==='apply'?'apply':'request'),request_id:id,public_key:key,changes},location.origin);}
+manager.postMessage({type:'meshcorestation-advisor-'+(operation==='apply'?'apply':'request'),request_id:id,public_key:key,changes},location.origin);}
 function watchdog(delay,text){clearTimeout(pending.timer);const id=pending.id;pending.timer=setTimeout(()=>{if(pending?.id!==id)return;pending=null;current={};readAt=0;fields();lock(false);$('message').textContent=text;},delay);}
-window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==window.opener||!pending||event.data?.request_id!==pending.id)return;const data=event.data;
+window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==management()||!pending||event.data?.request_id!==pending.id)return;const data=event.data;
 if(data.type==='meshcorestation-advisor-progress'){
 watchdog(90000,'The repeater operation has not completed. Check the management window for a confirmation or error. A submitted change may have applied; read again before retrying.');
 $('message').textContent=data.text;
@@ -50,9 +52,9 @@ if(data.public_key)key=data.public_key;current=data.error?{}:(data.current||{});
 $('message').textContent=data.error||((data.applied?'Applied and read back '+data.results.length+' selected setting(s).':'Current settings received.')+' '+Object.entries(data.errors||{}).map(([f,e])=>f+': '+e).join(' '));
 refresh().catch(e=>{$('message').textContent+=' History refresh failed: '+e.message;}).finally(()=>lock(false));});
 $('back-management').onclick=()=>{
-if(!window.opener||window.opener.closed){$('message').textContent='The repeater-management window is closed. Open repeater management from the map and reconnect.';return;}
-window.opener.postMessage({type:'meshcorestation-advisor-return'},location.origin);
-window.opener.focus();window.close();
+const manager=management();
+if(!manager||manager.closed){$('message').textContent='Open the advisor from Repeater management.';return;}
+manager.postMessage({type:'meshcorestation-advisor-return'},location.origin);
 };
 $('read-repeater').onclick=()=>send('read');
 $('compare').onclick=()=>task(async()=>{if(!key||!readAt||Date.now()-readAt>300000)throw Error('Read current repeater settings again before reviewing.');const data=await api('review');observations(data);history(data.history);renderReview(data);});

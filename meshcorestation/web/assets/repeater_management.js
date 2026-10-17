@@ -47,6 +47,7 @@
             fetch('/api/repeater', {method: 'POST', keepalive: true, headers: {'Content-Type': 'application/json', 'X-Meshcore-Control': '1'}, body: JSON.stringify({action: 'logout', public_key: contact.public_key, session})}).catch(() => {});
         }
         $('repeater-console-log').textContent='';$('repeater-console-command').value='';
+        const frame = $('repeater-advisor-frame'); if (frame) frame.removeAttribute('src');
         session = ''; inputs.forEach(input => { if (input.type === 'password') input.value = ''; });
     }
     function close() {
@@ -54,8 +55,13 @@
         forget(); dialog.close();
     }
     function tab(name) {
+        if (name === 'advisor') {
+            if (!admin || !session) { message('Connect as administrator to use the recommendation advisor.', true); return; }
+            const frame = $('repeater-advisor-frame');
+            if (!frame.hasAttribute('src')) frame.src = '/repeater-advisor';
+        }
         selectedTab = name;
-        for (const value of ['status', 'config', 'console']) {
+        for (const value of ['status', 'config', 'console', 'advisor']) {
             const active = value === name;
             $('repeater-tab-' + value).setAttribute('aria-selected', String(active));
             $('repeater-tab-' + value).tabIndex = active ? 0 : -1;
@@ -66,21 +72,22 @@
         dialog = node('dialog'); dialog.id = 'repeater-manage-dialog'; dialog.setAttribute('aria-labelledby', 'repeater-title');
         dialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-title">Repeater management</h2><button type="button" id="repeater-close" aria-label="Close repeater management">×</button></div>
             <div class="repeater-fixed"><strong id="repeater-name"></strong><p id="repeater-identity" class="muted"></p><div class="repeater-tabs" role="tablist" aria-label="Repeater management">
-            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button></div><button type="button" id="repeater-open-advisor" hidden>Recommendation advisor ↗</button></div>
+            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button><button type="button" id="repeater-tab-advisor" role="tab" aria-controls="repeater-advisor" hidden>Recommendation advisor</button></div></div>
             <div class="dialog-body"><p id="repeater-message" role="status" aria-live="polite"></p><button type="button" id="repeater-reconnect" hidden>Connect again</button>
             <section id="repeater-status" role="tabpanel" aria-labelledby="repeater-tab-status"><div class="repeater-toolbar"><span id="repeater-last-response" class="muted">Not yet read</span><button type="button" id="repeater-refresh">↻ Refresh</button></div><div id="repeater-status-cards"></div><div id="repeater-extras"></div></section>
             <section id="repeater-config" role="tabpanel" aria-labelledby="repeater-tab-config" hidden></section>
-            <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section></div>`;
+            <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section><section id="repeater-advisor" role="tabpanel" aria-labelledby="repeater-tab-advisor" hidden><iframe id="repeater-advisor-frame" title="Repeater recommendation advisor" loading="lazy" referrerpolicy="same-origin"></iframe></section></div>`;
         document.body.append(dialog);
         $('repeater-close').addEventListener('click', close);
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
         $('repeater-refresh').addEventListener('click', () => run(readStatus));
-        $('repeater-open-advisor').addEventListener('click', openAdvisor);
         $('repeater-reconnect').addEventListener('click', () => { if (dirty() && !window.confirm('Discard unsaved edits and reconnect?')) return; forget(); dialog.close(); openLogin(); });
-        for (const name of ['status', 'config', 'console']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
+        for (const name of ['status', 'config', 'console', 'advisor']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
         dialog.querySelector('[role="tablist"]').addEventListener('keydown', event => {
             if (busy || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-            event.preventDefault(); const tabs=['status','config','console']; tab(event.key==='Home'?'status':event.key==='End'?'console':tabs[(tabs.indexOf(selectedTab)+(event.key==='ArrowRight'?1:2))%3]); $('repeater-tab-' + selectedTab).focus();
+            event.preventDefault(); const tabs=admin?['status','config','console','advisor']:['status','config','console'];
+            tab(event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(tabs.indexOf(selectedTab)+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length]);
+            $('repeater-tab-' + selectedTab).focus();
         });
         $('repeater-console-commands').onclick = openCommandPicker;
         $('repeater-console-clear').onclick=()=>{$('repeater-console-log').textContent='';};
@@ -122,6 +129,7 @@
                 const remembered = savePassword($('repeater-remember-password').checked ? password : '');
                 session = result.session; admin = result.admin; schema = result.fields;
                 values.clear(); inputs.clear(); loaded.clear(); buildConfig(); buildExtras();
+                $('repeater-advisor-frame').removeAttribute('src');
                 $('repeater-name').textContent = contact.name || '(unnamed repeater)';
                 identity(result.contact); $('repeater-reconnect').hidden = true;
                 $('repeater-status-cards').replaceChildren(); $('repeater-last-response').textContent = 'Not yet read';
@@ -209,26 +217,23 @@
         const hops = info.out_path_len;
         $('repeater-identity').textContent = contact.public_key.slice(0, 12) + '… · ' + (hops === 0 ? 'Direct' : hops > 0 ? hops + ' hops' : 'Flood route') + (admin ? '' : ' · Guest access');
         $('repeater-identity').title = contact.public_key;
-        const advisorButton = $('repeater-open-advisor'); if (advisorButton) advisorButton.hidden = !admin;
+        const advisorTab = $('repeater-tab-advisor'); if (advisorTab) advisorTab.hidden = !admin;
     }
 
-    // Authenticated bridge: credentials stay in the management window.
+    // Same-origin embedded advisor; credentials and radio session stay in management.
     const advisorFields = ['flood.max','flood.max.unscoped','flood.max.advert','advert.interval','flood.advert.interval','loop.detect'];
-    let advisorWindow = null;
     window.addEventListener('message', event => {
-        if (event.origin !== window.location.origin || event.source !== advisorWindow || !advisorWindow ||
+        const frame=$('repeater-advisor-frame');
+        if(!frame || event.origin!==window.location.origin || event.source!==frame.contentWindow ||
             !['meshcorestation-advisor-request','meshcorestation-advisor-apply','meshcorestation-advisor-return'].includes(event.data?.type)) return;
-        if(event.data.type==='meshcorestation-advisor-return') {
-            window.focus();
-            if(contact && !dialog.open && !loginDialog.open) {
-                if(session && admin) dialog.showModal(); else openLogin();
-            }
+        if(event.data.type==='meshcorestation-advisor-return'){
+            if(dialog.open){tab('config');$('repeater-tab-config').focus();}
             return;
         }
-        const target=advisorWindow, payload=event.data;
-        const send=data=>{if(!target.closed)target.postMessage({type:'meshcorestation-advisor-values',request_id:payload.request_id,...data},window.location.origin);};
+        const target=frame.contentWindow,payload=event.data;
+        const send=data=>{if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-values',request_id:payload.request_id,...data},window.location.origin);};
         if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
-        const progress=text=>{if(!target.closed)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
+        const progress=text=>{if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
         progress('Management connected. Checking administrator session…');
         const apply=payload.type==='meshcorestation-advisor-apply';
         if(apply && (payload.public_key!==contact.public_key || dirty())) {
@@ -263,7 +268,7 @@
                     for(const field of advisorFields) {
                         progress('Reading '+field+' ('+(advisorFields.indexOf(field)+1)+'/'+advisorFields.length+')… Waiting for repeater reply.');
                         try {current[field]=(await request({action:'read',field})).value;
-                            if(!target.closed)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text:'Received '+field+'.',field,value:current[field]},window.location.origin);}
+                            if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text:'Received '+field+'.',field,value:current[field]},window.location.origin);}
                         catch(error) {errors[field]=error.message;if(!session || /timed out|two minutes|Administrator/i.test(error.message))break;}
                     }
                 }
@@ -272,11 +277,6 @@
             } catch(error) {send({error:error.message,public_key:contact.public_key,results,applied:apply});}
         });
     });
-    function openAdvisor() {
-        if (!contact || !session || !admin) { message('Connect as administrator to read repeater settings.',true); return; }
-        advisorWindow = window.open('/repeater-advisor', '_blank');
-        if (!advisorWindow) message('Allow popups to open the recommendation advisor.',true);
-    }
     function openLogin() {
         $('repeater-login-name').textContent = contact.name || contact.public_key;
         $('repeater-login-message').textContent = ''; $('repeater-password').value = savedPassword();

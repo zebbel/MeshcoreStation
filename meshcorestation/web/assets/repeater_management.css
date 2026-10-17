@@ -49,3 +49,8 @@
 
 .repeater-remember { display: flex; align-items: center; gap: 8px; }
 #repeater-login-dialog #repeater-remember-password { width: auto; padding: 0; flex: 0 0 auto; }
+
+/* Same-window advisor, contained inside the repeater management modal. */
+#repeater-advisor{padding:0}
+#repeater-advisor-frame{display:block;width:100%;height:min(68vh,800px);min-height:460px;border:0;background:transparent}
+@media(max-width:600px){#repeater-advisor-frame{height:66vh;min-height:380px}.repeater-tabs button{padding:10px 4px;font-size:12px}}

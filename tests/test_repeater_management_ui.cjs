@@ -19,6 +19,10 @@ const submit=id=>$(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelab
 (async()=>{
  w.meshcorestationManageRepeater({public_key:key,name:'Hill',type:2});submit('repeater-login-form');await settle();
  $('repeater-tab-console').click();assert.equal($('repeater-console').hidden,false);assert.equal($('repeater-status').hidden,true);
+assert.equal($('repeater-tab-advisor').hidden,false);
+$('repeater-tab-advisor').click();assert.equal($('repeater-advisor').hidden,false);
+assert.equal($('repeater-advisor-frame').getAttribute('src'),'/repeater-advisor');
+$('repeater-tab-console').click();
  $('repeater-console-commands').click();assert.equal($('repeater-command-dialog').open,true);
  const before=posts.length;
  $('repeater-command-search').value='firmware version';$('repeater-command-search').dispatchEvent(new w.Event('input'));
@@ -40,6 +44,7 @@ const submit=id=>$(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelab
  $('repeater-close').click();assert.equal($('repeater-console-log').textContent,'');
  admin=false;w.meshcorestationManageRepeater({public_key:key,name:'Hill',type:2});submit('repeater-login-form');await settle();
  assert.equal($('repeater-console-command').disabled,true);
+assert.equal($('repeater-tab-advisor').hidden,true);
  $('repeater-tab-console').click();$('repeater-console-command').value='reboot';submit('repeater-console-form');await settle();
  assert.equal(posts.filter(p=>p.action==='console').length,2);
  $('repeater-close').click();

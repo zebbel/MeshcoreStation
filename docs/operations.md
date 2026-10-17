@@ -7,6 +7,13 @@ Use Raspberry Pi OS / Debian, systemd and Python 3.12 or newer. Clone the stable
 installs dependencies, writes `meshcorestation.env`, installs the service and
 adds serial access through `dialout`.
 
+The installer displays the hardware model, architecture and Python interpreter bitness.
+It removes an existing systemd mask for `meshcorestation.service` before installing
+its unit, and validates that the service is enabled and that the local dashboard
+responds before reporting success. If startup fails, it prints systemd diagnostics.
+On a Pi 3 B+, compatible wheels depend on the running Python and OS (32/64-bit);
+the ARMv6 wheel exception is only for Pi Zero with an ARMv6 interpreter.
+
 Open the Pi's address in your browser. Select the companion port in **Settings**.
 Select a private channel in **Channels**, or create a room and choose **Use as bot
 channel**. The companion must already have the desired channel configured.
