@@ -30,6 +30,30 @@ def test_opt_in_polling_defaults_and_snapshots(tmp_path,monkeypatch):
          'neighbours_count':1},'manual')
     assert result['complete']
     assert optimizer_store.snapshots(KEY)[0]['neighbors'][0]['snr']==5.5
+    # Actual meshcore_py v2.3.14 default is 4 bytes = 8 hex digits.
+    eight=optimizer_store.save_neighbors(KEY,{
+        'neighbours':[{'pubkey':'12ab34cd','snr':-1.25,'secs_ago':42}],
+        'results_count':1,'neighbours_count':1},'manual')
+    assert eight['neighbors']==1 and eight['complete']
+    assert optimizer_store.snapshots(KEY)[0]['neighbors'][0]['neighbor_key']=='12ab34cd'
+    # A mixed response is partial until all reported entries parse successfully.
+    mixed=optimizer_store.save_neighbors(KEY,{
+        'neighbours':[{'pubkey':'0011aabb','snr':4,'secs_ago':25},
+                      {'pubkey':'unknown','snr':0,'secs_ago':0}],
+        'results_count':2,'neighbours_count':2},'manual')
+    assert mixed['neighbors']==1 and not mixed['complete']
+    # A valid empty response must remain distinguishable from a parse error.
+    empty=optimizer_store.save_neighbors(KEY,{'neighbours':[],
+         'results_count':0,'neighbours_count':0},'manual')
+    assert empty['neighbors']==0 and empty['complete']
+    import pytest
+    with pytest.raises(ValueError,match='valid public-key prefix'):
+        optimizer_store.save_neighbors(KEY,{
+            'neighbours':[{'pubkey':'not-hex','snr':5}],
+            'neighbours_count':1},'manual')
+    with pytest.raises(ValueError,match='no usable neighbor entries'):
+        optimizer_store.save_neighbors(KEY,{
+            'neighbours':[],'neighbours_count':2},'manual')
     optimizer_store.update_profile(KEY,'hybrid','manual')
     assert optimizer_store.due(now+864000) is None
 

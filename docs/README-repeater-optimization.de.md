@@ -90,3 +90,22 @@ before/after calculations are derived from these change records, so they
 disappear as well. Passive packet observations, neighbor snapshots,
 other repeaters, pending/failed writes and unrelated setting history remain.
 No LoRa transmission is triggered by history deletion.
+
+
+## Neighbor prefix compatibility fix (unpublished draft)
+
+MeshCore Python v2.3.14 defaults to 4-byte repeater neighbor prefixes,
+represented by 8 hex characters. The original snapshot parser rejected
+prefixes shorter than 12 hex characters and silently saved zero rows for
+valid results. The corrected parser accepts whole-byte hex prefixes
+(2–64 characters) without falsely resolving them to full identities.
+If the radio response reports or contains neighbors but parsing yields
+zero entries, the app rejects the snapshot rather than mislabeling it
+a verified empty neighbor list.
+
+Snapshot display now distinguishes entries saved versus the repeater's
+reported total, shows saved prefixes with SNR and last-heard age, and
+flags old zero-entry snapshots as unreliable when the repeater reported
+a nonzero count. Re-reading is never triggered automatically by this
+fix; it requires the existing manual button or separately opted-in
+scheduled polling. Existing old snapshots remain unchanged in storage.

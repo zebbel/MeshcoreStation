@@ -12,7 +12,13 @@ statistics:{copies:0,matching_copies:0,unscoped:0,active_days:0,ambiguous:0,
 partial:true,collector_error:'',first_at:null,storage:{bytes:0,free_bytes:20e9}},
 analysis:{recommendations:[{field:'flood.max',suggested:null,current:null,confidence:'insufficient',
 observed:0,matching:0,p90:null,max:null,can_apply:false,reasons:['missing'],explanation:'Not enough evidence.'}],
-notes:[]},neighbor_snapshots:[],history:[],comparisons:{}};
+notes:[]},neighbor_snapshots:[
+ {id:1,at:1,source:'manual',reported:3,complete:0,neighbors:[]},
+ {id:2,at:2,source:'manual',reported:2,complete:1,neighbors:[
+  {neighbor_key:'1234abcd',snr:2.5,secs_ago:120},
+  {neighbor_key:'eeff0011',snr:-3.25,secs_ago:90}]},
+ {id:3,at:3,source:'manual',reported:0,complete:1,neighbors:[]}
+ ],history:[],comparisons:{}};
 w.fetch=async (url,opts)=>{reqs.push({url,method:opts.method,body:opts.body});return {
 ok:true,json:async()=>sample}};
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
@@ -24,6 +30,12 @@ w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:p
  data:{type:'meshcorestation-optimizer-context',public_key:key,name:'Hill'}}));
 await settle();
 assert.equal(reqs.length,1);assert.equal(reqs[0].method,'GET');
+assert($('neighbors').textContent.includes('0 saved / 3 reported'));
+assert($('neighbors').textContent.includes('This snapshot is unreliable'));
+assert($('neighbors').textContent.includes('Prefix 1234abcd'));
+assert($('neighbors').textContent.includes('SNR 2.5 dB'));
+assert($('neighbors').textContent.includes('2 saved / 2 reported'));
+assert($('neighbors').textContent.includes('Repeater reported no neighbors'));
 assert.equal(posts.length,1); // no LoRa on opening
 $('analyze').click();await settle();
 assert.equal(reqs.at(-1).method,'POST');

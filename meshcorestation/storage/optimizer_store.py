@@ -121,19 +121,29 @@ def save_neighbors(key, data, source='manual'):
         if not isinstance(neighbor,dict):
             continue
         peer=str(neighbor.get('pubkey') or '').lower()
-        if not re.fullmatch('[0-9a-f]{12,64}',peer):
+        # meshcore_py 2.3.14 requests four-byte public-key prefixes by
+        # default (eight hex characters), not six-byte / 12-character ones.
+        # Some firmware and clients use other prefix sizes; each prefix must
+        # represent whole bytes. Store it as a prefix, never a verified key.
+        if not re.fullmatch('[0-9a-f]{2,64}',peer) or len(peer)%2:
             continue
         snr,age=neighbor.get('snr'),neighbor.get('secs_ago')
         parsed.append((peer,float(snr) if type(snr) in (int,float) and abs(snr)<1000 else None,
                        float(age) if type(age) in (int,float) and 0<=age<1e8 else None))
     count=data.get('neighbours_count')
     count=count if type(count) is int and count>=0 else None
+    if rows and not parsed:
+        # A successful radio request whose neighbor entries we cannot decode
+        # must not be cached as a genuinely empty neighbor list.
+        raise ValueError('Neighbor response contained entries, but none had a valid public-key prefix.')
+    if count and not parsed:
+        raise ValueError('Repeater reported neighbors, but no usable neighbor entries were decoded.')
     at=time.time()
     with closing(connect()) as db, db:
         row=db.execute('INSERT INTO snapshots(public_key,at,source,reported,complete) VALUES(?,?,?,?,?)',
-                       (key,at,source,count,int(count is not None and count<=len(rows)))).lastrowid
+                       (key,at,source,count,int(count is not None and count<=len(parsed)))).lastrowid
         db.executemany('INSERT INTO neighbors VALUES(?,?,?,?)',[(row,*item) for item in parsed])
-    return {'at':at,'neighbors':len(parsed),'reported':count,'complete':count is not None and count<=len(rows)}
+    return {'at':at,'neighbors':len(parsed),'reported':count,'complete':count is not None and count<=len(parsed)}
 
 
 def snapshots(key, limit=15):

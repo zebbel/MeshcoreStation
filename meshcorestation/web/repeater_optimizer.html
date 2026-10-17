@@ -173,9 +173,27 @@ function render(data,replaceSettings=false){
  const neighbors=$('neighbors');neighbors.replaceChildren();
  if(!data.neighbor_snapshots.length)neighbors.append(el('p','No neighbor snapshots saved.'));
  for(const snap of data.neighbor_snapshots.slice(0,10)){
-  const row=el('p',new Date(snap.at*1000).toLocaleString()+' · '+snap.source+
-    ' · '+snap.neighbors.length+' listed'+(snap.complete?'':' (partial or completeness unknown)'));
-  neighbors.append(row);
+  const block=el('article');block.className='finding';
+  const saved=snap.neighbors.length,reported=snap.reported;
+  const known=Number.isInteger(reported)&&reported>=0;
+  const suspect=known&&reported>0&&saved===0;
+  const title=new Date(snap.at*1000).toLocaleString()+' · '+snap.source+
+    ' · '+saved+' saved'+(known?' / '+reported+' reported':' (total unknown)');
+  block.append(el('p',title+(snap.complete?' · complete':' · partial')));
+  if(suspect){
+    block.append(el('p','This snapshot is unreliable: the repeater reported neighbors, but none were stored. The previous parser may have rejected short public-key prefixes. Use Read neighbors now to get a new snapshot.'));
+  }else if(!saved){
+    block.append(el('p',known&&reported===0?'Repeater reported no neighbors at this time.':'No usable entries saved; this does not establish that the repeater has no neighbors.'));
+  }else{
+    const list=el('div');list.className='neighbor-entries';
+    for(const peer of snap.neighbors){
+      const age=peer.secs_ago==null?'age unknown':Math.round(peer.secs_ago/60)+' min ago';
+      const snr=peer.snr==null?'SNR unknown':'SNR '+peer.snr+' dB';
+      list.append(el('p','Prefix '+peer.neighbor_key+' · '+snr+' · last heard '+age));
+    }
+    block.append(list);
+  }
+  neighbors.append(block);
  }
  const hist=$('history');hist.replaceChildren();
  if(!data.history.length)hist.append(el('p','No verified optimizer changes yet.'));
