@@ -33,3 +33,20 @@ def finish(ident,actual,status):
 def recent(key):
     with database() as db:
         return [dict(row) for row in db.execute('SELECT * FROM changes WHERE public_key=? ORDER BY id DESC LIMIT 50',(key,))]
+
+
+
+def clear_verified_flood(key):
+    """Clear verified optimizer changes for ONE repeater only.
+
+    Before/after entries are derived from these records and disappear with
+    them. Do not erase pending, failed, or unrelated configuration audits.
+    This is a local database operation with no radio traffic.
+    """
+    from meshcorestation.storage.optimizer_store import valid_key
+    valid_key(key)
+    with database() as db:
+        cursor=db.execute("""DELETE FROM changes
+            WHERE public_key=? AND status='verified'
+              AND field IN ('flood.max', 'flood.max.unscoped')""",(key,))
+        return cursor.rowcount

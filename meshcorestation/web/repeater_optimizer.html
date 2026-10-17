@@ -14,22 +14,20 @@ select,input[type=number]{max-width:240px;width:100%}.actions{display:flex;flex-
 .kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .kpi,.finding{border:1px solid #3e5565;border-radius:9px;padding:12px;background:#172431}
 .kpi strong{display:block;font-size:23px}.finding{margin:12px 0}
-.muted strong{color:#d2dfeb}.warning{border-left:3px solid #e6b15f;padding:10px;background:#2c3033}
+.muted strong{color:#d2dfeb}
 #message{min-height:1.5em;white-space:pre-wrap}table{width:100%;border-collapse:collapse}
 td,th{text-align:left;padding:8px;border-bottom:1px solid #405465;font-size:13px}
 table{overflow-wrap:anywhere}.scroll{overflow-x:auto}.result{margin:8px 0}
 @media(max-width:500px){main{padding:8px}section{padding:12px}.kpis{grid-template-columns:1fr}}
 </style></head><body><main>
-<button id="back" type="button">← Configurations</button>
 <h1>Repeater Optimizer</h1><p class="muted" id="identity">Connect in Repeater Management to select a repeater.</p>
-<p class="warning">Passive by default. Analysis never sends LoRa requests. Manual reads and confirmed writes transmit over LoRa. Neighbor polling transmits only after explicit 12h / 24h opt-in. Observations at one companion are not network-wide delivery proof.</p>
 
 <section><h2>Optimization scope</h2>
 <label for="role">Repeater role</label>
 <select id="role"><option value="unknown">Unknown / analyze network</option><option value="local">Local coverage</option><option value="regional">Regional connector</option><option value="hybrid">Hybrid coverage + connector</option></select>
 <label for="polling">Neighbor polling</label>
 <select id="polling"><option value="manual">Manual only (default, no scheduled LoRa)</option><option value="24h">Every 24 hours (scheduled LoRa)</option><option value="12h">Every 12 hours (scheduled LoRa)</option></select>
-<div class="actions"><button id="save-profile" type="button">Save role and polling</button><button id="read-neighbors" type="button">Read neighbors now · LoRa</button></div>
+<div class="actions"><button id="save-profile" type="button">Save role and polling</button><button id="read-neighbors" type="button">Read neighbors now</button></div>
 <p class="muted" id="schedule">Manual mode does not send scheduled requests.</p>
 </section>
 
@@ -43,14 +41,14 @@ table{overflow-wrap:anywhere}.scroll{overflow-x:auto}.result{margin:8px 0}
  <div class="kpi"><small>Distinct active days</small><strong id="active">—</strong></div>
 </div>
 <p class="muted" id="coverage">No passive statistics loaded.</p>
-<div class="actions"><button id="analyze" type="button">Analyze stored observations · no LoRa</button><button id="read-settings" type="button">Read flood settings · LoRa</button></div>
+<div class="actions"><button id="analyze" type="button">Analyze stored observations</button><button id="read-settings" type="button">Read flood settings</button></div>
 <p id="message" role="status" aria-live="polite"></p>
 </section>
 
 <section><h2>Hop-limit recommendations</h2>
 <p class="muted">Experimental suggestions can be displayed only with a sufficiently complete observation period, a selected role, recent neighbor information and manually read current settings. They are not guaranteed delivery-safe values.</p>
 <div id="recommendations"></div>
-<button id="apply" type="button" disabled>Review and apply selected trials · LoRa</button>
+<button id="apply" type="button" disabled>Review and apply selected trials</button>
 <p class="muted">Each write requires confirmation in Repeater Management, a fresh value check, and readback verification. No automatic configuration changes.</p>
 </section>
 
@@ -63,15 +61,15 @@ table{overflow-wrap:anywhere}.scroll{overflow-x:auto}.result{margin:8px 0}
 <label>Detailed days <input id="retention_days" type="number" min="1" max="180"></label>
 <label>Neighbor days <input id="neighbor_days" type="number" min="7" max="365"></label>
 <label>Summary days <input id="summary_days" type="number" min="30" max="730"></label>
-<label>Database limit (MB) <input id="budget_mb" type="number" min="256" max="16384"></label>
-<label>Reserve free (MB) <input id="reserve_mb" type="number" min="1024" max="16384"></label>
+<label>Database limit (GB) <input id="budget_gb" type="number" min="0.25" max="16" step="0.25"></label>
+<label>Reserve free (GB) <input id="reserve_gb" type="number" min="1" max="16" step="0.25"></label>
 </div>
-<p id="disk" class="muted"></p><button id="save-storage" type="button">Save storage limits · no LoRa</button>
+<p id="disk" class="muted"></p><button id="save-storage" type="button">Save storage limits</button>
 </section>
 
 <section><h2>Verified changes and before/after</h2>
 <p class="muted">Compares equal 24-hour samples before and after a verified change, with a one-hour settling gap, if the legacy selected-repeater measurements cover both windows. These are descriptive and cannot prove improved reachability.</p>
-<div id="history"></div></section>
+<div id="history"></div><button id="clear-history" type="button" disabled>Clear verified changes and comparisons</button></section>
 </main>
 <script>
 (()=>{'use strict';
@@ -80,7 +78,11 @@ const origin=location.origin, manager=window.parent!==window?window.parent:null;
 let key='',name='', current={}, readAt=0, latest=null, pending=null, serial=0, busy=false;
 function notice(text){$('message').textContent=text;}
 function lock(yes){busy=yes;document.querySelectorAll('button').forEach(b=>b.disabled=yes);if(!yes)renderActions();}
-function renderActions(){if(busy)return;$('apply').disabled=!latest?.analysis?.recommendations?.some(r=>r.can_apply);}
+function renderActions(){
+ if(busy)return;
+ $('apply').disabled=!latest?.analysis?.recommendations?.some(r=>r.can_apply);
+ $('clear-history').disabled=!latest?.history?.some(r=>r.status==='verified'&&['flood.max','flood.max.unscoped'].includes(r.field));
+}
 function send(type,extra={}){
  if(!manager||!key){notice('Open Repeater Optimizer from an administrator session.');return;}
  if(busy)return;
@@ -106,7 +108,10 @@ function render(data,replaceSettings=false){
  latest=data;
  if(replaceSettings){
   $('role').value=data.profile.role;$('polling').value=data.profile.polling;
-  for(const [k,v] of Object.entries(data.settings))if($(k))$(k).value=v;
+  for(const [k,v] of Object.entries(data.settings)){
+    if((k==='budget_mb'||k==='reserve_mb'))$(k.replace('_mb','_gb')).value=String(v/1024);
+    else if($(k))$(k).value=v;
+  }
  }
  $('copies').textContent=data.statistics.copies;
  $('matches').textContent=data.statistics.matching_copies;
@@ -116,7 +121,7 @@ function render(data,replaceSettings=false){
  $('coverage').textContent='Oldest retained: '+(s.first_at?new Date(s.first_at*1000).toLocaleString():'not yet recorded')+
   ' · Ambiguous paths: '+s.ambiguous+(s.partial?' · Incomplete observation window':'')+
   (s.collector_error?' · Collector: '+s.collector_error:'');
- $('disk').textContent='Statistics database: '+(s.storage.bytes/1048576).toFixed(1)+' MB · Free disk: '+
+ $('disk').textContent='Statistics database: '+(s.storage.bytes/1073741824).toFixed(2)+' GB · Free disk: '+
   (s.storage.free_bytes/1073741824).toFixed(2)+' GB.';
  $('schedule').textContent=data.profile.polling==='manual'?'Manual mode: no scheduled LoRa requests.':
   'Scheduled neighbor request: every '+(data.profile.polling==='12h'?'12':'24')+
@@ -168,7 +173,7 @@ function render(data,replaceSettings=false){
     for(const note of comparison.notes||[])section.append(el('small',note));
   }
   if(row.status==='verified'){
-   const btn=el('button','Review restore · LoRa');btn.type='button';
+   const btn=el('button','Review restore');btn.type='button';
    btn.onclick=()=>send('meshcorestation-advisor-apply',{changes:[{field:row.field,expected:row.actual,value:row.before_value}]});
    section.append(btn);
   }
@@ -190,8 +195,15 @@ $('save-profile').onclick=()=>{
  send('meshcorestation-optimizer-profile',{role,polling});
 };
 $('save-storage').onclick=()=>{
- const names=['retention_days','neighbor_days','summary_days','budget_mb','reserve_mb'];
+ const names=['retention_days','neighbor_days','summary_days'];
  const settings=Object.fromEntries(names.map(n=>[n,Number($(n).value)]));
+ for(const field of ['budget','reserve']){
+   const input=$(field+'_gb'), gb=Number(input.value);
+   if(!input.value.trim()||!Number.isFinite(gb)||gb*4!==Math.round(gb*4)){
+     notice('Enter a valid value in 0.25 GB steps.');return;
+   }
+   settings[field+'_mb']=Math.round(gb*1024);
+ }
  send('meshcorestation-optimizer-storage',{settings});
 };
 $('apply').onclick=()=>{
@@ -201,7 +213,11 @@ $('apply').onclick=()=>{
  if(!changes.length){notice('Select a proposed trial first.');return;}
  send('meshcorestation-advisor-apply',{changes});
 };
-$('back').onclick=()=>{if(manager)manager.postMessage({type:'meshcorestation-advisor-return'},origin);};
+$('clear-history').onclick=()=>{
+ if(busy||!key||!latest?.history?.some(r=>r.status==='verified'&&['flood.max','flood.max.unscoped'].includes(r.field)))return;
+ if(!confirm('Permanently delete all verified flood-limit change records and their before/after comparisons for '+name+'? This cannot be undone. Passive packet observations and other repeaters are unchanged.'))return;
+ send('meshcorestation-optimizer-clear-history',{confirm:true});
+};
 window.addEventListener('message',async event=>{
  if(event.origin!==origin||event.source!==manager)return;
  const data=event.data||{};
@@ -229,10 +245,12 @@ window.addEventListener('message',async event=>{
   }
  }else if(type==='meshcorestation-optimizer-neighbors'){
   notice('Neighbor snapshot received and stored.');
+ }else if(type==='meshcorestation-optimizer-clear-history'){
+  notice((data.removed??0)+' verified flood-limit change record(s) deleted. Comparisons removed. Passive observations unchanged.');
  }else if(type==='meshcorestation-optimizer-profile'||type==='meshcorestation-optimizer-storage'){
-  notice('Settings saved. No LoRa request was sent.');
+  notice('Settings saved.');
  }
- await refresh(type==='meshcorestation-optimizer-profile'||type==='meshcorestation-optimizer-storage','review');
+ await refresh(['meshcorestation-optimizer-profile','meshcorestation-optimizer-storage'].includes(type),'review');
 });
 if(manager)manager.postMessage({type:'meshcorestation-optimizer-ready'},origin);
 })();

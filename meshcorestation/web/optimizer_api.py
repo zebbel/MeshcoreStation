@@ -42,13 +42,18 @@ def register_optimizer_routes(server):
                     raise ValueError('Expected object.')
                 key=optimizer_store.valid_key(data.get('public_key'))
                 action=data.get('action')
-                if action in ('profile','storage'):
+                if action in ('profile','storage','clear_history'):
                     if not _authorized(key,data.get('session')):
                         return json_response({'ok':False,'error':'An active repeater administrator session is required.'},403)
                     optimizer_store.initialize()
                     if action=='profile':
                         saved=optimizer_store.update_profile(key,data.get('role'),data.get('polling'))
                         return json_response({'ok':True,'profile':saved})
+                    if action=='clear_history':
+                        if data.get('confirm') is not True:
+                            raise ValueError('Confirm clearing the verified change history.')
+                        removed=advisor_history.clear_verified_flood(key)
+                        return json_response({'ok':True,'removed':removed})
                     settings=optimizer_store.update_config(data.get('settings'))
                     return json_response({'ok':True,'settings':settings})
                 if action!='review':

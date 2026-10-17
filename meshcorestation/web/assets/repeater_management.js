@@ -227,7 +227,8 @@
         if(!frame || event.origin!==window.location.origin || event.source!==frame.contentWindow ||
             !['meshcorestation-advisor-request','meshcorestation-advisor-apply','meshcorestation-advisor-return',
               'meshcorestation-optimizer-neighbors','meshcorestation-optimizer-ready',
-              'meshcorestation-optimizer-profile','meshcorestation-optimizer-storage'].includes(event.data?.type)) return;
+              'meshcorestation-optimizer-profile','meshcorestation-optimizer-storage',
+              'meshcorestation-optimizer-clear-history'].includes(event.data?.type)) return;
         if(event.data.type==='meshcorestation-optimizer-ready'){
             if(dialog.open && admin && session)
                 frame.contentWindow.postMessage({type:'meshcorestation-optimizer-context',public_key:contact.public_key,name:contact.name},window.location.origin);
@@ -242,20 +243,22 @@
         if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
         const progress=text=>{if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
         progress('Management connected. Checking administrator session…');
-        const options=payload.type==='meshcorestation-optimizer-profile'||payload.type==='meshcorestation-optimizer-storage';
+        const options=['meshcorestation-optimizer-profile','meshcorestation-optimizer-storage','meshcorestation-optimizer-clear-history'].includes(payload.type);
         if(options){
             run(async()=>{
                 try {
-                    const body={action:payload.type==='meshcorestation-optimizer-profile'?'profile':'storage',
+                    const body={action:payload.type==='meshcorestation-optimizer-profile'?'profile':
+                        payload.type==='meshcorestation-optimizer-storage'?'storage':'clear_history',
                         public_key:contact.public_key,session};
                     if(body.action==='profile'){
                         body.role=payload.role;body.polling=payload.polling;
-                    }else body.settings=payload.settings;
+                    }else if(body.action==='storage') body.settings=payload.settings;
+                    else if(body.action==='clear_history') body.confirm=payload.confirm===true;
                     const res=await fetch('/api/repeater-optimizer',{method:'POST',cache:'no-store',
                         headers:{'Content-Type':'application/json','X-Meshcore-Control':'1'},body:JSON.stringify(body)});
                     const data=await res.json();
                     if(!res.ok||!data.ok)throw Error(data.error||'Saving optimizer settings failed.');
-                    send({saved:true,profile:data.profile,settings:data.settings});
+                    send({saved:true,profile:data.profile,settings:data.settings,removed:data.removed});
                 }catch(error){send({error:error.message});}
             });
             return;

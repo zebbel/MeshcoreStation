@@ -116,3 +116,55 @@ def test_api_never_uses_radio_for_analysis(tmp_path,monkeypatch):
         'action':'profile','public_key':KEY,'role':'regional','polling':'24h'})
     assert stored.status_code==200
     assert optimizer_store.profile(KEY)['polling']=='24h'
+
+
+
+def test_clear_verified_changes_scoped_to_selected_repeater(tmp_path, monkeypatch):
+    """Clear derived comparison history, not packet observations or other audits."""
+    from meshcorestation.storage import advisor_history
+    setup(tmp_path,monkeypatch)
+    monkeypatch.setattr(advisor_history,'FILE',tmp_path/'history.db')
+    other='cd'*32
+    with advisor_history.database() as db:
+        rows=[
+            (KEY,'flood.max','verified'),
+            (KEY,'flood.max.unscoped','verified'),
+            (KEY,'flood.max','pending / outcome unknown'),
+            (KEY,'loop.detect','verified'),
+            (other,'flood.max','verified'),
+        ]
+        for key,field,status in rows:
+            db.execute("""INSERT INTO changes(at,public_key,field,before_value,requested,actual,status)
+                 VALUES(?,?,?,?,?,?,?)""",(time.time(),key,field,'8','5','5',status))
+    with passive_stats.connect() as db:
+        db.execute("""INSERT INTO network_observations
+            (at,kind,scoped,path_len,hash_size,route,digest,rssi,snr)
+            VALUES(?,?,?,?,?,?,?,?,?)""",(time.time(),5,1,1,1,'ab','digest',-80,2))
+        db.commit()
+    app=Flask(__name__)
+    optimizer_api.register_optimizer_routes(app)
+    client=app.test_client()
+    headers={'X-Meshcore-Control':'1'}
+    request_data={'action':'clear_history','public_key':KEY,'session':'test-admin'}
+    refused=client.post('/api/repeater-optimizer',json=request_data,headers=headers)
+    assert refused.status_code==403
+    assert len(advisor_history.recent(KEY))==4
+    captured=[]
+    def locally_authorized(payload,timeout=5):
+        captured.append(payload)
+        return {'ok':payload['operation']=='optimizer_authorize'
+                and payload['public_key']==KEY and payload['session']=='test-admin'}
+    monkeypatch.setattr(optimizer_api.bridge,'request',locally_authorized)
+    # A valid administrator session alone is not enough for deletion.
+    assert client.post('/api/repeater-optimizer',json=request_data,headers=headers).status_code==400
+    request_data['confirm']=True
+    cleared=client.post('/api/repeater-optimizer',json=request_data,headers=headers)
+    assert cleared.status_code==200
+    assert cleared.json['removed']==2
+    assert len(captured)==2 and all(item['operation']=='optimizer_authorize' for item in captured)
+    assert {(entry['field'],entry['status']) for entry in advisor_history.recent(KEY)}=={
+        ('flood.max','pending / outcome unknown'),('loop.detect','verified')}
+    assert len(advisor_history.recent(other))==1
+    assert passive_stats.network_snapshot(KEY,1)['copies']==1
+    # Repeating the clearing operation does not damage unrelated records.
+    assert client.post('/api/repeater-optimizer',json=request_data,headers=headers).json['removed']==0

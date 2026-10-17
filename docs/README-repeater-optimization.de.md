@@ -70,3 +70,23 @@ The registered web endpoints are /repeater-optimizer and
 Only publish after explicit instruction; check main and merge updates
 into the feature branch first. Keep stable base version aligned with
 main and increment only the rc number.
+
+
+## UI cleanup and history deletion
+
+The optimizer's embedded screen no longer shows a separate "Back to
+Configurations" control or the introductory radio-policy warning. Button
+labels no longer include "LoRa"/"no LoRa" suffixes; existing radio-request
+restrictions remain unchanged.
+
+Database budget and free-space reserve are presented in GB, allowing
+quarter-GB steps, while existing values and storage validation remain
+stored internally in MiB: 3 GB displayed is 3072 MiB, and 4 GB is 4096 MiB.
+
+"Clear verified changes and comparisons" requires explicit user confirmation
+and current local administrator authorization. It deletes only verified
+flood.max / flood.max.unscoped changes for the selected repeater. The
+before/after calculations are derived from these change records, so they
+disappear as well. Passive packet observations, neighbor snapshots,
+other repeaters, pending/failed writes and unrelated setting history remain.
+No LoRa transmission is triggered by history deletion.
