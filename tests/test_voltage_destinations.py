@@ -123,3 +123,43 @@ def test_explicit_channel_independent_of_bot_room(monkeypatch):
     assert c.scope_resets==[None]
     assert report(db)['channel_name']=='Chat: Battery ops'
     db.close()
+
+@pytest.mark.parametrize('has_reading', [True, False])
+def test_daily_report_reuses_last_successful_reading(monkeypatch, has_reading):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    db = database()
+    now = time.time()
+    stamp = now - 3600
+    with db:
+        db.execute('DELETE FROM voltage_reports')
+        db.execute('UPDATE voltage_config SET enabled=1, public_key=?, interval_minutes=1440, report_target=?',
+                   (KEY, 'room:2'))
+        rows = [(KEY, 1, now - 300, None, 'Timeout'),
+                ('cd' * 32, 1, now - 100, 4.2, None),
+                (KEY, 2, now - 100, 4.1, None)]
+        if has_reading:
+            rows.append((KEY, 1, stamp, 3.92, None))
+        for key, channel, sampled_at, voltage, error in rows:
+            db.execute('''INSERT INTO voltage_samples
+                (public_key,name,sampled_at,voltage,error,voltage_channel,interval_seconds)
+                VALUES (?, 'Field repeater', ?, ?, ?, ?, 86400)''',
+                (key, sampled_at, voltage, error, channel))
+    m, service, commands = monitor(db)
+    async def unexpected_read(cfg):
+        pytest.fail('Daily report requested an extra telemetry read')
+    m.sample = unexpected_read
+    monkeypatch.setattr('meshcorestation.radio.voltage_monitor.due_slots',
+                        lambda cfg, now: [('morning', now)])
+    asyncio.run(m.tick())
+    if has_reading:
+        expected_stamp = datetime.fromtimestamp(stamp, ZoneInfo(config(db)['timezone'])).strftime('%d.%m %H:%M')
+        assert service.posts == [(2, f'Battery Field repeater: 3.92 V | {expected_stamp}')]
+        assert report(db)['status'] == 'queued'
+    else:
+        assert not service.posts
+        assert report(db)['status'] == 'failed'
+        assert 'No successful battery reading' in report(db)['detail']
+    asyncio.run(m.tick())
+    assert len(service.posts) == int(has_reading), 'A report slot must not be sent twice'
+    db.close()

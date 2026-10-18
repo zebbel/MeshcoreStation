@@ -125,3 +125,9 @@ LoRa. Each manual remote neighbor read returns a persisted snapshot receipt
 reopening the SQLite database. Status displays this receipt; Optimizer
 checks it against its new GET response and warns on a mismatch. Neither
 local refresh nor receipt verification transmits any additional LoRa requests.
+
+## 3.0.4rc8
+
+Repeater Optimizer uses the shared dashboard stylesheet and follows the same
+light/dark preference. Merged main 3.0.4, including daily battery reports using
+the last stored reading.

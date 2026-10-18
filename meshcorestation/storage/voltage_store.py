@@ -100,6 +100,15 @@ def latest(db, cfg):
     return dict(row) if row else None
 
 
+def latest_reading(db, cfg):
+    """Last successful reading for this repeater and telemetry channel."""
+    row = db.execute('''SELECT * FROM voltage_samples WHERE public_key=? AND voltage_channel=?
+                        AND voltage IS NOT NULL AND error IS NULL
+                        ORDER BY sampled_at DESC, id DESC LIMIT 1''',
+                     (cfg['public_key'], cfg['voltage_channel'])).fetchone()
+    return dict(row) if row else None
+
+
 def extract_voltage(telemetry, channel):
     if not isinstance(telemetry, list):
         raise ValueError('No telemetry response from repeater.')

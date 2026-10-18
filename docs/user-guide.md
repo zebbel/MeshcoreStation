@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.0.2** on `main`, including the bot, room server,
+This guide covers stable **3.0.4** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 
@@ -59,7 +59,11 @@ all repeaters or the final recipient received a message.
 Select a repeater from the map and save battery settings. Configure sampling,
 report times and **Send battery reports to**: follow the bot, a named private
 channel, or an enabled local room. The target is independent of the monitored
-repeater. A missing target fails visibly instead of silently changing destination.
+repeater. Daily reports use the last successful stored battery reading and its
+original timestamp, without requesting an extra telemetry read. Failed reads do
+not replace that value. If no successful reading exists, the report attempt is
+logged as failed. Regular scheduled and manual sampling continue unchanged.
+A missing target fails visibly instead of silently changing destination.
 
 Passive repeater statistics and usefulness summaries describe traffic the station
 observed. Reception conditions and missing observations limit conclusions about

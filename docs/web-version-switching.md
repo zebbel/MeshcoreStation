@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.0.3** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.0.4** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -67,6 +67,13 @@ Every published application update must increment `meshcorestation.__version__`
 and update the current-version references in the README and guides. Queue several
 changes under one release version; do not publish changed application code with
 the same version as the previous release.
+
+### 3.0.4
+
+Daily battery reports reuse the last successful stored reading and its original
+timestamp, without an extra telemetry request. Failed reads do not replace the
+reported value. Reports without a successful reading record an explicit failure.
+Regular scheduled and manual sampling continue unchanged.
 
 ### 3.0.3
 
