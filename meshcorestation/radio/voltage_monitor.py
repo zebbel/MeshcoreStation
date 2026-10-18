@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from meshcore import EventType
 from meshcorestation.radio.channels_control import channel_type
 from meshcorestation.radio.contacts_control import new_contact
-from meshcorestation.storage.voltage_store import initialize, config, latest, extract_voltage, due_slots
+from meshcorestation.storage.voltage_store import initialize, config, latest, latest_reading, extract_voltage, due_slots
 
 
 class VoltageMonitor:
@@ -129,9 +129,8 @@ class VoltageMonitor:
                      'Attempt reserved; interrupted attempts are not retransmitted automatically.')).rowcount
             if not claimed:
                 continue
-            if not sample or time.time() - sample['sampled_at'] > 120:
-                sample = await self.sample(cfg)
-            await self.report(slot, cfg, sample)
+            # Reports reuse stored telemetry; they never request an extra read.
+            await self.report(slot, cfg, latest_reading(self.db, cfg))
         self.heartbeat('idle')
 
     async def report(self, slot, cfg, sample):
@@ -139,6 +138,8 @@ class VoltageMonitor:
         try:
             if config(self.db)['revision'] != cfg['revision']:
                 raise ValueError('Report settings changed.')
+            if sample is None:
+                raise ValueError('No successful battery reading available for this repeater and telemetry channel.')
             c = self.companion
             stamp = datetime.fromtimestamp(sample['sampled_at'], ZoneInfo(cfg['timezone'])).strftime('%d.%m %H:%M')
             name = ''.join(ch for ch in sample['name'] if ord(ch) >= 32 and ord(ch) != 127)
