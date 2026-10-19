@@ -1,13 +1,22 @@
 (() => {
-    let dialog,map,controller,repeaters=[],selected='',selectionEvent='stats-picker-selected',markers=new Map();
+    let dialog,map,controller,repeaters=[],selected='',selectionEvent='stats-picker-selected',actionLabel='Use this repeater',managedRepeaters=new Set(),markers=new Map();
     const el=(tag,value,cls)=>{const n=document.createElement(tag);if(value!=null)n.textContent=value;if(cls)n.className=cls;return n;};
     function choose(repeater){
+        if(managedRepeaters.has(repeater.public_key))return;
         dialog.close();
         document.dispatchEvent(new CustomEvent(selectionEvent,{detail:repeater.public_key}));
     }
+    function action(repeater){
+        const managed=managedRepeaters.has(repeater.public_key);
+        const button=el('button',managed?'Already managed':actionLabel);
+        button.type='button';button.disabled=managed;
+        if(managed)button.title='This repeater is already in management.';
+        button.onclick=()=>choose(repeater);
+        return button;
+    }
     function details(repeater){
         const box=el('div');box.append(el('strong',repeater.name),el('p',repeater.public_key,'map-key'));
-        const button=el('button','Use this repeater');button.type='button';button.onclick=()=>choose(repeater);box.append(button);window.meshcorestationRepeaterActions(box,repeater,()=>dialog.close());return box;
+        box.append(action(repeater));window.meshcorestationRepeaterActions(box,repeater,()=>dialog.close());return box;
     }
     function filter(){
         const query=dialog.querySelector('.stats-map-search').value.trim().toLowerCase();
@@ -19,7 +28,7 @@
             const marker=markers.get(repeater.public_key);
             if(marker){const locate=el('button','Show on map');locate.type='button';locate.onclick=()=>{map.setView(marker.getLatLng(),13);marker.openPopup();};row.append(locate);}
             else row.append(el('span','No map position available','muted'));
-            const use=el('button','Use this repeater');use.type='button';use.onclick=()=>choose(repeater);row.append(use);list.append(row);
+            row.append(action(repeater));list.append(row);
         }
         if(!matches.length)list.append(el('p','No repeaters match this search.'));
         if(query)dialog.querySelector('.stats-map-fallback').open=true;
@@ -34,7 +43,10 @@
             dialog.addEventListener('close',()=>{controller?.abort();if(map){map.remove();map=null;}markers.clear();});
         }
         controller?.abort();if(map){map.remove();map=null;}markers.clear();
+        actionLabel=detail.actionLabel||'Use this repeater';
+        dialog.querySelector('p').textContent=`Click a repeater marker, check its name and public key, then choose ${actionLabel}. ${detail.managedRepeaters?'Already managed repeaters cannot be added twice. ':''}Closing leaves your selection unchanged.`;
         repeaters=detail.repeaters;selected=detail.selected;selectionEvent=detail.selectionEvent||'stats-picker-selected';
+        managedRepeaters=new Set(detail.managedRepeaters||[]);
         dialog.querySelector('#stats-picker-title').textContent=detail.title||'Choose my repeater';
         dialog.querySelector('.stats-map-search').value='';dialog.querySelector('.stats-map-fallback').open=false;
         const message=dialog.querySelector('.stats-picker-message');message.textContent='Loading known repeater positions…';

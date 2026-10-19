@@ -4,6 +4,8 @@
   if (location.pathname !== '/rooms') return;
   const $ = id => document.getElementById(id);
   let rooms = [], selected = null, busy = false;
+  const embedded = new URLSearchParams(location.search).get('embedded') === '1';
+  if (embedded) document.body.classList.add('rooms-embedded');
   let contacts = [], contactsBusy = false, membersKey = null, qrRoom = null, shownRoom = null;
   function current() { return rooms.find(r => r.id === selected); }
   async function request(body) {
@@ -17,6 +19,21 @@
   }
   function contactName(key) { return contacts.find(c=>c.public_key===key.toLowerCase())?.name?.trim() || ''; }
   function shortKey(key) { return key.slice(0,6)+'…'+key.slice(-4); }
+  function updateRoomActions() {
+    const room=current(), toggle=$('toggle'), deletion=$('delete-room');
+    toggle.disabled = !room || busy || (!room.enabled && !room.auth_revision);
+    $('bot-channel').disabled = !room || busy;
+    deletion.disabled = !room || busy || !!room.enabled || !!room.is_bot;
+    deletion.title = !room ? 'Select a room.' : room.is_bot
+      ? 'Switch the bot to another channel before deleting.'
+      : room.enabled ? 'Disable this room before deleting it.'
+      : 'Permanently remove the room and its data.';
+    $('room-action-hint').textContent = !room ? '' : room.is_bot
+      ? 'This room is the bot channel. Switch to another channel before deleting it.'
+      : room.enabled ? 'Disable this room before deleting it.'
+      : !room.auth_revision ? 'Save a room password below to enable this room.'
+      : '';
+  }
   function renderMembers() {
     const room=current();
     const members=(room?.members || []).filter(m=>m.public_key!==room.public_key);
@@ -51,13 +68,14 @@
       shownRoom=selected; qrRoom=null; $('room-qr').hidden=true; $('room-qr-image').removeAttribute('src');
       $('show-qr').textContent='Show room QR code'; $('room-password').value='';
     }
-    if (!room) return;
+    if (!room) { updateRoomActions(); return; }
     $('title').textContent = room.name; $('state').textContent = room.enabled ? 'Enabled' : 'Disabled · no room radio traffic';
     $('toggle').textContent = room.enabled ? 'Disable room' : 'Enable room'; $('send').disabled = !room.enabled;
     $('bot-channel').textContent = room.is_bot ? 'Bot channel ✓' : 'Use as bot channel';
+
     $('public-key').value = room.public_key;
     $('password-state').textContent=room.auth_revision ? 'Password is set. Enter a new password only to change it.' : 'Set a password, then enable this room. Existing history and identity are preserved.';
-    $('toggle').disabled=!room.auth_revision;
+    updateRoomActions();
     renderMembers();
     $('posts').replaceChildren(...room.posts.map(p => {
       const row=document.createElement('article'), label=document.createElement('small'), text=document.createElement('p');
@@ -67,10 +85,11 @@
   }
   async function change(body, clear) {
     if (busy) return;busy=true;$('error').textContent='';
+    updateRoomActions();
     $('members').querySelectorAll('select,button').forEach(n=>n.disabled=true);
     try {render(await request({room:selected,...body}),true);if(clear)$(clear).value='';}
     catch(e){$('error').textContent=e.message;}
-    finally {busy=false;$('members').querySelectorAll('select,button').forEach(n=>n.disabled=false);}
+    finally {busy=false;updateRoomActions();$('members').querySelectorAll('select,button').forEach(n=>n.disabled=false);}
   }
   $('show-qr').onclick=async()=>{
     if (!$('room-qr').hidden) { $('room-qr').hidden=true; $('show-qr').textContent='Show room QR code'; return; }
@@ -105,11 +124,31 @@
   $('post').onsubmit=e=>{e.preventDefault();change({action:'post',text:$('text').value},'text');};
   $('password-form').onsubmit=e=>{e.preventDefault();change({action:'password',password:$('room-password').value},'room-password');};
   $('toggle').onclick=()=>change({action:'enabled',enabled:!Boolean(current().enabled)});
+  $('delete-room').onclick=()=>{
+    const room=current();
+    if(!room || busy || room.enabled || room.is_bot)return;
+    if(!window.confirm('Permanently delete room "'+room.name+'"?\n\nIts identity, password, participants, messages and history will be deleted. This cannot be undone.'))return;
+    change({action:'delete',confirm_delete:true,expected:{name:room.name,public_key:room.public_key}});
+  };
   $('bot-channel').onclick=()=>change({action:'bot'});
   $('restart').onclick=()=>change({action:'restart'});
   $('copy').onclick=async()=>{try {await navigator.clipboard.writeText(current().contact_uri);}catch { $('error').textContent='Copy this link: '+current().contact_uri; }};
   $('room').onchange=()=>{selected=Number($('room').value);render({rooms,status:lastStatus},true);};
   let lastStatus={running:false,sessions:0,dropped_packets:0};
-  async function refresh(first=false){if(busy||document.hidden)return;busy=true;try{const result=await request();lastStatus=result.status;render(result,first);}catch(e){$('error').textContent=e.message;}finally{busy=false;}}
+  async function refresh(first=false){if(busy||document.hidden)return;busy=true;updateRoomActions();try{const result=await request();lastStatus=result.status;render(result,first);}catch(e){$('error').textContent=e.message;}finally{busy=false;updateRoomActions();}}
+  if(embedded) {
+    const resize=()=>{
+      if(window.parent===window)return;
+      const shell=document.querySelector('.room-shell');
+      if(!shell)return;
+      // Only measure the actual content, never body/documentElement scrollHeight:
+      // those can inherit the iframe's previous height and create empty space.
+      const height=Math.max(shell.getBoundingClientRect().height,shell.scrollHeight);
+      if(height>0)window.parent.postMessage({kind:'meshcorestation-room-iframe-height',height:Math.ceil(height)+8},window.location.origin);
+    };
+    if(typeof ResizeObserver==='function')new ResizeObserver(resize).observe(document.querySelector('.room-shell'));
+    window.addEventListener('load',resize);
+    resize();
+  }
   refresh(true);updateContacts();setInterval(()=>refresh(),5000);
 })();

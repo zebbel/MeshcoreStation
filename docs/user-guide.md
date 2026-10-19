@@ -56,7 +56,23 @@ all repeaters or the final recipient received a message.
 
 ## Repeater battery and statistics
 
-Select a repeater from the map and save battery settings. Configure sampling,
+Open **Repeater management** and use **Add repeater from map** to save each
+repeater to the station's managed list. The dropdown controls the displayed
+battery history, statistics and management popup. The list is shared across
+browsers; each browser remembers which repeater it last viewed.
+
+Each repeater has separate sampling intervals, telemetry channel, report times,
+timezone and destination. New repeaters start with battery polling disabled;
+enable it in that repeater's **Battery history / settings**. Disabling one
+repeater does not affect the others. Manual reads target the selected repeater.
+Polling is serial, with one due read per worker cycle, so heavy schedules may
+run later than their nominal interval.
+
+Adding a repeater starts passive metadata collection for it without transmitting.
+Use **Pause collection** / **Start collection** to control only that repeater;
+others keep collecting. Existing observations remain available when paused.
+
+Select a repeater and save its battery settings. Configure sampling,
 report times and **Send battery reports to**: follow the bot, a named private
 channel, or an enabled local room. The target is independent of the monitored
 repeater. Daily reports use the last successful stored battery reading and its
@@ -100,3 +116,9 @@ receiving messages, while Write also allows posting. Changes save immediately.
 room password. Change the password to prevent that.
 
 For configuration coverage and the remote Console tab, see [Repeater management](repeater-management.md).
+
+**Remove repeater** stops its monitoring and collection and permanently deletes
+its battery settings, readings, report history and collected statistics. The
+confirmation names the selected repeater. Other repeaters are unaffected. Its
+known map/contact entry remains available so it can be added again with fresh
+settings. The remembered management password is cleared in the current browser.

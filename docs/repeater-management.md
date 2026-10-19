@@ -1,6 +1,8 @@
 # Repeater management
 
-Open a repeater on the map and choose management. Connect using its admin
+Use the dashboard’s **Repeater management** dropdown and **Open repeater management**,
+or open a repeater on the map and choose management. **Add repeater from map**
+persists another managed repeater without replacing existing ones. Connect using its admin
 password, or leave the password blank to use existing permissions or guest access.
 **Remember password** optionally saves the login password for this repeater in
 this browser on this device and fills it in on the next login. It is off by
@@ -85,3 +87,9 @@ These sources evolve. Settings compiled only for particular hardware cannot be
 assumed to exist on every repeater. Automated tests cover validation, permission
 checks, special response formats, command dispatch and browser behavior; physical
 radio and board-specific behavior still require testing on the connected hardware.
+
+**Remove repeater** stops its monitoring and collection and permanently deletes
+its battery settings, readings, report history and collected statistics. The
+confirmation names the selected repeater. Other repeaters are unaffected. Its
+known map/contact entry remains available so it can be added again with fresh
+settings. The remembered management password is cleared in the current browser.

@@ -98,6 +98,26 @@ class RoomService:
                        (room,identity.seed,identity.public.hex()))
             return room
 
+    def delete(self, room, expected_name, expected_public_key):
+        """Permanently remove an inactive room and all of its private data."""
+        if type(room) is not int or room < 1:
+            raise ValueError('Select a room.')
+        if not isinstance(expected_name, str) or not isinstance(expected_public_key, str):
+            raise ValueError('Refresh rooms before deleting.')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            current = self._config(db, room)
+            if current['name'] != expected_name or current['public_key'] != expected_public_key:
+                raise ValueError('Room changed. Refresh before deleting.')
+            if current['is_bot']:
+                raise ValueError('Switch the bot to another channel before deleting this room.')
+            if current['enabled']:
+                raise ValueError('Disable this room before permanently deleting it.')
+            for table in ('room_auth', 'identities', 'sessions_replay', 'members',
+                          'posts', 'replay', 'cursors'):
+                db.execute(f'DELETE FROM {table} WHERE room_id=?', (room,))
+            db.execute('DELETE FROM rooms WHERE id=?', (room,))
+
     def rooms(self):
         with self.connect() as db:
             return [dict(row) for row in db.execute('SELECT id,name,enabled,is_bot FROM rooms ORDER BY id')]

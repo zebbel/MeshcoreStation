@@ -28,6 +28,7 @@ def initialize():
         db.execute('PRAGMA journal_mode=WAL')
         db.executescript('''
             CREATE TABLE IF NOT EXISTS selection (id INTEGER PRIMARY KEY CHECK(id=1), public_key TEXT NOT NULL, since REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS subscriptions (public_key TEXT PRIMARY KEY, since REAL NOT NULL, enabled INTEGER NOT NULL DEFAULT 1);
             CREATE TABLE IF NOT EXISTS observations (
                 id INTEGER PRIMARY KEY, target TEXT NOT NULL, at REAL NOT NULL, digest TEXT,
                 kind INTEGER NOT NULL, scoped INTEGER NOT NULL, ambiguous INTEGER NOT NULL,
@@ -53,6 +54,41 @@ def select(key):
         if row and row['public_key']==key:
             return
         db.execute('INSERT OR REPLACE INTO selection VALUES(1,?,?)',(key,time.time()))
+
+
+def track(key, enabled=True):
+    if key not in {r['public_key'] for r in known_repeaters()}:
+        raise ValueError('Select a known repeater.')
+    if type(enabled) is not bool:
+        raise ValueError('Collection enabled must be true or false.')
+    with closing(connect()) as db, db:
+        legacy = db.execute('SELECT since FROM selection WHERE public_key=?', (key,)).fetchone()
+        since = legacy['since'] if legacy else time.time()
+        db.execute('''INSERT INTO subscriptions(public_key,since,enabled) VALUES (?,?,?)
+            ON CONFLICT(public_key) DO UPDATE SET enabled=excluded.enabled''', (key,since,int(enabled)))
+
+
+def collection_targets(db):
+    targets = {row['public_key']: dict(row) for row in db.execute('SELECT public_key,since,enabled FROM subscriptions')}
+    legacy = db.execute('SELECT public_key,since FROM selection WHERE id=1').fetchone()
+    if legacy and legacy['public_key'] and legacy['public_key'] not in targets:
+        targets[legacy['public_key']] = dict(legacy, enabled=1)
+    return [row for row in targets.values() if row['enabled']]
+
+
+def store_batch(db, batch, repeaters):
+    # Serialize subscription reads and inserts with removal, so queued packets
+    # cannot recreate observations after deletion.
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
+    for selection in collection_targets(db):
+        for at, packet in batch:
+            if at < selection['since']:
+                continue
+            values = attribute(packet, selection['public_key'], repeaters)
+            if values:
+                db.execute('''INSERT INTO observations(target,at,digest,kind,scoped,ambiguous,first_hop,middle_hop,last_hop,route,previous,following)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', (selection['public_key'], at, *values))
 
 
 def normalize(rx):
@@ -141,13 +177,7 @@ class Collector:
                 if now-refresh>=10:
                     repeaters=known_repeaters(); refresh=now
                 with closing(connect()) as db, db:
-                    selection=db.execute('SELECT * FROM selection WHERE id=1').fetchone()
-                    if selection and selection['public_key']:
-                        for at,packet in batch:
-                            if at<selection['since']: continue
-                            values=attribute(packet,selection['public_key'],repeaters)
-                            if values:
-                                db.execute('INSERT INTO observations(target,at,digest,kind,scoped,ambiguous,first_hop,middle_hop,last_hop,route,previous,following) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(selection['public_key'],at,*values))
+                    store_batch(db, batch, repeaters)
                     if now-prune>=60:
                         db.execute('DELETE FROM observations WHERE at<?',(now-RETENTION,))
                         boundary=db.execute('SELECT id,at FROM observations ORDER BY id DESC LIMIT 1 OFFSET ?',(MAX_ROWS,)).fetchone()
@@ -171,8 +201,10 @@ class Collector:
 collector=Collector()
 
 
-def snapshot(days):
+def snapshot(days, public_key=None):
     if days not in (1,7,30): raise ValueError('Choose 24 hours, 7 days or 30 days.')
+    if public_key is not None and public_key not in {r['public_key'] for r in known_repeaters()}:
+        raise ValueError('Select a known repeater.')
     now=time.time(); cutoff=now-days*86400
     step=3600 if days==1 else 86400
     # Aggregate in SQLite instead of loading months of observations into Pi memory.
@@ -180,6 +212,14 @@ def snapshot(days):
         db.execute('BEGIN')
         selected=db.execute('SELECT * FROM selection WHERE id=1').fetchone()
         key=selected['public_key'] if selected else ''
+        if public_key is not None and public_key != key:
+            key=public_key
+            first=db.execute('SELECT MIN(at) FROM observations WHERE target=?', (key,)).fetchone()[0]
+            selected={'public_key':key,'since':first or now}
+        subscription=db.execute('SELECT * FROM subscriptions WHERE public_key=?',(key,)).fetchone()
+        collecting=any(row['public_key']==key for row in collection_targets(db))
+        if subscription:
+            selected={'public_key':key,'since':subscription['since']}
         params=(key,cutoff)
         where='target=? AND at>=? AND ambiguous=0'
         totals=db.execute('SELECT COUNT(*) AS copies, COUNT(digest) AS identified, COUNT(DISTINCT digest) AS unique_count, COALESCE(SUM(first_hop),0) AS first, COALESCE(SUM(middle_hop),0) AS middle, COALESCE(SUM(last_hop),0) AS final, COALESCE(SUM(scoped),0) AS scoped FROM observations WHERE '+where,params).fetchone()
@@ -202,7 +242,7 @@ def snapshot(days):
         bucket=buckets.get(at,{})
         timeline.append({'at':at,'copies':bucket.get('copies',0),'unique':bucket.get('unique_count',0)})
     from meshcorestation.bridge import bridge
-    return {'selection':dict(selected) if selected else None,'repeaters':known_repeaters(),'days':days,
+    return {'collection_enabled': collecting, 'selection':dict(selected) if selected else None,'repeaters':known_repeaters(),'days':days,
             'copies':totals['copies'],'unique':unique,'repeated':repeats,'ratio':repeats/totals['identified'] if totals['identified'] else None,
             'unidentified':totals['copies']-totals['identified'],'ambiguous':ambiguous,'earliest':earliest,
             'health':{**health,'running':bool(collector.thread and collector.thread.is_alive()),'error':collector.error,'radio':bridge.status[0]},

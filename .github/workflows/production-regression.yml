@@ -1,0 +1,31 @@
+name: Production regression
+on:
+  push:
+    branches: [main, release-3.0.5-integration]
+  pull_request:
+    paths:
+      - 'meshcorestation/**'
+      - 'tests/**'
+      - '.github/workflows/production-regression.yml'
+      - 'requirements.txt'
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt pytest
+      - run: python -m pytest tests/test_layout_panels.py tests/test_multi_repeater.py tests/test_voltage_destinations.py tests/test_passive_statistics.py tests/test_rooms_api.py tests/test_room_service.py -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --package-lock=false jsdom
+      - run: node tests/test_managed_repeaters_ui.cjs
+      - run: node tests/test_rooms_ui.cjs
+      - run: node tests/test_room_embed_ui.cjs
+      - run: node tests/test_passive_statistics_ui.cjs
+      - run: node tests/test_statistics_picker_ui.cjs
