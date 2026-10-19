@@ -18,5 +18,17 @@ const open=()=>w.document.dispatchEvent(new w.CustomEvent('stats-picker-open',{d
     fail=true;open();await settle();assert(d.querySelector('.stats-map-fallback').open);
     const search=d.querySelector('.stats-map-search');search.value='No coordinates';search.dispatchEvent(new w.Event('input'));
     const rows=d.querySelectorAll('.stats-picker-row');assert.equal(rows.length,1);rows[0].querySelector('button').click();assert.deepEqual(selected,[key,other]);
-    dom.window.close();console.log('Map selection, cancel, safe names and offline searchable fallback passed.');
+    fail=false;const managedEvents=[];w.document.addEventListener('managed-repeater-added',e=>managedEvents.push(e.detail));
+    w.document.dispatchEvent(new w.CustomEvent('stats-picker-open',{detail:{repeaters:[{public_key:key,name:'Existing'},{public_key:other,name:'New repeater'}],selected:key,managedRepeaters:[key],selectionEvent:'managed-repeater-added',actionLabel:'Add repeater',title:'Add repeater from map'}}));
+    await settle();
+    const popupButton=popups.at(-1).querySelector('button');
+    assert(popupButton.disabled);assert.equal(popupButton.textContent,'Already managed');
+    popupButton.onclick();assert.deepEqual(managedEvents,[]);
+    const rows2=d.querySelectorAll('.stats-picker-row');
+    assert.equal(rows2.length,2);
+    assert(rows2[0].querySelector('button:last-child').disabled);
+    assert.equal(rows2[0].querySelector('button:last-child').textContent,'Already managed');
+    assert(!rows2[1].querySelector('button:last-child').disabled);
+    rows2[1].querySelector('button:last-child').click();assert.deepEqual(managedEvents,[other]);
+    dom.window.close();console.log('Map selection, managed-repeater disabling, cancel, safe names and offline searchable fallback passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

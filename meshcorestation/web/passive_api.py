@@ -16,8 +16,11 @@ def register_passive_routes(server):
                 body=request.get_json(silent=True)
                 if not isinstance(body,dict) or not isinstance(body.get('public_key'),str):
                     raise ValueError('Select a repeater.')
-                stats.select(body['public_key'].lower())
-            return reply({'ok':True,**stats.snapshot(days)})
+                if 'enabled' in body:
+                    stats.track(body['public_key'].lower(), body['enabled'])
+                else:
+                    stats.select(body['public_key'].lower())
+            return reply({'ok':True,**stats.snapshot(days, request.args.get('public_key'))})
         except ValueError as exc:
             return reply({'ok':False,'error':str(exc)},400)
         except Exception:

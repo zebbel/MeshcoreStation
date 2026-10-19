@@ -1,6 +1,6 @@
 # Independent room server
 
-The room server is included in stable **MeshcoreStation 3.0.4** on `main`.
+The room server is included in stable **MeshcoreStation 3.0.5** on `main`.
 See [V3 release notes](v3-review.md) for changes and validation. Enabling a room
 does not flash the companion.
 
@@ -75,7 +75,7 @@ Install or update main using the [update guide](web-version-switching.md).
 The room server is part of the stable application; no feature-branch switch is
 needed. Verify delivery with your companion and Android app after setup.
 
-1. Open **Room server → Open room server** in the dashboard (`/rooms`).
+1. Open the collapsible **Room server** section on the dashboard (or visit `/rooms`).
 2. Create a room. It remains disabled until explicitly enabled.
 3. Set a room password (1–15 UTF-8 bytes, matching the companion protocol).
    Passwords are stored as salted hashes and are never returned by the API.
@@ -151,3 +151,13 @@ preserves existing schedules and defaults the target to the bot chat/room.
 
 V3 runs recognized room commands through a separate bounded worker. See
 [architecture](architecture.md) for queue, cancellation and permission semantics.
+
+## Deleting a room
+
+Select a room and, if it is enabled, use **Disable room** first. If it is the
+selected bot channel, switch the bot to a normal companion channel or a different
+room before deleting. If a managed repeater uses this room as its battery report destination,
+change that destination in **Repeater management** first. Click **Delete room** and confirm. This permanently deletes
+the room identity, password hash, participant permissions, posts, cursors, and
+replay history, so previous room contact links stop working. Other rooms are
+unaffected. This is irreversible; back up `rooms.db` if history must be retained.

@@ -2,12 +2,45 @@
 import json
 import sqlite3
 import threading
+from contextlib import closing
 from pathlib import Path
 from urllib.parse import urlencode
 from flask import request, send_file
-from meshcorestation.config import DATA_DIR
+from meshcorestation.config import DATA_DIR, DB_PATH
 from meshcorestation.rooms.service import RoomService
 from meshcorestation.web.http import control_request_error, json_response as reply
+
+
+def delete_room_with_battery_guard(service, rid, expected):
+    """Check all managed battery destinations before removing a room.
+
+    Lock the station DB first to serialize against concurrent battery-setting
+    saves, which also take the station write lock before reading room settings.
+    The station database may not exist on a room-only first installation.
+    """
+    if not DB_PATH.exists():
+        service.delete(rid, expected['name'], expected['public_key'])
+        return
+    with closing(sqlite3.connect(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as station:
+        station.execute('BEGIN IMMEDIATE')
+        table = station.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='voltage_config'"
+        ).fetchone()
+        if table:
+            fields = {col[1] for col in station.execute('PRAGMA table_info(voltage_config)')}
+            if 'report_target' in fields:
+                condition = "report_target=?"
+                if 'managed' in fields:
+                    condition += ' AND managed=1'
+                used = station.execute(
+                    f'SELECT 1 FROM voltage_config WHERE {condition} LIMIT 1',
+                    (f'room:{rid}',)
+                ).fetchone()
+                if used:
+                    raise ValueError('This room is used as a repeater battery report destination. '
+                                     'Change the destination in Repeater management before deleting it.')
+        service.delete(rid, expected['name'], expected['public_key'])
+        station.commit()
 
 
 def register_room_routes(server):
@@ -36,7 +69,9 @@ def register_room_routes(server):
             if request.method == 'POST':
                 if request.mimetype != 'application/json':
                     return reply(dict(ok=False,error='Expected JSON.'),415)
-                raw = request.stream.read(8193)
+                if request.content_length is not None and request.content_length > 8192:
+                    raise ValueError('Request too large.')
+                raw = request.get_data(cache=True)
                 if len(raw) > 8192:
                     raise ValueError('Request too large.')
                 body = json.loads(raw)
@@ -52,6 +87,11 @@ def register_room_routes(server):
                     return reply(contact_card(service.config(rid), contact_type=3))
                 if action == 'create':
                     rid = service.create(body.get('name'))
+                elif action == 'delete':
+                    expected = body.get('expected')
+                    if body.get('confirm_delete') is not True or not isinstance(expected, dict) or set(expected) != {'name', 'public_key'}:
+                        raise ValueError('Refresh and confirm permanent room deletion.')
+                    delete_room_with_battery_guard(service, rid, expected)
                 elif action == 'enabled':
                     service.set_enabled(rid, body.get('enabled'))
                 elif action == 'password':

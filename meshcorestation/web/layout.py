@@ -19,12 +19,32 @@ def build_layout():
         html.Header([html.Div([html.Div([html.Img(src="/assets/meshcore-logo.png?v=1.2", id="meshcore-brand-image", alt="MeshCore"), html.Span("M", id="brand-fallback", hidden=True)], className="mark meshcore-mark"), html.Div([html.H1("MeshcoreStation"), html.P("Your mesh, at a glance.", className="muted")])], className="brand"), html.Div([html.Span(className="live-dot"), " Refreshes every 5 seconds"], className="refresh-label")]),
         html.Div([card("Bot status", "bot-status", "bot-detail"), card("Known repeaters", "repeater-count", "repeater-detail")], className="cards"),
     html.Div(id="error", role="status"),
-        html.Section([html.Div([html.Div([html.H2("Room server"), html.P("Independent private message boards", className="muted")]), html.A("Open room server ↗", href="/rooms", className="info-button")], className="toolbar")], className="history"),
-        html.Section([html.Div([html.Div([html.H2("Repeater battery"), html.P("Voltage history and scheduled channel reports", className="muted")]), html.Div([html.Button("Select repeater", id="select-voltage-repeater", className="info-button"), html.Button("Battery history / settings", id="open-voltage", className="info-button")], className="voltage-actions")], className="toolbar"), html.Div(id="battery-overview")], className="history"),
-        html.Section([html.Details([
-            html.Summary(html.H2("My repeater statistics")),
-            html.Div(id="repeater-statistics-inline")
-        ], id="repeater-statistics-disclosure", className="panel-disclosure")], className="history"),
+        html.Section(html.Details([
+            html.Summary(html.H2("Room server")),
+            html.Div(html.Iframe(src="/rooms?embedded=1", id="room-server-frame",
+                                title="Room server controls", style={"width": "100%", "height": "160px", "border": "0", "display": "block"}),
+                     className="room-server-inline")
+        ], id="room-server-disclosure", className="panel-disclosure"), className="history"),
+        html.Section(html.Details([
+            html.Summary(html.H2("Repeater management")),
+            html.Div([
+                html.Label([html.Span("Selected repeater"), html.Select(id="managed-repeater", **{"aria-label": "Selected repeater"})]),
+                html.Div([
+                    html.Button("Add repeater from map", id="managed-repeater-add", type="button", className="info-button"),
+                    html.Button("Open repeater management", id="managed-repeater-open", type="button", className="info-button", disabled=True),
+                    html.Button("Remove repeater", id="managed-repeater-remove", type="button", className="info-button", disabled=True)
+                ], className="managed-repeater-actions")
+            ], className="managed-repeater-controls"),
+            html.P(id="managed-repeater-message", role="status"),
+            html.Section([
+                html.Div([html.H2("Repeater battery"), html.Button("Battery history / settings", id="open-voltage", className="info-button")], className="toolbar"),
+                html.Div(id="battery-overview")
+            ], className="managed-repeater-section"),
+            html.Details([
+                html.Summary(html.H2("Repeater statistics")),
+                html.Div(id="repeater-statistics-inline")
+            ], id="repeater-statistics-disclosure", className="panel-disclosure managed-repeater-section")
+        ], id="repeater-management-disclosure", className="panel-disclosure"), className="history"),
         html.Section([html.Details([
             html.Summary([
                 html.H2("Command history"),

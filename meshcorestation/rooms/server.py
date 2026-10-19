@@ -34,7 +34,15 @@ class RoomEndpoint:
         self.auth_revision = service.config(room)['auth_revision']
 
     def refresh_auth(self):
-        config = self.service.config(self.room)
+        try:
+            config = self.service.config(self.room)
+        except ValueError as error:
+            if str(error) != 'Unknown room.':
+                raise
+            # A room deleted since the previous worker cycle must not stop
+            # the room worker or leave any authenticated sessions active.
+            self.sessions.clear()
+            return {'enabled': False, 'auth_revision': self.auth_revision}, True
         changed = config['auth_revision'] != self.auth_revision
         if changed or not config['enabled']:
             self.sessions.clear()
@@ -55,7 +63,13 @@ class RoomEndpoint:
         return None
 
     def advert(self):
-        details = self.service.config(self.room)
+        try:
+            details = self.service.config(self.room)
+        except ValueError as error:
+            if str(error) != 'Unknown room.':
+                raise
+            self.sessions.clear()
+            return None
         if not details['enabled']:
             return None
         self.last_advert = self.clock()

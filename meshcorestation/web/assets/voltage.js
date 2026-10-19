@@ -162,5 +162,5 @@
         } catch(error) {window.alert(error.message);} finally {button.disabled=false;}
     });
     document.addEventListener('meshcore-voltage-open',e=>{const key=e.detail?.public_key||'';if(dialog?.open&&key)choose(key);else open(key);});
-    document.addEventListener('click',e=>{if(e.target.closest('#open-voltage'))open();});
+    document.addEventListener('click',e=>{if(e.target.closest('#open-voltage'))open(window.meshcorestationSelectedRepeater||'');});
 })();

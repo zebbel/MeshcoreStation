@@ -131,3 +131,15 @@ local refresh nor receipt verification transmits any additional LoRa requests.
 Repeater Optimizer uses the shared dashboard stylesheet and follows the same
 light/dark preference. Merged main 3.0.4, including daily battery reports using
 the last stored reading.
+
+## 3.0.5rc1 · Integration with main
+
+The optimizer branch now includes the MeshcoreStation 3.0.5 dashboard,
+room-server and multi-repeater backend. Per-repeater passive subscriptions
+are combined with the optimizer's independent network-wide metadata capture,
+disk budget and neighbor snapshots. Removing a managed repeater also removes
+its stored optimizer role, scheduled polling, snapshots and audit history.
+Network-wide observations remain because they are shared evidence.
+
+Analysis remains local and passive. Manual radio reads, verified writes,
+and explicitly opted-in 12h/24h neighbor polling retain their prior safeguards.

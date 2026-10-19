@@ -34,11 +34,51 @@ def initialize(db):
     if 'report_target' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
         db.execute("ALTER TABLE voltage_config ADD COLUMN report_target TEXT NOT NULL DEFAULT 'bot'")
 
+    if 'managed' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
+        db.execute('ALTER TABLE voltage_config ADD COLUMN managed INTEGER NOT NULL DEFAULT 1')
+    # Upgrade the singleton table in place, preserving settings and pending reads.
+    sql = db.execute("SELECT sql FROM sqlite_master WHERE name='voltage_config'").fetchone()[0]
+    if re.search(r'CHECK\s*\(\s*id\s*=\s*1\s*\)', sql, re.I):
+        columns = ','.join(row[1] for row in db.execute('PRAGMA table_info(voltage_config)'))
+        with db:
+            db.execute('ALTER TABLE voltage_config RENAME TO voltage_config_single')
+            db.execute(re.sub(r'CHECK\s*\(\s*id\s*=\s*1\s*\)', '', sql, flags=re.I))
+            db.execute(f'INSERT INTO voltage_config ({columns}) SELECT {columns} FROM voltage_config_single')
+            db.execute('DROP TABLE voltage_config_single')
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS voltage_config_key ON voltage_config(public_key) WHERE public_key != ''")
+    # Keep existing report attempts reserved after namespacing slots by repeater.
+    db.execute("UPDATE voltage_reports SET slot=public_key||'|'||slot WHERE substr(slot,1,65) != public_key||'|'")
+    db.commit()
 
-def config(db):
-    row = db.execute('SELECT * FROM voltage_config WHERE id=1').fetchone()
+
+def configurations(db):
+    return [config(db, row[0]) for row in db.execute("SELECT public_key FROM voltage_config WHERE public_key != '' AND managed=1 ORDER BY id")]
+
+
+def ensure_repeater(db, key):
+    if not isinstance(key, str) or not re.fullmatch('[0-9a-f]{64}', key):
+        raise ValueError('Select a repeater from the list or map.')
+    if not db.execute('SELECT 1 FROM repeaters WHERE lower(public_key)=? AND adv_type=2', (key,)).fetchone():
+        raise ValueError('Selected repeater is not in the known repeater list.')
+    db.execute('INSERT OR IGNORE INTO voltage_config(public_key) VALUES (?)', (key,))
+    db.execute('UPDATE voltage_config SET managed=1 WHERE public_key=?', (key,))
+    return config(db, key)
+
+
+def config(db, public_key=None):
+    if public_key:
+        row = db.execute('SELECT * FROM voltage_config WHERE public_key=?', (public_key,)).fetchone()
+        if row is None:
+            return dict(id=None, public_key=public_key, enabled=False, interval_minutes=30,
+                        reports_enabled=True, report_time_1='08:00', report_time_2='20:00',
+                        timezone='Europe/Berlin', voltage_channel=1, report_target='bot',
+                        revision=0, updated_at=0, request_seq=0, handled_seq=0)
+    else:
+        row = db.execute('SELECT * FROM voltage_config WHERE managed=1 ORDER BY public_key=\'\',id LIMIT 1').fetchone()
     if row is None:
-        raise ValueError('Start the updated bot once to initialize voltage monitoring.')
+        return dict(id=None, public_key='', enabled=False, interval_minutes=30, reports_enabled=False,
+                    report_time_1='08:00', report_time_2='20:00', timezone='Europe/Berlin',
+                    voltage_channel=1, report_target='bot', revision=0, updated_at=0, request_seq=0, handled_seq=0)
     result = dict(row)
     for key in ('enabled', 'reports_enabled'):
         result[key] = bool(result[key])

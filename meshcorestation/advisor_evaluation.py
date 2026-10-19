@@ -41,6 +41,11 @@ def evaluate_recent(key, changes, now=None):
     with closing(passive_stats.connect()) as db:
         db.execute('BEGIN')
         selected = db.execute('SELECT * FROM selection WHERE id=1').fetchone()
+        # With 3.0.5 each repeater has its own passive subscription.
+        # Preserve the old selection as a fallback for legacy history.
+        subscription = db.execute('SELECT * FROM subscriptions WHERE public_key=?', (key,)).fetchone()
+        if subscription:
+            selected = subscription
         health = db.execute('SELECT * FROM health WHERE id=1').fetchone()
         selection = dict(selected) if selected else {}
         health = dict(health) if health else {}
@@ -59,7 +64,7 @@ def evaluate_recent(key, changes, now=None):
             before_start, after_start = at - WINDOW, at + SETTLING
             after_end = after_start + WINDOW
             if before_start < now - passive_stats.RETENTION:
-                entry['message'] = 'Baseline passed the 30-day statistics retention period.'
+                entry['message'] = 'Baseline passed the detailed statistics retention period.'
                 continue
             if selection.get('since', now) > before_start:
                 entry['message'] = 'Selected-repeater collection did not cover the full baseline.'
@@ -99,5 +104,5 @@ def evaluate_recent(key, changes, now=None):
             if others:
                 entry['notes'].append(f'{others} other advisor changes in the interval; no single-setting attribution.')
             if health.get('dropped'):
-                entry['notes'].append('The collector reported packet drops, but their timing is unknown.')
+                entry['notes'].append('The collector reported dropped observations, but their timing is unknown.')
         return results

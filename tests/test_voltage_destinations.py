@@ -19,7 +19,7 @@ def database():
     db.execute('INSERT INTO repeaters VALUES (?, 2)', (KEY,))
     initialize(db)
     db.execute('INSERT INTO voltage_reports(slot,public_key,due_at,attempted_at,status,detail) VALUES (?,?,?,?,?,?)',
-               ('morning',KEY,time.time(),time.time(),'unconfirmed','pending'))
+               (KEY+'|morning',KEY,time.time(),time.time(),'unconfirmed','pending'))
     db.commit()
     return db
 
@@ -58,7 +58,7 @@ def cfg(db,target):
     return config(db)
 
 def report(db):
-    return dict(db.execute("SELECT * FROM voltage_reports WHERE slot='morning'").fetchone())
+    return dict(db.execute("SELECT * FROM voltage_reports WHERE slot=?", (KEY+'|morning',)).fetchone())
 
 def test_migration_retains_bot_destination():
     db=sqlite3.connect(':memory:')
@@ -94,7 +94,7 @@ def test_destination_validation():
 def test_room_report_not_sent_to_channel():
     db=database()
     m,s,c=monitor(db)
-    asyncio.run(m.report('morning',cfg(db,'room:2'),SAMPLE))
+    asyncio.run(m.report(KEY+'|morning',cfg(db,'room:2'),SAMPLE))
     assert s.posts and not c.sent
     assert report(db)['channel_name']=='Room: Test room'
     assert report(db)['status']=='queued'
@@ -103,12 +103,12 @@ def test_room_report_not_sent_to_channel():
 def test_bot_follow_room_and_offline_room():
     db=database()
     m,s,c=monitor(db,room_bot=2)
-    asyncio.run(m.report('morning',cfg(db,'bot'),SAMPLE))
+    asyncio.run(m.report(KEY+'|morning',cfg(db,'bot'),SAMPLE))
     assert s.posts and not c.sent
     db.close()
     db=database()
     m,s,c=monitor(db,running=False)
-    asyncio.run(m.report('morning',cfg(db,'room:2'),SAMPLE))
+    asyncio.run(m.report(KEY+'|morning',cfg(db,'room:2'),SAMPLE))
     assert not s.posts and report(db)['status']=='failed'
     db.close()
 
@@ -118,7 +118,7 @@ def test_explicit_channel_independent_of_bot_room(monkeypatch):
     monkeypatch.setattr('meshcorestation.radio.channels_control.read_channels',channels)
     db=database()
     m,s,c=monitor(db,room_bot=2)
-    asyncio.run(m.report('morning',cfg(db,'channel:Battery ops'),SAMPLE))
+    asyncio.run(m.report(KEY+'|morning',cfg(db,'channel:Battery ops'),SAMPLE))
     assert not s.posts and c.sent and c.sent[0][0]==3
     assert c.scope_resets==[None]
     assert report(db)['channel_name']=='Chat: Battery ops'

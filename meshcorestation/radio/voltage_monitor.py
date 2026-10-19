@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from meshcore import EventType
 from meshcorestation.radio.channels_control import channel_type
 from meshcorestation.radio.contacts_control import new_contact
-from meshcorestation.storage.voltage_store import initialize, config, latest, latest_reading, extract_voltage, due_slots
+from meshcorestation.storage.voltage_store import initialize, config, configurations, latest, latest_reading, extract_voltage, due_slots
 
 
 class VoltageMonitor:
@@ -101,6 +101,10 @@ class VoltageMonitor:
             self.companion.logger.warning('Voltage read for %s failed: %s', key[:12], error)
         stamp = time.time()
         with self.db:
+            self.db.execute('BEGIN IMMEDIATE')
+            current = config(self.db, key)
+            if not current.get('managed', 1) or current['revision'] != cfg['revision']:
+                return None
             self.db.execute('''INSERT INTO voltage_samples
                 (public_key,name,sampled_at,voltage,error,voltage_channel,interval_seconds)
                 VALUES (?,?,?,?,?,?,?)''', (key, name, stamp, voltage, error,
@@ -109,34 +113,46 @@ class VoltageMonitor:
         return latest(self.db, cfg)
 
     async def tick(self):
-        cfg = config(self.db)
+        configs = configurations(self.db)
+        # Reports use stored readings first, so an unreachable repeater cannot
+        # delay another repeater's report behind a telemetry timeout.
+        for cfg in configs:
+            for slot, due_at in due_slots(cfg, time.time()):
+                slot = cfg['public_key'] + '|' + slot
+                with self.db:
+                    self.db.execute('BEGIN IMMEDIATE')
+                    current = config(self.db, cfg['public_key'])
+                    if not current.get('managed', 1) or current['revision'] != cfg['revision']:
+                        continue
+                    claimed = self.db.execute('''INSERT OR IGNORE INTO voltage_reports
+                        (slot,public_key,due_at,attempted_at,status,detail) VALUES (?,?,?,?,?,?)''',
+                        (slot, cfg['public_key'], due_at, time.time(), 'unconfirmed',
+                         'Attempt reserved; interrupted attempts are not retransmitted automatically.')).rowcount
+                if claimed:
+                    await self.report(slot, cfg, latest_reading(self.db, cfg))
+        # One radio read per tick bounds control-lock time. Oldest due samples
+        # go first; a failed read also advances its interval to avoid starvation.
+        pending = []
         now = time.time()
-        sample = latest(self.db, cfg)
-        manual = cfg['request_seq'] > cfg['handled_seq']
-        due = cfg['enabled'] and (not sample or now - sample['sampled_at'] >= cfg['interval_minutes'] * 60)
-        if cfg['public_key'] and (manual or due):
+        for cfg in configurations(self.db):
+            sample = latest(self.db, cfg)
+            stamp = sample['sampled_at'] if sample else 0
+            manual = cfg['request_seq'] > cfg['handled_seq']
+            if manual or (cfg['enabled'] and now - stamp >= cfg['interval_minutes'] * 60):
+                pending.append((not manual, stamp, cfg['id'], cfg))
+        if pending:
+            cfg = min(pending, key=lambda item: item[:3])[3]
             with self.db:
-                self.db.execute('UPDATE voltage_config SET handled_seq=? WHERE id=1', (cfg['request_seq'],))
-            sample = await self.sample(cfg)
-        # Dashboard saves can happen while the radio request is in flight.
-        if config(self.db)['revision'] != cfg['revision']:
-            return
-        for slot, due_at in due_slots(cfg, time.time()):
-            with self.db:
-                claimed = self.db.execute('''INSERT OR IGNORE INTO voltage_reports
-                    (slot,public_key,due_at,attempted_at,status,detail) VALUES (?,?,?,?,?,?)''',
-                    (slot, cfg['public_key'], due_at, time.time(), 'unconfirmed',
-                     'Attempt reserved; interrupted attempts are not retransmitted automatically.')).rowcount
-            if not claimed:
-                continue
-            # Reports reuse stored telemetry; they never request an extra read.
-            await self.report(slot, cfg, latest_reading(self.db, cfg))
+                claimed = self.db.execute('UPDATE voltage_config SET handled_seq=? WHERE id=? AND revision=?',
+                                          (cfg['request_seq'], cfg['id'], cfg['revision'])).rowcount
+            if claimed:
+                await self.sample(cfg)
         self.heartbeat('idle')
 
     async def report(self, slot, cfg, sample):
         state, detail, destination = 'failed', '', None
         try:
-            if config(self.db)['revision'] != cfg['revision']:
+            if config(self.db, cfg['public_key'])['revision'] != cfg['revision']:
                 raise ValueError('Report settings changed.')
             if sample is None:
                 raise ValueError('No successful battery reading available for this repeater and telemetry channel.')
@@ -158,7 +174,7 @@ class VoltageMonitor:
                 destination = 'Room: ' + room['name']
                 if not room['enabled']:
                     raise ValueError('Selected room disabled.')
-                if config(self.db)['revision'] != cfg['revision']:
+                if config(self.db, cfg['public_key'])['revision'] != cfg['revision']:
                     raise ValueError('Report settings changed.')
                 worker.service.local_post(room_id, message)
                 state, detail = 'queued', message + ' (Room queued; delivery unconfirmed.)'
@@ -180,7 +196,7 @@ class VoltageMonitor:
                     reset = await c.mc.commands.set_flood_scope(None)
                     if reset is None or reset.type != EventType.OK:
                         raise ValueError('Could not reset default scope.')
-                    if config(self.db)['revision'] != cfg['revision']:
+                    if config(self.db, cfg['public_key'])['revision'] != cfg['revision']:
                         raise ValueError('Report settings changed.')
                     state, detail = 'unconfirmed', 'Send attempted; no automatic retry.'
                     sent = await c.mc.commands.send_chan_msg(index, message)

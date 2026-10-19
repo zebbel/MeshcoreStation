@@ -39,3 +39,14 @@
     .rooms-page #members li { grid-template-columns: minmax(0,1fr) auto; }
     .rooms-page .member-identity { grid-column: 1 / -1; }
 }
+
+/* The unchanged Room server UI can also render inside the dashboard disclosure. */
+#room-server-disclosure .room-server-inline { padding: 0 26px 18px; min-width: 0; }
+#room-server-frame { width: 100%; display: block; border: 0; background: transparent; }
+.rooms-page.rooms-embedded { background: var(--panel); overflow-x: hidden; }
+.rooms-page.rooms-embedded .room-shell { max-width: none; padding: 0; }
+.rooms-page.rooms-embedded .room-back, .rooms-page.rooms-embedded h1 { display: none; }
+.rooms-page.rooms-embedded .room-shell > p:first-of-type { margin-top: 20px; }
+.rooms-page .room-delete { color: var(--red); }
+.rooms-page .room-delete:disabled { opacity: .45; }
+@media(max-width:700px) { #room-server-disclosure .room-server-inline { padding: 0 16px 16px; } }

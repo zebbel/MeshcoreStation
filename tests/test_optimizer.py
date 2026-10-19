@@ -148,7 +148,7 @@ def test_api_never_uses_radio_for_analysis(tmp_path,monkeypatch):
     assert response.json['analysis']['recommendations'][0]['suggested'] is None
     monkeypatch.setattr(optimizer_api.bridge,'request',lambda payload,timeout=5: {'ok':True})
     stored=client.post('/api/repeater-optimizer',headers=headers,json={
-        'action':'profile','public_key':KEY,'role':'regional','polling':'24h'})
+        'action':'profile','public_key':KEY,'role':'regional','polling':'24h','session':'test-admin'})
     assert stored.status_code==200
     assert optimizer_store.profile(KEY)['polling']=='24h'
 

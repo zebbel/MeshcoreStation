@@ -1,5 +1,5 @@
 (() => {
-    let dialog, busy=false, timer=null, requestId=0, knownRepeaters=[], autoRefreshPaused=false;
+    let dialog, busy=false, timer=null, requestId=0, knownRepeaters=[], autoRefreshPaused=false, collectionEnabled=false;
     const el=(tag,value,cls)=>{const node=document.createElement(tag);if(value!=null)node.textContent=value;if(cls)node.className=cls;return node;};
     const date=value=>value ? new Date(value*1000).toLocaleString(undefined,{timeZone:'Europe/Berlin'}) : 'No observations yet';
     function message(value){dialog.querySelector('.stats-message').textContent=value;}
@@ -27,7 +27,7 @@
         const details=el('details');details.append(el('summary','Show chart values'));details.append(table('Traffic values',['Bucket start','Copies','Unique payloads'],points.map(p=>[date(p.at),p.copies,p.unique])));section.append(details);return section;
     }
     function usefulness(data){
-        const u=data.usefulness, panel=el('details',null,'stats-usefulness');panel.open=true;
+        const u=data.usefulness, panel=el('details',null,'stats-usefulness');
         panel.append(el('summary','Repeater usefulness'),el('p','As observed by this station','muted'));
         if(!u){panel.append(el('p','Summary unavailable.'));return panel;}
         panel.append(el('h3',u.summary));
@@ -49,7 +49,8 @@
     }
     const nodeLabel=n=>`${n.name}${n.status==='matched'?'':` (${n.status})`}`;
     function render(data){
-        knownRepeaters=data.repeaters;
+        knownRepeaters=data.repeaters;collectionEnabled=!!data.collection_enabled;
+        dialog.querySelector('.stats-pause').textContent=collectionEnabled?'Pause collection':'Start collection';
         const select=dialog.querySelector('.stats-repeater');
         select.replaceChildren();const empty=el('option','Not selected / pause collection');empty.value='';select.append(empty);
         for(const repeater of data.repeaters){const option=el('option',`${repeater.name} · ${repeater.public_key.slice(0,12)}`);option.value=repeater.public_key;select.append(option);}
@@ -59,7 +60,7 @@
         dialog.querySelector('.stats-selected').textContent=selected ? `Selected: ${data.repeaters.find(r=>r.public_key===selected)?.name || selected}` : 'No repeater selected';
         const host=dialog.querySelector('.stats-content');
         const oldDetails=host.querySelector('.stats-detailed'),oldSimple=host.querySelector('.stats-usefulness');
-        const detailOpen=oldDetails?.open??true,simpleOpen=oldSimple?.open??true;host.replaceChildren();
+        const detailOpen=oldDetails?.open??false,simpleOpen=oldSimple?.open??false;host.replaceChildren();
         const content=el('details',null,'stats-detailed');content.open=detailOpen;content.append(el('summary','Detailed statistics'));
         const simple=usefulness(data);simple.open=simpleOpen;
         const columns=el('div',null,'stats-columns');columns.append(content,simple);host.append(columns);
@@ -79,14 +80,16 @@
         content.append(el('p','Counts include only your selected repeater’s matched flood paths. Ambiguous target prefixes are counted separately and excluded from other totals. Short prefixes can also collide with unknown repeaters. Adjacent hops suggest a directional relationship, not a verified bidirectional link. Direct-route and trace packets are excluded because their paths are not a reliable forwarding history. No message text, raw payloads or network-wide statistics are stored.','muted'));
     }
     async function load(save=false){
-        if(busy)return;busy=true;const id=++requestId;
+        if(window.meshcorestationSelectedRepeater===''){++requestId;dialog.querySelector('.stats-content').replaceChildren();dialog.querySelector('.stats-selected').textContent='No repeater selected';dialog.querySelector('.stats-pause').disabled=true;message('Add a repeater to view its statistics.');return;}
+        if(busy && save)return;busy=true;const id=++requestId;
         dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=true);message(save?'Saving selection…':'Loading observations…');
         try{
-            const url=`/api/repeater-statistics?days=${dialog.querySelector('.stats-period').value}`;
-            const response=await fetch(url,{method:save?'POST':'GET',cache:'no-store',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},...(save?{body:JSON.stringify({public_key:dialog.querySelector('.stats-repeater').value})}:{}),signal:AbortSignal.timeout(60000)});
+            const key=window.meshcorestationSelectedRepeater||'';
+            const url=`/api/repeater-statistics?days=${dialog.querySelector('.stats-period').value}`+(key?'&public_key='+encodeURIComponent(key):'');
+            const response=await fetch(url,{method:save?'POST':'GET',cache:'no-store',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},...(save?{body:JSON.stringify({public_key:window.meshcorestationSelectedRepeater||dialog.querySelector('.stats-repeater').value,enabled:!collectionEnabled})}:{}),signal:AbortSignal.timeout(60000)});
             const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Statistics request failed.');
             if(id===requestId){autoRefreshPaused=false;render(result);message('Observed by MeshcoreStation · saved metadata only · no radio requests');}
-        }catch(error){autoRefreshPaused=true;message(['TimeoutError','AbortError'].includes(error.name)?'Statistics took longer than 60 seconds. Automatic refresh is paused. Try 24 hours or press Refresh to retry.':error.message+' Automatic refresh is paused; press Refresh to retry.');}finally{busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=false);}
+        }catch(error){if(id!==requestId)return;autoRefreshPaused=true;message(['TimeoutError','AbortError'].includes(error.name)?'Statistics took longer than 60 seconds. Automatic refresh is paused. Try 24 hours or press Refresh to retry.':error.message+' Automatic refresh is paused; press Refresh to retry.');}finally{busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=false);}
     }
     function attach(){
         const section=document.getElementById('repeater-statistics-disclosure');
@@ -94,9 +97,11 @@
         if(!section || !host || dialog)return;
         dialog=host;
         dialog.innerHTML="<p class=\"muted\">Passive observations, not the repeater\u2019s total traffic. Only packets heard by this station are available.</p><div class=\"stats-controls\"><span class=\"stats-selected\">No repeater selected</span><button type=\"button\" class=\"stats-map\">Choose on map</button><button type=\"button\" class=\"stats-pause\">Pause collection</button><select class=\"stats-repeater\" hidden aria-label=\"Selected repeater\"></select><button type=\"button\" class=\"stats-save\" hidden>Save selection</button><label>Period<select class=\"stats-period\"><option value=\"1\">24 hours</option><option value=\"7\">7 days</option><option value=\"30\">30 days</option></select></label><button type=\"button\" class=\"stats-refresh\">Refresh</button></div><p class=\"stats-message\" role=\"status\" aria-live=\"polite\"></p><div class=\"stats-content\"></div>";
+        if(document.getElementById('managed-repeater')){dialog.querySelector('.stats-map').hidden=true;}
+        document.addEventListener('managed-repeater-selected',()=>{dialog.querySelector('.stats-content').replaceChildren();load();});
         dialog.querySelector('.stats-save').onclick=()=>load(true);
         dialog.querySelector('.stats-map').onclick=()=>document.dispatchEvent(new CustomEvent('stats-picker-open',{detail:{repeaters:knownRepeaters,selected:dialog.querySelector('.stats-repeater').value}}));
-        dialog.querySelector('.stats-pause').onclick=()=>{dialog.querySelector('.stats-repeater').value='';load(true);};
+        dialog.querySelector('.stats-pause').onclick=()=>load(true);
         document.addEventListener('stats-picker-selected',event=>{
             if(busy || !knownRepeaters.some(r=>r.public_key===event.detail))return;
             dialog.querySelector('.stats-repeater').value=event.detail;load(true);

@@ -50,3 +50,13 @@ def clear_verified_flood(key):
             WHERE public_key=? AND status='verified'
               AND field IN ('flood.max', 'flood.max.unscoped')""",(key,))
         return cursor.rowcount
+
+
+def remove_repeater(key):
+    """Forget one removed repeater's optimizer audit and derived comparisons."""
+    from meshcorestation.storage.optimizer_store import valid_key
+    valid_key(key)
+    if not FILE.exists():
+        return
+    with database() as db:
+        db.execute('DELETE FROM changes WHERE public_key=?', (key,))

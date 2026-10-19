@@ -167,3 +167,15 @@ def cleanup(now=None):
     with closing(connect()) as db, db:
         db.execute('DELETE FROM neighbors WHERE snapshot_id IN (SELECT id FROM snapshots WHERE at<?)',(cutoff,))
         db.execute('DELETE FROM snapshots WHERE at<?',(cutoff,))
+
+
+def remove_repeater(key):
+    """Discard optimizer role, polling and snapshots for a removed managed repeater."""
+    valid_key(key)
+    if not FILE.exists():
+        return
+    with closing(connect()) as db, db:
+        db.execute('DELETE FROM neighbors WHERE snapshot_id IN '
+                   '(SELECT id FROM snapshots WHERE public_key=?)', (key,))
+        db.execute('DELETE FROM snapshots WHERE public_key=?', (key,))
+        db.execute('DELETE FROM profiles WHERE public_key=?', (key,))
