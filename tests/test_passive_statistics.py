@@ -77,7 +77,7 @@ def test_missing_payload_does_not_fabricate_unique_counts(db):
 
 def test_collector_background_storage_and_retention(db,monkeypatch):
     s.select(TARGET)
-    insert(TARGET,s.normalize(packet()),s.known_repeaters(),time.time()-31*86400)
+    insert(TARGET,s.normalize(packet()),s.known_repeaters(),time.time()-61*86400)
     worker=s.Collector();worker.start()
     try:
         worker.submit(packet())
@@ -112,22 +112,28 @@ def test_rx_hook_observes_non_bot_channel_before_filter(monkeypatch):
     fake.submit.assert_called_once_with(rx)
 
 
-def test_storage_cap_and_no_payload_persistence(db,monkeypatch):
-    monkeypatch.setattr(s,'MAX_ROWS',2)
+def test_configurable_storage_keeps_observations_without_payload_persistence(db,monkeypatch):
+    # Optimizer capture no longer has a fixed 200k-row cap. The configured
+    # retention/disk budget determines when data is removed or paused.
     s.select(TARGET)
-    for i in range(4):insert(TARGET,s.normalize(packet(pkt_payload=b'private secret')),s.known_repeaters(),time.time()-10+i)
+    for i in range(4):
+        insert(TARGET,s.normalize(packet(pkt_payload=b'private secret')),
+               s.known_repeaters(),time.time()-10+i)
     worker=s.Collector();worker.start()
     try:
+        worker.submit(packet(pkt_payload=b'private secret'))
         deadline=time.monotonic()+3
         while time.monotonic()<deadline:
             with s.connect() as connection:
                 rows=connection.execute('SELECT * FROM observations').fetchall()
-                health=connection.execute('SELECT * FROM health').fetchone()
-            if len(rows)==2:break
+                network=connection.execute('SELECT * FROM network_observations').fetchall()
+            if len(rows)==5 and len(network)==1:
+                break
             time.sleep(.02)
-        assert len(rows)==2 and health['trimmed_at']
-        assert 'private secret' not in str([dict(r) for r in rows])
-    finally:worker.close()
+        assert len(rows)==5 and len(network)==1
+        assert 'private secret' not in str([dict(r) for r in rows]+[dict(r) for r in network])
+    finally:
+        worker.close()
 
 
 def test_queue_is_bounded_and_drops_visible():
