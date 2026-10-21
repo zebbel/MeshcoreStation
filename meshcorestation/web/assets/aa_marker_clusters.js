@@ -16,7 +16,7 @@
     window.meshcorestationMarkerClusters = map => {
         if (!window.L?.markerClusterGroup) throw new Error('Map clustering could not be loaded. Refresh the page and try again.');
         return L.markerClusterGroup({
-            maxClusterRadius: 55,
+            maxClusterRadius: 30,
             showCoverageOnHover: false,
             zoomToBoundsOnClick: true,
             spiderfyOnMaxZoom: true,

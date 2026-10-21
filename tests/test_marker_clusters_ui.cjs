@@ -11,6 +11,8 @@ const a=marker([51,10]),b=marker([51,10.001]),c=marker([51,10]);
 let cluster=group.getVisibleParent(a);assert.equal(cluster.getChildCount(),3);
 const icon=group.options.iconCreateFunction(cluster);assert.equal(icon.options.html.textContent,'3');
 assert(icon.options.html.getAttribute('aria-label').includes('3 repeaters'));
+map.setZoom(16);
+assert(group.getVisibleParent(b)===b,'Markers with enough room must separate before maximum zoom');
 map.setZoom(19);
 assert(group.getVisibleParent(b)===b,'Separated markers must become individual markers when zoomed in');
 cluster=group.getVisibleParent(a);assert.equal(cluster.getChildCount(),2);
