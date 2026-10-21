@@ -172,3 +172,7 @@ records. An ongoing outage can be entered once its end time is known. Ordinary
 battery history and general dashboard statistics are not rewritten by this feature.
 
 This release includes main 3.0.6 and its repeater map clustering. Known downtime can now be excluded from optimizer evidence and before/after comparisons.
+
+## 3.0.7rc1 · Integration with main
+
+Includes main 3.0.7 with reduced repeater map clustering distance, preserving optimizer functionality and known-downtime exclusions.
