@@ -59,11 +59,13 @@
                 }
             }
             if (summary) notes.prepend(text('p', 'Blue = resolved route · red dashed = unresolved section between known positions. Arrows point from sender toward bot.', 'map-legend'));
+            const clusters = id === 'repeater-map' ? window.meshcorestationMarkerClusters(map) : null;
             for (const node of data.nodes) {
                 const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
                 const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
-                L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).addTo(map).bindPopup(() => describe(node));
+                L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).addTo(clusters && node.role === 'repeater' ? clusters : map).bindPopup(() => describe(node));
             }
+            if (clusters) notes.prepend(text('p', 'Numbered circles group nearby repeaters. Zoom in or click a group to expand it; overlapping markers spread apart when expanded.', 'map-legend'));
             notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
             if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));
             requestAnimationFrame(() => { if (maps.get(id) !== map) return; map.invalidateSize(); if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), { padding: [35, 35], maxZoom: 14 }); });
