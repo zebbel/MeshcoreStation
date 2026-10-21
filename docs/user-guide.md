@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.0.4** on `main`, including the bot, room server,
+This guide covers stable **3.0.6** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 
@@ -122,3 +122,11 @@ its battery settings, readings, report history and collected statistics. The
 confirmation names the selected repeater. Other repeaters are unaffected. Its
 known map/contact entry remains available so it can be added again with fresh
 settings. The remembered management password is cleared in the current browser.
+
+### Repeater map groups
+
+Nearby repeaters are grouped into numbered circles in the known-repeaters map
+and repeater picker. Zoom in or click a group to expand it. Repeaters at the same
+location spread apart when the group is expanded so each can be selected.
+Show on map reveals the selected repeater even inside a group. Packet-route
+maps retain individual numbered hops.

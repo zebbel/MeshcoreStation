@@ -60,8 +60,8 @@ await settle();
 assert.equal($('back'),null);
 assert.equal(w.document.querySelectorAll('.scope-field').length,2);
 assert.equal(w.document.querySelectorAll('.period-field').length,1);
-assert.equal(w.document.querySelectorAll('.storage-field').length,5);
-assert.equal(w.document.querySelectorAll('.storage-grid .storage-field').length,5);
+assert.equal(w.document.querySelectorAll('.storage-field').length,7);
+assert.equal(w.document.querySelectorAll('.storage-grid .storage-field').length,7);
 for(const id of ['role','polling','days','retention_days','neighbor_days','summary_days','budget_gb','reserve_gb']){
   assert(w.document.querySelector('label[for="'+id+'"]'),'Control needs its own label: '+id);
 }
@@ -127,6 +127,16 @@ assert($('neighbors').textContent.includes('2 saved / 2 reported'));
 assert($('neighbors').textContent.includes('Prefix 00ffaa11'));
 assert.equal($('neighbors').querySelectorAll('article').length,1,'A new read replaces the previous entry');
 assert(!$('neighbors').textContent.includes('Prefix 1234abcd'),'Previous neighbor read is hidden');
+$('downtime-start').value='2026-01-01T10:00';$('downtime-end').value='2026-01-02T10:00';
+$('save-downtime').click();sent=posts.at(-1);
+assert.equal(sent.type,'meshcorestation-optimizer-downtime');assert.equal(sent.end-sent.start,86400);
+sample.downtime=[{id:9,start:sent.start,end:sent.end}];sample.statistics.excluded_downtime_seconds=86400;
+w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,data:{type:'meshcorestation-advisor-values',request_id:sent.request_id,saved:true}}));await settle();
+assert($('downtime-summary').textContent.includes('24.0 hours excluded'));
+$('downtime-list').querySelector('button').click();sent=posts.at(-1);assert.equal(sent.remove,9);
+sample.downtime=[];
+w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,data:{type:'meshcorestation-advisor-values',request_id:sent.request_id,saved:true}}));await settle();
+const beforeInvalid=posts.length;$('downtime-end').value='2025-01-01T10:00';$('save-downtime').click();assert.equal(posts.length,beforeInvalid);
 dom.window.close();
 console.log('Optimizer passive GET/analysis, explicit polling opt-in and manual LoRa button passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

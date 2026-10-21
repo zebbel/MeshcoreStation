@@ -42,10 +42,16 @@ def register_optimizer_routes(server):
                     raise ValueError('Expected object.')
                 key=optimizer_store.valid_key(data.get('public_key'))
                 action=data.get('action')
-                if action in ('profile','storage','clear_history'):
+                if action in ('profile','storage','clear_history','downtime'):
                     if not _authorized(key,data.get('session')):
                         return json_response({'ok':False,'error':'An active repeater administrator session is required.'},403)
                     optimizer_store.initialize()
+                    if action=='downtime':
+                        if data.get('remove') is not None:
+                            optimizer_store.remove_downtime(key,data['remove'])
+                        else:
+                            optimizer_store.add_downtime(key,data.get('start'),data.get('end'))
+                        return json_response({'ok':True})
                     if action=='profile':
                         saved=optimizer_store.update_profile(key,data.get('role'),data.get('polling'))
                         return json_response({'ok':True,'profile':saved})
@@ -72,6 +78,7 @@ def register_optimizer_routes(server):
             stats=passive_stats.network_snapshot(key,days)
             profile=optimizer_store.profile(key)
             snapshots=optimizer_store.snapshots(key, limit=1)
+            snapshots=[row for row in snapshots if not optimizer_store.offline_intervals(key,row['at'],row['at']+0.001)]
             # Do not return every individual path to the browser.
             findings=analyze(stats,profile,snapshots,current)
             summary={k:v for k,v in stats.items() if k not in ('daily','scope')}
@@ -81,7 +88,7 @@ def register_optimizer_routes(server):
             comparisons=compare_history(key,history)
             return json_response({'ok':True,'profile':profile,'settings':optimizer_store.config(),
                                   'statistics':summary,'daily':stats['daily'][-365:],
-                                  'neighbor_snapshots':snapshots,'analysis':findings,
+                                  'downtime':optimizer_store.downtimes(key),'neighbor_snapshots':snapshots,'analysis':findings,
                                   'history':history,'comparisons':comparisons})
         except (ValueError,TypeError,KeyError,OverflowError) as exc:
             return json_response({'ok':False,'error':str(exc)},400)

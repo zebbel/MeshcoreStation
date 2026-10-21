@@ -4,7 +4,7 @@ These are companion-observed traffic ratios, never proof of improved delivery.
 """
 import time
 from contextlib import closing
-from meshcorestation.storage import passive_stats
+from meshcorestation.storage import passive_stats, optimizer_store
 
 WINDOW = 86400
 SETTLING = 3600
@@ -63,6 +63,9 @@ def evaluate_recent(key, changes, now=None):
                 continue
             before_start, after_start = at - WINDOW, at + SETTLING
             after_end = after_start + WINDOW
+            if optimizer_store.offline_intervals(key,before_start,after_end):
+                entry['message']='Known repeater downtime overlaps the comparison or settling period. This comparison is excluded.'
+                continue
             if before_start < now - passive_stats.RETENTION:
                 entry['message'] = 'Baseline passed the detailed statistics retention period.'
                 continue

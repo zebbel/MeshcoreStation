@@ -22,7 +22,7 @@ jobs:
         run: python -m compileall -q meshcorestation tests
       - name: Optimizer and production regression tests
         run: |
-          python -m pytest -q tests/test_optimizer.py tests/test_advisor.py tests/test_advisor_evaluation.py tests/test_multi_repeater.py tests/test_voltage_destinations.py tests/test_passive_statistics.py tests/test_rooms_api.py tests/test_room_service.py tests/test_layout_panels.py
+          python -m pytest -q tests/test_optimizer.py tests/test_optimizer_downtime.py tests/test_advisor.py tests/test_advisor_evaluation.py tests/test_multi_repeater.py tests/test_voltage_destinations.py tests/test_passive_statistics.py tests/test_rooms_api.py tests/test_room_service.py tests/test_layout_panels.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -38,3 +38,4 @@ jobs:
           node tests/test_room_embed_ui.cjs
           node tests/test_passive_statistics_ui.cjs
           node tests/test_statistics_picker_ui.cjs
+          node tests/test_marker_clusters_ui.cjs

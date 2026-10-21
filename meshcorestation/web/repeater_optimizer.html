@@ -41,6 +41,13 @@ table{overflow-wrap:anywhere}.scroll{overflow-x:auto}.result{margin:8px 0}
 </style></head><body><main>
 <h1>Repeater Optimizer</h1><p class="muted" id="identity">Connect in Repeater Management to select a repeater.</p>
 
+<section><h2>Known repeater downtime</h2>
+<p class="muted">Record a completed offline period for this repeater. Times use your browser’s local timezone. A lack of traffic alone does not prove downtime. Marking a period excludes it from optimization; packet history is retained.</p>
+<div class="storage-grid">
+<label class="storage-field" for="downtime-start"><span>Offline from</span><input id="downtime-start" type="datetime-local" required></label>
+<label class="storage-field" for="downtime-end"><span>Back online at</span><input id="downtime-end" type="datetime-local" required></label>
+</div><button id="save-downtime" type="button">Record downtime</button>
+<p id="downtime-summary" class="muted"></p><div id="downtime-list"></div></section>
 <section><h2>Optimization scope</h2>
 <div class="scope-field">
 <label for="role">Repeater role</label>
@@ -139,6 +146,15 @@ function render(data,replaceSettings=false){
     else if($(k))$(k).value=v;
   }
  }
+ const downtimeList=$('downtime-list');downtimeList.replaceChildren();
+ for(const row of data.downtime||[]){
+  const line=el('div');line.className='actions';
+  line.append(el('span',new Date(row.start*1000).toLocaleString()+' – '+new Date(row.end*1000).toLocaleString()));
+  const remove=el('button','Remove entry');remove.type='button';remove.onclick=()=>{
+   if(confirm('Remove this downtime entry for '+name+'? Its observations will be included again.'))send('meshcorestation-optimizer-downtime',{remove:row.id});
+  };line.append(remove);downtimeList.append(line);
+ }
+ $('downtime-summary').textContent=((data.statistics.excluded_downtime_seconds||0)/3600).toFixed(1)+' hours excluded in the selected period. Before/after windows overlapping known downtime are not compared.';
  $('copies').textContent=data.statistics.copies;
  $('matches').textContent=data.statistics.matching_copies;
  $('unscoped').textContent=data.statistics.unscoped;
@@ -234,6 +250,11 @@ $('analyze').onclick=()=>refresh(false,'review');
 $('read-settings').onclick=()=>send('meshcorestation-advisor-request');
 $('read-neighbors').onclick=()=>send('meshcorestation-optimizer-neighbors');
 $('refresh-neighbors').onclick=()=>refresh();
+$('save-downtime').onclick=()=>{
+ const start=new Date($('downtime-start').value).getTime()/1000,end=new Date($('downtime-end').value).getTime()/1000;
+ if(!Number.isFinite(start)||!Number.isFinite(end)||start<=0||start>=end||end>Date.now()/1000){notice('Enter a completed offline period: start before end, both in the past.');return;}
+ send('meshcorestation-optimizer-downtime',{start,end});
+};
 $('save-profile').onclick=()=>{
  const role=$('role').value,polling=$('polling').value;
  if(polling!=='manual'&&!confirm('Enable scheduled LoRa neighbor reads every '+(polling==='12h'?'12':'24')+' hours for this repeater?'))return;
@@ -300,6 +321,8 @@ window.addEventListener('message',async event=>{
     ? 'Snapshot #'+storedSnapshot.id+': '+storedSnapshot.neighbors+' of '+
       storedSnapshot.received+' returned entries saved.'
     : 'Neighbor response received, but no saved snapshot confirmation was returned.');
+ }else if(type==='meshcorestation-optimizer-downtime'){
+  notice('Downtime records updated. Analysis and comparisons refreshed.');
  }else if(type==='meshcorestation-optimizer-clear-history'){
   notice((data.removed??0)+' verified flood-limit change record(s) deleted. Comparisons removed. Passive observations unchanged.');
  }else if(type==='meshcorestation-optimizer-profile'||type==='meshcorestation-optimizer-storage'){

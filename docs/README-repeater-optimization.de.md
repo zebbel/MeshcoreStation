@@ -143,3 +143,32 @@ Network-wide observations remain because they are shared evidence.
 
 Analysis remains local and passive. Manual radio reads, verified writes,
 and explicitly opted-in 12h/24h neighbor polling retain their prior safeguards.
+
+## 3.0.6rc1 · Known repeater downtime
+
+In Repeater Optimizer, **Known repeater downtime** records a completed offline
+period using the browser's local timezone. Enter the time it went offline and the
+time it returned, then select **Record downtime**. Records are per repeater and
+require the existing administrator session. This only changes local metadata;
+it sends no LoRa command. Silence is never automatically classified as downtime.
+
+Within the selected analysis window, overlapping records are combined and their
+observations excluded from packet counts, path distributions, active days and
+charts. The optimizer shows the excluded hours, requires at least 72 remaining
+hours as well as its normal traffic/active-day checks, and requires a neighbor
+snapshot newer than the recorded outage. Those remaining hours are not proof of
+continuous uptime: unrecorded outages and unseen packets remain unknown.
+
+A before/after comparison overlapping recorded downtime in either 24-hour sample
+or the one-hour settling interval is unavailable. It is not shortened or
+rescaled, which could misleadingly attribute outage effects to a setting change.
+Old comparisons outside these periods remain available.
+
+Packet observations are retained. **Remove entry** corrects an incorrectly marked
+period and permits reanalysis of those records. Overlapping entries count time
+only once; remove all overlapping entries to fully restore a period. Maximum:
+100 records per repeater. Removing the managed repeater also removes its downtime
+records. An ongoing outage can be entered once its end time is known. Ordinary
+battery history and general dashboard statistics are not rewritten by this feature.
+
+This release includes main 3.0.6 and its repeater map clustering. Known downtime can now be excluded from optimizer evidence and before/after comparisons.

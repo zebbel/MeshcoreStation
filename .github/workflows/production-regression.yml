@@ -29,3 +29,5 @@ jobs:
       - run: node tests/test_room_embed_ui.cjs
       - run: node tests/test_passive_statistics_ui.cjs
       - run: node tests/test_statistics_picker_ui.cjs
+      - run: node tests/test_marker_clusters_ui.cjs
+      - run: node tests/test_route_maps_ui.cjs

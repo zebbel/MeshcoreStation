@@ -6,13 +6,15 @@ const key='76'.repeat(32),other='ab'.repeat(32),selected=[],popups=[];let fail=f
 w.fetch=async()=>{if(fail)throw Error('Offline');return {ok:true,json:async()=>({nodes:[{role:'repeater',public_key:key,position:[50,8]},{role:'bot',public_key:other,position:[51,8]}]})}};
 w.L={divIcon:options=>{icons.push(options);return options},map:()=>({setView(){return this},invalidateSize(){},fitBounds(){},remove(){removed++}}),tileLayer:()=>({on(){return this},addTo(){}}),marker:position=>({addTo(){return this},bindPopup(node){popups.push(typeof node==='function'?node():node);return this},getLatLng(){return position},openPopup(){}})};
 w.document.addEventListener('stats-picker-selected',e=>selected.push(e.detail));
+w.meshcorestationRevealMarker=(map,clusters,marker,isCurrent)=>clusters.zoomToShowLayer(marker,()=>{if(isCurrent())marker.openPopup();});
+let revealed=0;w.meshcorestationMarkerClusters=()=>({zoomToShowLayer(marker,callback){revealed++;callback();}});
 const settle=()=>new Promise(r=>setImmediate(r));
 const open=()=>w.document.dispatchEvent(new w.CustomEvent('stats-picker-open',{detail:{repeaters:[{public_key:key,name:'My <b>repeater</b>'},{public_key:other,name:'No coordinates'}],selected:key}}));
 (async()=>{
     w.eval(fs.readFileSync('meshcorestation/web/assets/aa_dialog.js','utf8'));
     w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_statistics_picker.js','utf8'));
     open();await settle();const d=w.document.getElementById('stats-repeater-picker');
-    assert(d.open);assert.equal(popups.length,1);assert.equal(icons.length,1);assert(icons[0].html.classList.contains('stats-selected-marker'));assert.equal(icons[0].html.textContent,'R');assert(popups[0].textContent.includes(key));assert(!popups[0].querySelector('b'));
+    assert(d.open);assert(revealed>0);assert.equal(popups.length,1);assert.equal(icons.length,1);assert(icons[0].html.classList.contains('stats-selected-marker'));assert.equal(icons[0].html.textContent,'R');assert(popups[0].textContent.includes(key));assert(!popups[0].querySelector('b'));
     d.querySelector('.stats-picker-close').click();assert.deepEqual(selected,[]);assert.equal(removed,1);
     open();await settle();popups.at(-1).querySelector('button').click();assert.deepEqual(selected,[key]);assert(!d.open);
     fail=true;open();await settle();assert(d.querySelector('.stats-map-fallback').open);

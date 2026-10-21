@@ -1,5 +1,6 @@
 """Persist per-repeater roles, opted-in neighbor schedules and bounded snapshots."""
 import re
+import math
 import sqlite3
 import time
 from contextlib import closing
@@ -22,6 +23,9 @@ def connect():
 def initialize():
     with closing(connect()) as db, db:
         db.executescript("""
+          CREATE TABLE IF NOT EXISTS downtime (
+            id INTEGER PRIMARY KEY, public_key TEXT NOT NULL, start REAL NOT NULL, end REAL NOT NULL);
+          CREATE INDEX IF NOT EXISTS downtime_key ON downtime(public_key,start);
           CREATE TABLE IF NOT EXISTS profiles (
             public_key TEXT PRIMARY KEY, role TEXT NOT NULL DEFAULT 'unknown',
             polling TEXT NOT NULL DEFAULT 'manual', next_poll REAL,
@@ -179,3 +183,52 @@ def remove_repeater(key):
                    '(SELECT id FROM snapshots WHERE public_key=?)', (key,))
         db.execute('DELETE FROM snapshots WHERE public_key=?', (key,))
         db.execute('DELETE FROM profiles WHERE public_key=?', (key,))
+        db.execute('DELETE FROM downtime WHERE public_key=?', (key,))
+
+
+def downtimes(key):
+    valid_key(key)
+    if not FILE.exists():
+        return []
+    with closing(connect()) as db:
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='downtime'").fetchone():
+            return []  # Older databases have no recorded downtime.
+        return [dict(row) for row in db.execute('SELECT * FROM downtime WHERE public_key=? ORDER BY start DESC,id DESC',(key,))]
+
+
+def add_downtime(key, start, end):
+    valid_key(key)
+    if any(type(v) not in (int,float) or not math.isfinite(v) for v in (start,end)) or not 0 < start < end <= time.time():
+        raise ValueError('Enter a valid past offline interval with the end after the start.')
+    initialize()
+    with closing(connect()) as db, db:
+        db.execute('BEGIN IMMEDIATE')
+        if db.execute('SELECT COUNT(*) FROM downtime WHERE public_key=?',(key,)).fetchone()[0]>=100:
+            raise ValueError('Maximum 100 downtime entries per repeater; remove obsolete entries first.')
+        db.execute('INSERT INTO downtime(public_key,start,end) VALUES(?,?,?)',(key,start,end))
+
+
+def remove_downtime(key, ident):
+    valid_key(key)
+    if type(ident) is not int or ident<=0:
+        raise ValueError('Invalid downtime entry.')
+    with closing(connect()) as db, db:
+        if db.execute('DELETE FROM downtime WHERE public_key=? AND id=?',(key,ident)).rowcount!=1:
+            raise ValueError('Downtime entry not found for this repeater.')
+
+
+def offline_intervals(key, start, end):
+    """Clip and merge recorded [start,end) intervals so overlaps count once."""
+    intervals=sorted((max(start,r['start']),min(end,r['end'])) for r in downtimes(key)
+                     if r['start']<end and r['end']>start)
+    merged=[]
+    for a,b in intervals:
+        if merged and a<=merged[-1][1]:
+            merged[-1]=(merged[-1][0],max(b,merged[-1][1]))
+        else:
+            merged.append((a,b))
+    return merged
+
+
+def exclusion_sql(intervals):
+    return ''.join(' AND NOT (at>=? AND at<?)' for _ in intervals), [v for pair in intervals for v in pair]

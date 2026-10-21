@@ -16,6 +16,8 @@ def analyze(stats, profile, snapshots, current):
         gaps.append('Choose a repeater role to evaluate network reachability requirements.')
     if stats['copies']<100 or stats['matching_copies']<30:
         gaps.append('Insufficient observations (at least 100 total and 30 matching packets).')
+    if stats.get('usable_hours',stats.get('days',7)*24)<72:
+        gaps.append('Less than 72 hours remain after excluding known downtime.')
     if stats['active_days']<3:
         gaps.append('Less than three active days.')
     if stats['matching_copies'] and stats['ambiguous']>stats['matching_copies']/5:
@@ -26,6 +28,8 @@ def analyze(stats, profile, snapshots, current):
         gaps.append('The passive collector reports missing data.')
     if not last or last['at']<stats['now']-14*86400:
         gaps.append('Recent neighbor snapshot missing (not older than 14 days).')
+    elif stats.get('last_downtime_end') and last['at']<stats['last_downtime_end']:
+        gaps.append('Read neighbors again after the recorded downtime.')
     elif not last['complete']:
         gaps.append('Latest neighbor list is partial; other neighbors may be missing.')
     results=[]
@@ -80,7 +84,7 @@ def analyze(stats, profile, snapshots, current):
 
 def compare_history(key, changes, now=None):
     """Two 24-hour passive-only observations around verified flood limit writes."""
-    from meshcorestation.storage import passive_stats
+    from meshcorestation.storage import passive_stats, optimizer_store
     from contextlib import closing
     import time
     now=time.time() if now is None else now
@@ -95,6 +99,9 @@ def compare_history(key, changes, now=None):
             at=change['at']; first=at-86400; second=at+3600; end=second+86400
             item={'status':'unavailable','message':'Comparison unavailable.'}
             results[str(change['id'])]=item
+            if optimizer_store.offline_intervals(key,first,end):
+                item['message']='Known repeater downtime overlaps the comparison or settling period. This comparison is excluded.'
+                continue
             if earliest is None or earliest>first:
                 item['message']='Full 24h passive baseline is missing.'
                 continue

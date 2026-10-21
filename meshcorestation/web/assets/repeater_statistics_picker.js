@@ -1,5 +1,5 @@
 (() => {
-    let dialog,map,controller,repeaters=[],selected='',selectionEvent='stats-picker-selected',actionLabel='Use this repeater',managedRepeaters=new Set(),markers=new Map();
+    let dialog,map,clusters,controller,repeaters=[],selected='',selectionEvent='stats-picker-selected',actionLabel='Use this repeater',managedRepeaters=new Set(),markers=new Map();
     const el=(tag,value,cls)=>{const n=document.createElement(tag);if(value!=null)n.textContent=value;if(cls)n.className=cls;return n;};
     function choose(repeater){
         if(managedRepeaters.has(repeater.public_key))return;
@@ -26,7 +26,7 @@
             const row=el('div',null,'stats-picker-row');
             row.append(el('strong',repeater.name+(repeater.public_key===selected?' (selected)':'')),el('span',repeater.public_key,'map-key'));
             const marker=markers.get(repeater.public_key);
-            if(marker){const locate=el('button','Show on map');locate.type='button';locate.onclick=()=>{map.setView(marker.getLatLng(),13);marker.openPopup();};row.append(locate);}
+            if(marker){const locate=el('button','Show on map');locate.type='button';locate.onclick=()=>{const currentMap=map;window.meshcorestationRevealMarker(map,clusters,marker,()=>map===currentMap&&dialog.open);};row.append(locate);}
             else row.append(el('span','No map position available','muted'));
             row.append(action(repeater));list.append(row);
         }
@@ -59,6 +59,7 @@
             if(!window.L)throw Error('Map library unavailable. Use the searchable list.');
             map=L.map(dialog.querySelector('.stats-picker-map')).setView([51,10],5);
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).on('tileerror',()=>{message.textContent='Map tiles unavailable. Markers and the searchable list remain usable.';}).addTo(map);
+            clusters=window.meshcorestationMarkerClusters(map);
             const positions=[];
             for(const node of data.nodes){
                 const repeater=repeaters.find(r=>r.public_key===node.public_key);
@@ -66,17 +67,17 @@
                 const chosen=repeater.public_key===selected;
                 const badge=el('span','R','map-marker repeater'+(chosen?' stats-selected-marker':''));
                 const icon=L.divIcon({html:badge,className:'map-icon',iconSize:[28,28],iconAnchor:[14,14]});
-                const marker=L.marker(node.position,{icon,title:repeater.name+(chosen?' (selected)':''),zIndexOffset:chosen?100:0}).addTo(map).bindPopup(() => details({...node,...repeater}));
+                const marker=L.marker(node.position,{icon,title:repeater.name+(chosen?' (selected)':''),zIndexOffset:chosen?100:0}).addTo(clusters).bindPopup(() => details({...node,...repeater}));
                 markers.set(repeater.public_key,marker);positions.push(node.position);
             }
-            filter();message.textContent=`${markers.size} of ${repeaters.length} repeaters shown. Use the list for missing positions.`;
+            filter();message.textContent=`${markers.size} of ${repeaters.length} repeaters shown. Zoom in or click numbered groups to expand them. Use the list for missing positions.`;
             if(!markers.size)dialog.querySelector('.stats-map-fallback').open=true;
             const currentMap=map;
             requestAnimationFrame(()=>{
                 if(map!==currentMap)return;
                 map.invalidateSize();
                 const current=markers.get(selected);
-                if(current){map.setView(current.getLatLng(),12);current.openPopup();}
+                if(current){map.setView(current.getLatLng(),12);window.meshcorestationRevealMarker(map,clusters,current,()=>map===currentMap&&dialog.open);}
                 else if(positions.length)map.fitBounds(positions,{padding:[30,30],maxZoom:13});
             });
         }catch(error){if(request.signal.aborted)return;message.textContent=error.message;dialog.querySelector('.stats-map-fallback').open=true;}
