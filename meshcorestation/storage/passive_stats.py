@@ -332,32 +332,31 @@ def network_snapshot(key, days=7):
         other_keys={r['public_key'] for r in known_repeaters()}
         other_keys.add(key)
         prefixes=[key[:n] for n in (2,4,6)]
-        # Use a complete route segment match, not a substring of another hash.
-        predicates=' OR '.join("('|' || route || '|') LIKE ?" for _ in prefixes)
-        parameters=['%|'+p+'|%' for p in prefixes]
-        query=f"""SELECT at,kind,scoped,path_len,hash_size,route,digest,rssi,snr
-                    FROM network_observations WHERE at>=? AND at<=? AND ({predicates})"""
-        selected=db.execute(query,(cutoff,now,*parameters))
+        # Collision status depends on the hash size, not on each packet.
+        collisions={size:sum(other.startswith(key[:size*2]) for other in other_keys)>1
+                    for size in (1,2,3)}
+        # Filter complete segments using the matching hash width. Aggregate in
+        # SQLite instead of loading every packet and rescanning every contact.
+        predicates=' OR '.join("(hash_size=? AND ('|' || route || '|') LIKE ?)" for _ in prefixes)
+        parameters=[value for size,prefix in enumerate(prefixes,1)
+                    for value in (size,'%|'+prefix+'|%')]
+        selected=db.execute(f"""SELECT hash_size,scoped,path_len,
+                    CAST(at/86400 AS INTEGER) day,COUNT(*) copies
+                    FROM network_observations WHERE at>=? AND at<=? AND ({predicates})
+                    GROUP BY hash_size,scoped,path_len,day""",(cutoff,now,*parameters))
         scope={label:{'count':0,'target':0,'hist':{}} for label in ('scoped','unscoped')}
         matches=0;ambiguous=0;active=set()
         for item in selected:
-            size=item['hash_size'];prefix=key[:size*2]
-            route=item['route'].split('|') if item['route'] else []
-            if prefix not in route:
-                continue
+            count=item['copies']
             label='scoped' if item['scoped'] else 'unscoped'
-            scope[label]['count']+=1
-            # Known hash collision is a hard ambiguity; unknown contacts remain
-            # an uncertainty that prevents claiming complete mesh visibility.
-            collision=sum(other.startswith(prefix) for other in other_keys)>1
-            if collision:
-                ambiguous+=1
+            scope[label]['count']+=count
+            if collisions[item['hash_size']]:
+                ambiguous+=count
             else:
-                matches+=1;scope[label]['target']+=1
-                hops=item['path_len']
-                hist=scope[label]['hist']
-                hist[hops]=hist.get(hops,0)+1
-            active.add(int(item['at']//86400))
+                matches+=count;scope[label]['target']+=count
+                hist=scope[label]['hist'];hops=item['path_len']
+                hist[hops]=hist.get(hops,0)+count
+            active.add(item['day'])
         totals=db.execute("""SELECT COUNT(*) copies,COUNT(DISTINCT digest) unique_digests,
                           COALESCE(SUM(scoped=0),0) unscoped
                           FROM network_observations WHERE at>=? AND at<=?""",(cutoff,now)).fetchone()

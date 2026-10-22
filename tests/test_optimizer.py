@@ -253,3 +253,25 @@ def test_neighbor_status_read_returns_persisted_snapshot_receipt(tmp_path, monke
         assert stored['complete']
     finally:
         direct.close()
+
+
+def test_network_aggregation_keeps_hash_width_collision_and_day_counts(tmp_path, monkeypatch):
+    setup(tmp_path,monkeypatch)
+    now=10*86400+100
+    monkeypatch.setattr(passive_stats.time,'time',lambda:now)
+    monkeypatch.setattr(passive_stats,'known_repeaters',lambda:[
+        {'public_key':KEY,'name':'target'},
+        {'public_key':'abcc'+'00'*30,'name':'one-byte collision'}])
+    rows=[(now-10,5,1,2,1,'ab|cd','a'),
+          (now-20,5,1,3,2,'abab|cdef','b'),
+          (now-30,5,1,3,2,'abab|cdef','b'),
+          (now-86400,5,0,2,3,'ababab|cdef01','c'),
+          (now-10,5,0,1,2,'aabb','unrelated')]
+    with passive_stats.connect() as db:
+        db.executemany('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,?,?,?,?,?,?)',rows)
+    data=passive_stats.network_snapshot(KEY,7)
+    assert data['copies']==5 and data['unique_digests']==4
+    assert data['ambiguous']==1 and data['matching_copies']==3
+    assert data['active_days']==2
+    assert data['scope']['scoped']=={'count':3,'target':2,'hist':{3:2}}
+    assert data['scope']['unscoped']=={'count':1,'target':1,'hist':{2:1}}

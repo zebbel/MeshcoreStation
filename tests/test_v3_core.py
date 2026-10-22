@@ -153,7 +153,7 @@ def test_packet_loop_continues_during_slow_room_command(tmp_path,monkeypatch):
             def __init__(self,service,room):
                 self.room=room;self.sessions={};self.new_posts=[]
                 self.last_advert=10**12;self.calls=0
-            def receive(self,raw):
+            def receive(self,raw,scopes=()):
                 self.calls+=1
                 if self.calls==1:self.new_posts=[{'text':'ping','author':'ab'*32}]
                 else:received_again.set()

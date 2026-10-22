@@ -4,8 +4,14 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.1.1. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.1.2. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.1.2
+
+- Keep Updates / version inside the scrollable Settings content, removing the large gap.
+- Speed up optimizer data loading by aggregating packets in SQLite and checking
+  repeater hash collisions once per hash width instead of once per packet.
 
 ## Changes in 3.1.1
 

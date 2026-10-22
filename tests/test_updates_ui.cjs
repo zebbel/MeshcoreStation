@@ -1,7 +1,7 @@
 const {JSDOM} = require('jsdom');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
-const dom = new JSDOM('<html><body><dialog id="companion-dialog"><div class="companion-grid"></div></dialog></body></html>', {runScripts:'outside-only', url:'http://localhost/'});
+const dom = new JSDOM('<html><body><dialog id="companion-dialog"><div class="dialog-header"></div><div class="dialog-body"><details id="companion-settings-disclosure"><div class="companion-grid"></div></details></div></dialog></body></html>', {runScripts:'outside-only', url:'http://localhost/'});
 const w = dom.window;
 w.AbortSignal.timeout = () => undefined;
 w.confirm = () => true;
@@ -25,6 +25,8 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
     w.eval(fs.readFileSync('meshcorestation/web/assets/updates.js', 'utf8'));
     await settle();
     const panel = w.document.querySelector('#update-panel');
+    assert.equal(panel.parentElement.className, 'dialog-body', 'Updates must share the scrollable settings body');
+    assert(!panel.closest('details'), 'Updates must remain outside collapsed companion settings');
     assert(panel);
     assert.equal(panel.querySelector('.update-branches'),null);
     assert(panel.querySelector('.update-install').disabled);
