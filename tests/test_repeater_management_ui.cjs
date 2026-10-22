@@ -15,6 +15,7 @@ w.fetch=async(url,options)=>{
  {data:{},contact:{public_key:key},sampled_at:1};
  return {ok:true,json:async()=>({ok:true,...result})};
 };
+w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
 w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_management.js','utf8'));
 const $=id=>w.document.getElementById(id),settle=()=>new Promise(r=>setImmediate(r));
 const submit=id=>$(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));

@@ -151,14 +151,14 @@ function render(data,replaceSettings=false){
  $('unscoped').textContent=data.statistics.unscoped;
  $('active').textContent=data.statistics.active_days;
  const s=data.statistics;
- $('coverage').textContent='Oldest retained: '+(s.first_at?new Date(s.first_at*1000).toLocaleString():'not yet recorded')+
+ $('coverage').textContent='Oldest retained: '+(s.first_at?window.meshcorestationFormatDate(s.first_at):'not yet recorded')+
   ' · Ambiguous paths: '+s.ambiguous+(s.partial?' · Incomplete observation window':'')+
   (s.collector_error?' · Collector: '+s.collector_error:'');
  $('disk').textContent='Statistics database: '+(s.storage.bytes/1073741824).toFixed(2)+' GB · Free disk: '+
   (s.storage.free_bytes/1073741824).toFixed(2)+' GB.';
  $('schedule').textContent=data.profile.polling==='manual'?'Manual mode: no scheduled LoRa requests.':
   'Scheduled neighbor request: every '+(data.profile.polling==='12h'?'12':'24')+
-  ' hours · next: '+(data.profile.next_poll?new Date(data.profile.next_poll*1000).toLocaleString():'unknown')+
+  ' hours · next: '+(data.profile.next_poll?window.meshcorestationFormatDate(data.profile.next_poll):'unknown')+
   (data.profile.last_error?' · Last error: '+data.profile.last_error:'');
  const area=$('recommendations');area.replaceChildren();
  for(const item of data.analysis.recommendations){
@@ -186,7 +186,7 @@ function render(data,replaceSettings=false){
   const saved=snap.neighbors.length,reported=snap.reported;
   const known=Number.isInteger(reported)&&reported>=0;
   const suspect=known&&reported>0&&saved===0;
-  const title=new Date(snap.at*1000).toLocaleString()+' · '+snap.source+
+  const title=window.meshcorestationFormatDate(snap.at)+' · '+snap.source+
     ' · '+saved+' saved'+(known?' / '+reported+' reported':' (total unknown)');
   block.append(el('p',title+(snap.complete?' · complete':' · partial')));
   if(suspect){
@@ -209,12 +209,12 @@ function render(data,replaceSettings=false){
  for(const row of data.history.slice(0,15)){
   if(!['flood.max','flood.max.unscoped'].includes(row.field))continue;
   const section=el('article');section.className='finding';
-  section.append(el('p',new Date(row.at*1000).toLocaleString()+' · '+row.field+': '+row.before_value+
+  section.append(el('p',window.meshcorestationFormatDate(row.at)+' · '+row.field+': '+row.before_value+
     ' → '+row.actual+' ('+row.status+')'));
   const comparison=data.comparisons?.[String(row.id)];
   if(comparison){
     section.append(el('p','Before/after: '+comparison.status+' · '+comparison.message));
-    if(comparison.next_at)section.append(el('small','After-window complete: '+new Date(comparison.next_at*1000).toLocaleString()));
+    if(comparison.next_at)section.append(el('small','After-window complete: '+window.meshcorestationFormatDate(comparison.next_at)));
     if(comparison.before&&comparison.after){
       section.append(el('p','Observed copies (24h each; 1h settling): '+comparison.before.copies+' → '+comparison.after.copies));
       for(const [label,field] of [['Repeated payload share','repeated_pct'],['Unscoped share','unscoped_pct'],['Adverts share','advert_pct']]){

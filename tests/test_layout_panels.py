@@ -25,7 +25,8 @@ def test_latest_command_and_button_remain_in_closed_summary():
     room=next(n for n in nodes if getattr(n,'id',None)=='room-server-disclosure')
     assert not getattr(room, 'open', False)
     room_iframe=next(n for n in walk(room) if getattr(n,'id',None)=='room-server-frame')
-    assert room_iframe.src=='/rooms?embedded=1'
+    assert room_iframe.src=='about:blank'
+    assert room_iframe.to_plotly_json()['props']['data-src']=='/rooms?embedded=1'
     assert room_iframe.style['height']=='160px'
     assert ids.index('room-server-disclosure') < ids.index('repeater-management-disclosure')
 

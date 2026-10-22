@@ -163,3 +163,18 @@ def test_daily_report_reuses_last_successful_reading(monkeypatch, has_reading):
     asyncio.run(m.tick())
     assert len(service.posts) == int(has_reading), 'A report slot must not be sent twice'
     db.close()
+
+
+def test_custom_report_template_uses_last_reading_and_keeps_destination(monkeypatch):
+    async def channels(companion):
+        return {"channels":[{"index":1,"name":"Ops","type":"private"}]},[("",bytes(16)),("Ops",b"\x11"*16)]
+    monkeypatch.setattr("meshcorestation.radio.channels_control.read_channels",channels)
+    db=database();m,service,commands=monitor(db)
+    settings=cfg(db,'channel:Ops')
+    with db:
+        db.execute('UPDATE voltage_config SET report_template=? WHERE id=1',('{repeater_name}: {battery_voltage:.1f}V ({battery_percent}%)',))
+    settings=config(db)
+    asyncio.run(m.report(KEY+'|morning',settings,dict(SAMPLE,voltage=3.86)))
+    assert commands.sent==[(1,'Field repeater: 3.9V (52%)')]
+    assert not service.posts
+    db.close()

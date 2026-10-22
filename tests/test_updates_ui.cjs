@@ -22,7 +22,8 @@ w.fetch = async (url, options) => {
 };
 const settle = () => new Promise(resolve => setImmediate(resolve));
 (async () => {
-    w.eval(fs.readFileSync('meshcorestation/web/assets/updates.js', 'utf8'));
+    w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
+w.eval(fs.readFileSync('meshcorestation/web/assets/updates.js', 'utf8'));
     await settle();
     const panel = w.document.querySelector('#update-panel');
     assert.equal(panel.parentElement.className, 'dialog-body', 'Updates must share the scrollable settings body');

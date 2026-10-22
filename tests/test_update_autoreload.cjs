@@ -5,7 +5,8 @@ for(const [page,phase,target,expected] of [['old','complete','new',1],['new','co
  const dom=new JSDOM(`<html><head><meta name="meshcorestation-revision" content="${page}"></head><body><div id="companion-dialog"><div class="companion-grid"></div></div></body></html>`,{runScripts:'outside-only',url:'http://localhost/'}),w=dom.window;
  w.AbortSignal.timeout=()=>undefined;w.reloadCount=0;
  w.fetch=async()=>({ok:true,json:async()=>({ok:true,revision:'new',version:'2.3.0',ready:true,check:{},status:{phase,target}})});
- w.eval(fs.readFileSync('meshcorestation/web/assets/updates.js','utf8').replaceAll('location.reload()','window.reloadCount++'));
+ w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
+w.eval(fs.readFileSync('meshcorestation/web/assets/updates.js','utf8').replaceAll('location.reload()','window.reloadCount++'));
  await settle();assert.equal(w.reloadCount,expected);
  w.document.querySelector('.update-check').click();await settle();assert.equal(w.reloadCount,expected);
  dom.window.close();

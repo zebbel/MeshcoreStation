@@ -46,7 +46,7 @@
         checking = {...(result.check || {})};
         checking.ready = result.ready;
         panel.querySelector('.update-version').textContent = `Installed: ${result.version} (${result.revision.slice(0, 8)}) · ${label(result.branch)}`;
-        panel.querySelector('.update-latest').textContent = checking.latest ? `Latest checked (${label(checking.branch)}): ${checking.latest_version} (${checking.latest.slice(0, 8)}) · ${new Date(checking.checked_at * 1000).toLocaleString()}` : 'No update check yet.';
+        panel.querySelector('.update-latest').textContent = checking.latest ? `Latest checked (${label(checking.branch)}): ${checking.latest_version} (${checking.latest.slice(0, 8)}) · ${window.meshcorestationFormatDate(checking.checked_at)}` : 'No update check yet.';
         const link = panel.querySelector('.update-changes');
         link.hidden = !checking.changes_url;
         if (checking.changes_url) link.href = checking.changes_url;

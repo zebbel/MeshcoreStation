@@ -12,7 +12,7 @@
     function controls() {
         dialog.setAttribute('aria-busy', String(busy));
         // Serial controls remain independently available when the companion is offline.
-        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel, #firmware-panel, #scope-settings, #optimizer-settings')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
+        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel, #firmware-panel, #scope-settings, #optimizer-settings, #display-settings')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
         if (positionMarker) positionMarker.dragging[busy || !settings ? 'disable' : 'enable']();
         networkControls();
     }
@@ -132,9 +132,13 @@
         window.meshcorestationPrepareDialog(positionDialog);
         document.body.append(positionDialog);
 
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
             if (busy || !settings) { status('Load companion settings first.', true); return; }
-            if (!positionMap) { status('Map library unavailable. Refresh the page or enter coordinates manually.', true); return; }
+            try {
+                if (!window.L) await window.meshcorestationLoadMapLibrary();
+            } catch (error) { status('Map library unavailable: ' + error.message + '. Enter coordinates manually.', true); return; }
+            if (busy || !settings) return;
+            if (!positionMap) initializePositionMap();
             pickedPosition = validPosition(input('adv_lat').value, input('adv_lon').value) || validPosition(settings.adv_lat, settings.adv_lon);
             positionDialog.showModal();
             syncPositionPicker(true);
@@ -149,11 +153,12 @@
             status('Position applied to the fields. Click Save position to update the companion.');
         });
 
-        if (!window.L) return;
+        function initializePositionMap() {
         positionMap = L.map('companion-position-map', {scrollWheelZoom: true, worldCopyJump: true}).setView([51, 10], 5);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, noWrap: true, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).on('tileerror', () => { document.getElementById('position-map-error').textContent = 'Background tiles unavailable. Check your Internet connection or use the coordinate fields.'; }).addTo(positionMap);
         positionMap.on('click', event => selectPosition(event.latlng));
         new ResizeObserver(() => { if (positionDialog.open) positionMap.invalidateSize(); }).observe(document.getElementById('companion-position-map'));
+        }
     }
 
     const networkInput = key => document.getElementById(`network-${key}`);
@@ -257,7 +262,7 @@
         if (!dialog) create();
         if (dialog.open) return;
         settings = null; network = null;
-        dialog.querySelectorAll('input').forEach(element => { if(element.closest('#scope-settings, #optimizer-settings'))return; element.value = ''; element.defaultValue = ''; });
+        dialog.querySelectorAll('input').forEach(element => { if(element.closest('#scope-settings, #optimizer-settings, #display-settings'))return; element.value = ''; element.defaultValue = ''; });
         dialog.showModal(); load();
     });
 })();

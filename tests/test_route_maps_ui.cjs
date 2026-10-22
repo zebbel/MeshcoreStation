@@ -5,12 +5,17 @@ const dom = new JSDOM('<html><body><button id="details"></button><section id="ro
 const w=dom.window;
 const calls=[];
 w.fetch=async url=>({ok:true,json:async()=>{calls.push(url);return {nodes:[],segments:[{positions:[[1,2],[3,4]],unresolved:true},{positions:[[3,4],[5,6]],unresolved:false}],notes:[],hops:[{number:1,name:'Hill <b>repeater</b>',hash:'aa',status:'Resolved'}],sender_name:'Alice',bot_name:'Base',direct_distance_km:12.5,route_distance_km:15.3,route_distance_lower_bound:true,path_valid:true};}});
-const lines=[],arrows=[];
-w.L={map:()=>({setView(){return this},remove(){},invalidateSize(){},project(p){return {x:p[1],y:-p[0]}},unproject(p){return p}}),tileLayer:()=>({on(){return this},addTo(){return this}}),polyline:(points,options)=>{lines.push(options);return {addTo(){}}},divIcon:options=>options,marker:(position,options)=>{arrows.push(options);return {addTo(){}}}};
+const lines=[],arrows=[],order=[];
+w.L={map:()=>({setView(){return this},remove(){},invalidateSize(){},fitBounds(){},project(p){return {x:p[1],y:-p[0]}},unproject(p){return p}}),tileLayer:()=>{order.push('tiles');return {on(){return this},addTo(){return this}}},polyline:(points,options)=>{order.push('line');lines.push(options);return {addTo(){}}},divIcon:options=>options,marker:(position,options)=>{arrows.push(options);return {addTo(){}}}};
 w.requestAnimationFrame=fn=>fn();
 const settle=()=>new Promise(r=>setImmediate(r));
 (async()=>{
     w.eval(fs.readFileSync('meshcorestation/web/assets/maps.js','utf8'));
+    const engine=w.L;delete w.L;let finish;const ready=new Promise(resolve=>finish=resolve);
+    w.meshcorestationLoadMapLibrary=options=>{assert.equal(options.clustering,false);return ready;};
+    const first=w.document.getElementById('details');first.dataset.details=JSON.stringify({id:0});first.click();await settle();
+    assert(w.document.getElementById('route-summary').textContent.includes('12.50 km'),'Distances must render before map scripts');
+    assert.equal(lines.length,0);w.L=engine;finish();await settle();
     for(const [id,message] of ['status','?','scope add abc','custom'].entries()){
         const button=w.document.getElementById('details');button.dataset.details=JSON.stringify({id:id+1,message});button.click();await settle();
         assert(!w.document.getElementById('route-section').hidden);
@@ -25,6 +30,9 @@ const settle=()=>new Promise(r=>setImmediate(r));
         assert.equal(lines.at(-2).dashArray,'9 8');
         assert.equal(arrows.at(-1).icon.html.style.transform,'rotate(-0.7853981633974483rad)');
     }
-    assert.equal(calls.length,4);
+    assert.equal(calls.length,5);
+    assert(order.indexOf('line')<order.indexOf('tiles'),'Routes draw before background tiles');
+    w.document.getElementById('details').click();await settle();
+    assert.equal(calls.length,5,'Recently opened routes should reuse the bounded cache');
     dom.window.close(); console.log('All-command route UI and safe name rendering checks passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

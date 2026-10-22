@@ -157,11 +157,10 @@ class VoltageMonitor:
             if sample is None:
                 raise ValueError('No successful battery reading available for this repeater and telemetry channel.')
             c = self.companion
-            stamp = datetime.fromtimestamp(sample['sampled_at'], ZoneInfo(cfg['timezone'])).strftime('%d.%m %H:%M')
-            name = ''.join(ch for ch in sample['name'] if ord(ch) >= 32 and ord(ch) != 127)
-            name = name.encode('utf-8')[:31].decode('utf-8', errors='ignore')
-            reading = f'{sample["voltage"]:.2f} V' if sample['voltage'] is not None else 'unavailable (no valid reading)'
-            message = f'Battery {name}: {reading} | {stamp}'
+            from meshcorestation.battery_templates import render, DEFAULT
+            from meshcorestation.commands.templates import split_reply
+            message = render(cfg.get('report_template',DEFAULT),sample,cfg)
+            parts = split_reply(message)
             target = cfg.get('report_target', 'bot')
             if target == 'bot':
                 target = f'room:{c.room_bot_id}' if c.room_bot_id is not None else f'channel:{c.channel_name}'
@@ -176,7 +175,8 @@ class VoltageMonitor:
                     raise ValueError('Selected room disabled.')
                 if config(self.db, cfg['public_key'])['revision'] != cfg['revision']:
                     raise ValueError('Report settings changed.')
-                worker.service.local_post(room_id, message)
+                for part in parts:
+                    worker.service.local_post(room_id, part)
                 state, detail = 'queued', message + ' (Room queued; delivery unconfirmed.)'
             elif target.startswith('channel:'):
                 from meshcorestation.radio.channels_control import read_channels
@@ -199,8 +199,16 @@ class VoltageMonitor:
                     if config(self.db, cfg['public_key'])['revision'] != cfg['revision']:
                         raise ValueError('Report settings changed.')
                     state, detail = 'unconfirmed', 'Send attempted; no automatic retry.'
-                    sent = await c.mc.commands.send_chan_msg(index, message)
-                    if sent is not None and sent.type == EventType.OK:
+                    accepted=0
+                    for part in parts:
+                        if config(self.db, cfg['public_key'])['revision'] != cfg['revision']:
+                            raise ValueError('Report settings changed during send.')
+                        sent=await c.mc.commands.send_chan_msg(index,part)
+                        if sent is None or sent.type != EventType.OK:
+                            detail=f'{accepted} of {len(parts)} report parts accepted; no automatic retry.'
+                            break
+                        accepted+=1
+                    if accepted==len(parts):
                         state, detail = 'queued', message + ' (Companion accepted; delivery unconfirmed.)'
             else:
                 raise ValueError('Invalid report destination.')

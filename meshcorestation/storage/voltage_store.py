@@ -1,10 +1,11 @@
 """SQLite storage shared by bot and dashboard; never contains channel secrets."""
 import math
 import re
+from meshcorestation import battery_templates
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'report_time_1', 'report_time_2', 'timezone', 'voltage_channel', 'report_target')
+FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'report_time_1', 'report_time_2', 'timezone', 'voltage_channel', 'report_target', 'report_template')
 
 
 def initialize(db):
@@ -33,6 +34,9 @@ def initialize(db):
     # Keep the previous bot-chat destination for existing installations.
     if 'report_target' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
         db.execute("ALTER TABLE voltage_config ADD COLUMN report_target TEXT NOT NULL DEFAULT 'bot'")
+
+    if 'report_template' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
+        db.execute("ALTER TABLE voltage_config ADD COLUMN report_template TEXT NOT NULL DEFAULT 'Battery {repeater_name}: {reading} | {sample_time}'")
 
     if 'managed' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
         db.execute('ALTER TABLE voltage_config ADD COLUMN managed INTEGER NOT NULL DEFAULT 1')
@@ -71,14 +75,14 @@ def config(db, public_key=None):
         if row is None:
             return dict(id=None, public_key=public_key, enabled=False, interval_minutes=30,
                         reports_enabled=True, report_time_1='08:00', report_time_2='20:00',
-                        timezone='Europe/Berlin', voltage_channel=1, report_target='bot',
+                        timezone='Europe/Berlin', voltage_channel=1, report_target='bot', report_template=battery_templates.DEFAULT,
                         revision=0, updated_at=0, request_seq=0, handled_seq=0)
     else:
         row = db.execute('SELECT * FROM voltage_config WHERE managed=1 ORDER BY public_key=\'\',id LIMIT 1').fetchone()
     if row is None:
         return dict(id=None, public_key='', enabled=False, interval_minutes=30, reports_enabled=False,
                     report_time_1='08:00', report_time_2='20:00', timezone='Europe/Berlin',
-                    voltage_channel=1, report_target='bot', revision=0, updated_at=0, request_seq=0, handled_seq=0)
+                    voltage_channel=1, report_target='bot', report_template=battery_templates.DEFAULT, revision=0, updated_at=0, request_seq=0, handled_seq=0)
     result = dict(row)
     for key in ('enabled', 'reports_enabled'):
         result[key] = bool(result[key])
@@ -86,7 +90,7 @@ def config(db, public_key=None):
 
 
 def validate(value, db):
-    if not isinstance(value, dict) or set(value) != set(FIELDS):
+    if not isinstance(value, dict) or set(value) not in (set(FIELDS),set(FIELDS)-{'report_template'}):
         raise ValueError('Invalid voltage settings fields.')
     result = dict(value)
     for key in ('enabled', 'reports_enabled'):
@@ -96,6 +100,9 @@ def validate(value, db):
     if not isinstance(key, str) or (key and not re.fullmatch('[0-9a-fA-F]{64}', key)):
         raise ValueError('Select a repeater from the list or map.')
     result['public_key'] = key = key.lower()
+    # Preserve saved text when an older client only edits schedules.
+    result.setdefault('report_template',config(db,key)['report_template'])
+    battery_templates.validate(result['report_template'])
     if key and not db.execute('SELECT 1 FROM repeaters WHERE lower(public_key)=? AND adv_type=2', (key,)).fetchone():
         raise ValueError('Selected repeater is not in the known repeater list.')
     if result['enabled'] and not key:

@@ -5,7 +5,7 @@ const dom=new JSDOM('<style>'+css+'</style><main><section><form><label>Value<inp
 function check(rules){
  for(const rule of rules){
   if(rule.selectorText) for(const selector of rule.selectorText.split(','))
-   assert(selector.trim().startsWith('.rooms-page '),'Unscoped room selector: '+selector);
+   assert((/^\.rooms-page(?:[ .:#\[]|$)/.test(selector.trim()) || ['#room-server-disclosure .room-server-inline','#room-server-frame'].includes(selector.trim())),'Unscoped room selector: '+selector);
   if(rule.cssRules)check(rule.cssRules);
  }
 }

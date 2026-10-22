@@ -28,3 +28,9 @@
 #voltage-dialog td, #voltage-dialog th { padding: 8px; text-align: left; overflow-wrap: anywhere; }
 #voltage-report-log { overflow-wrap: anywhere; }
 @media(max-width:650px) { .voltage-fields {grid-template-columns:1fr;} #voltage-dialog{padding:16px;} }
+
+.voltage-template-editor { margin-block: 20px; }
+#voltage-template { display: block; width: 100%; padding: 12px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.template-placeholders { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+#voltage-template-preview { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: var(--soft); }
+#display-settings select { display: block; padding: 10px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 7px; }

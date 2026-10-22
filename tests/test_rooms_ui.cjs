@@ -16,6 +16,7 @@ w.fetch=async(url,options)=>{
  return {ok:true,json:async()=>({ok:true,rooms:deleted?[]:[room],status:{running:true,sessions:1,dropped_packets:0}})};
 };
 w.setInterval=()=>0;
+w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
 w.eval(fs.readFileSync('meshcorestation/web/assets/rooms.js','utf8'));
 (async()=>{
  await new Promise(r=>setTimeout(r,10));

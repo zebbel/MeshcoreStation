@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.1.2** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.2.0** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -67,6 +67,14 @@ Every published application update must increment `meshcorestation.__version__`
 and update the current-version references in the README and guides. Queue several
 changes under one release version; do not publish changed application code with
 the same version as the previous release.
+
+### 3.2.0
+
+Faster initial dashboard and maps, deferred work for closed panels, cached route
+maps, per-repeater battery report templates and persistent date/clock display
+preferences. The battery settings migration preserves schedules, destinations and
+existing data. Reload the dashboard after installing to load the shared formatter
+and updated map loader.
 
 ### 3.1.2
 

@@ -21,7 +21,7 @@ window.MeshcoreStationBattery = (() => {
         const ns='http://www.w3.org/2000/svg',w=940,h=290,left=70,right=24,top=20,bottom=48,low=3.0,high=4.2,start=end-days*86400;
         const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.setAttribute('role','img');svg.setAttribute('aria-label','Battery voltage, fixed scale 3.0 to 4.2 volts. Missing readings break the line.');
         const x=t=>left+(t-start)/(end-start)*(w-left-right),y=v=>top+(high-v)/(high-low)*(h-top-bottom);
-        const date=t=>new Date(t*1000).toLocaleString(undefined,{timeZone:zone,dateStyle:'short',timeStyle:'short'});
+        const date=t=>window.meshcorestationFormatDate(t,zone,{seconds:false});
         function shape(tag,attrs,text){const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;svg.append(n);return n;}
         for(let i=0;i<=6;i++){const v=low+i*0.2;shape('line',{x1:left,y1:y(v),x2:w-right,y2:y(v),class:'voltage-grid'});shape('text',{x:left-10,y:y(v)+4,'text-anchor':'end'},`${v.toFixed(1)} V`);}
         for(let i=0;i<=3;i++){const t=start+(end-start)*i/3;shape('text',{x:x(t),y:h-17,'text-anchor':i===0?'start':i===3?'end':'middle'},date(t));}

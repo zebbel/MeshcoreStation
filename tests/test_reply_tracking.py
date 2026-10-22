@@ -57,7 +57,7 @@ def test_matching_route_duplicates_and_collisions(db):
 
 @pytest.mark.parametrize('change',[
     {'text':'Station: other'},{'text':'Other: pong'},{'stamp':999},{'key':b'abcdefghijklmnop'},
-    {'path':''},{'scope':b'abcdefghijklmnop'}
+    {'path':'zz'},{'scope':b'abcdefghijklmnop'}
 ])
 def test_no_false_matches(db,change):
     begin(db.db)

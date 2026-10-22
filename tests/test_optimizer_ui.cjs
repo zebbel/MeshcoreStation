@@ -22,6 +22,7 @@ notes:[]},neighbor_snapshots:[
 w.fetch=async (url,opts)=>{reqs.push({url,method:opts.method,body:opts.body});return {
 ok:true,json:async()=>sample}};
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
 w.eval(script);
 const settle=()=>new Promise(r=>setImmediate(r));
 (async()=>{

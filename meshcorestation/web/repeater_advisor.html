@@ -36,7 +36,7 @@ function history(rows,evaluations={}){
  if(!rows.length)box.append(el('p','No recorded advisor changes for this repeater.'));
  for(const row of rows){
   const article=el('article');
-  article.append(el('p',new Date(row.at*1000).toLocaleString()+' · '+row.field+': '+row.before_value+' → '+row.requested+' · '+row.status+(row.actual!==null?' · Read back: '+row.actual:'')));
+  article.append(el('p',window.meshcorestationFormatDate(row.at)+' · '+row.field+': '+row.before_value+' → '+row.requested+' · '+row.status+(row.actual!==null?' · Read back: '+row.actual:'')));
   if(row.status==='verified'&&schema[row.field]){
    const button=el('button','Review restore');
    button.onclick=()=>send('apply',[{field:row.field,expected:row.actual,value:row.before_value}]);
@@ -47,7 +47,7 @@ function history(rows,evaluations={}){
    const detail=el('div');detail.className='advisor-comparison';
    detail.append(el('strong','Before / after · '+comparison.status),el('p',comparison.message));
    if(comparison.next_at){
-    detail.append(el('p','Full after-window available after '+new Date(comparison.next_at*1000).toLocaleString()+'. Refresh history to evaluate.'));
+    detail.append(el('p','Full after-window available after '+window.meshcorestationFormatDate(comparison.next_at)+'. Refresh history to evaluate.'));
    }
    if(comparison.before&&comparison.after){
     detail.append(el('p','Equal 24-hour windows, separated by 1 settling hour. Packet copies: '+

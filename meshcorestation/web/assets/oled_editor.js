@@ -174,6 +174,7 @@
         }));grid.insertBefore(section,firmware?.parentElement===grid?firmware:null);section.querySelector('button').disabled=true;availability();
     }
     async function availability(){
+        if(document.hidden || !document.getElementById('companion-dialog')?.open)return;
         const section=$('oled-settings');if(!section)return;
         try{
             const r=await fetch('/api/oled/pages?status=1',{cache:'no-store',headers:{'X-Meshcore-Control':'1'}});

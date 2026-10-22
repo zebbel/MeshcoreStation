@@ -1,5 +1,5 @@
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
-const dom=new JSDOM('<dialog id="companion-dialog"><div class="companion-grid"></div></dialog>',{runScripts:'outside-only',url:'http://localhost/'}),w=dom.window,d=w.document;
+const dom=new JSDOM('<dialog id="companion-dialog" open><div class="companion-grid"></div></dialog>',{runScripts:'outside-only',pretendToBeVisual:true,url:'http://localhost/'}),w=dom.window,d=w.document;
 w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
 w.HTMLDialogElement.prototype.close=function(){this.open=false;};
 w.confirm=()=>true;

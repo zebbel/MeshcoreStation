@@ -5,7 +5,7 @@ import threading
 from contextlib import closing
 from pathlib import Path
 from urllib.parse import urlencode
-from flask import request, send_file
+from flask import request, Response
 from meshcorestation.config import DATA_DIR, DB_PATH
 from meshcorestation.rooms.service import RoomService
 from meshcorestation.web.http import control_request_error, json_response as reply
@@ -57,7 +57,8 @@ def register_room_routes(server):
 
     @server.get('/rooms')
     def rooms_page():
-        return send_file(Path(__file__).with_name('rooms.html'))
+        return Response(Path(__file__).with_name('rooms.html').read_text(encoding='utf-8'),
+                        mimetype='text/html',headers={'Cache-Control':'no-store'})
 
     @server.route('/api/rooms', methods=['GET', 'POST'])
     def rooms_api():

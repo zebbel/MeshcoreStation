@@ -4,8 +4,24 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.1.2. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.2.0. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.2.0
+
+- Show bot status, known repeater count and the latest command in the initial
+  dashboard. Closed history, room and repeater panels defer work; hidden tabs
+  pause dashboard refreshes. Map assets load when a map is opened.
+- Show Command Details route information before the map engine loads. Route maps
+  load Leaflet without clustering, draw overlays before tiles, and reuse up to
+  32 recently opened map results for 30 seconds.
+- Configure a separate battery report message template for each repeater with
+  insertion buttons, validation and live preview. Existing text remains the
+  default; schedules, destinations and use of the last successful reading stay
+  unchanged. Longer reports use bounded radio message parts.
+- Save application-wide date and clock display preferences in Settings. Defaults
+  are DD.MM.YYYY and 24-hour time; ISO/US dates and 12-hour time are available.
+  Report timezones and schedules remain separate from display preferences.
 
 ## Changes in 3.1.2
 

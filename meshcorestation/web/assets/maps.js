@@ -1,5 +1,16 @@
 (() => {
-    const maps = new Map(), requests = new Map();
+    const maps = new Map(), requests = new Map(), cache = new Map();
+    const cacheTTL = 30000;
+    async function mapData(url, signal) {
+        const saved=cache.get(url);
+        if(saved && Date.now()-saved.at<cacheTTL){cache.delete(url);cache.set(url,saved);return saved.data;}
+        const response=await fetch(url,{cache:"no-store",signal});
+        const data=await response.json();
+        if(!response.ok)throw Error(data.error||"Map data could not be loaded.");
+        cache.set(url,{at:Date.now(),data});
+        while(cache.size>32)cache.delete(cache.keys().next().value);
+        return data;
+    }
     function text(tag, value, className) { const el = document.createElement(tag); el.textContent = value; if (className) el.className = className; return el; }
     function dispose(id) { if (maps.has(id)) { maps.get(id).remove(); maps.delete(id); } }
     function describe(node) {
@@ -7,7 +18,7 @@
         box.append(text('strong', node.label), text('p', node.role === 'repeater' && node.order ? `Repeater hop ${node.order}` : node.role));
         box.append(text('p', node.position.map(n => n.toFixed(6)).join(', ')));
         if (node.public_key) box.append(text('p', node.public_key, 'map-key'));
-        if (node.updated_at) box.append(text('p', `Saved / last seen: ${new Date(node.updated_at * 1000).toLocaleString()}`));
+        if (node.updated_at) box.append(text('p', `Saved / last seen: ${window.meshcorestationFormatDate(node.updated_at)}`));
         if (node.role === 'repeater' && node.public_key) {
             window.meshcorestationRepeaterActions(box, node, () => {
                 document.getElementById('repeaters-dialog')?.close();
@@ -24,9 +35,12 @@
         if (summary) summary.replaceChildren(text('p', 'Loading distances and packet route…'));
         dispose(id); canvas.replaceChildren(); notes.replaceChildren(text('p', 'Loading map…'));
         try {
-            const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Map data could not be loaded.');
+            // Route details must not wait for map scripts or background tiles.
+            const needLibrary = !window.L || (id === 'repeater-map' && !window.L.markerClusterGroup);
+            const library = needLibrary ? window.meshcorestationLoadMapLibrary({clustering:id==='repeater-map'}) : Promise.resolve();
+            // Attach a rejection handler immediately while route data is fetched.
+            const ready=library.then(()=>null,error=>error);
+            const data = await mapData(url, controller.signal);
             if (controller.signal.aborted) return;
             notes.replaceChildren(...data.notes.map(note => text('p', note)));
             if (summary) {
@@ -38,11 +52,14 @@
                     text('p', sequence.join(' → '), 'route-sequence'));
                 if (data.path_valid && !data.hops.length) summary.append(text('p', 'Direct packet · no repeaters', 'muted'));
             }
+            const libraryError=await ready;
+            if(controller.signal.aborted)return;
+            if(libraryError)throw libraryError;
             if (!window.L) throw new Error('Map library could not be loaded. Refresh the page and try again.');
-            const map = L.map(canvas, { scrollWheelZoom: true }).setView([51, 10], 5); maps.set(id, map);
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
-                if (!notes.querySelector('.tile-warning')) notes.append(text('p', 'Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap.', 'tile-warning'));
-            }).addTo(map);
+            const map = L.map(canvas, { scrollWheelZoom: true }); maps.set(id, map);
+            // Set final bounds before attaching OSM tiles: no wasted requests at the default location.
+            if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), { padding: [35, 35], maxZoom: 14 });
+            else map.setView([51, 10], 5);
             for (const segment of data.segments) {
                 const line = segment.positions, color = segment.unresolved ? '#ef5350' : '#4d8eff';
                 L.polyline(line, { color, weight: 4, opacity: 0.9, dashArray: segment.unresolved ? '9 8' : null }).addTo(map);
@@ -68,7 +85,18 @@
             if (clusters) notes.prepend(text('p', 'Numbered circles group nearby repeaters. Zoom in or click a group to expand it; overlapping markers spread apart when expanded.', 'map-legend'));
             notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
             if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));
-            requestAnimationFrame(() => { if (maps.get(id) !== map) return; map.invalidateSize(); if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), { padding: [35, 35], maxZoom: 14 }); });
+            requestAnimationFrame(() => {
+                if (maps.get(id) !== map) return;
+                map.invalidateSize();
+                if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), {padding:[35,35],maxZoom:14});
+                // Draw the useful overlay first; request tiles only for the final bounds.
+                requestAnimationFrame(() => {
+                    if(maps.get(id)!==map)return;
+                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
+                        if (!notes.querySelector('.tile-warning')) notes.append(text('p', 'Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap.', 'tile-warning'));
+                    }).addTo(map);
+                });
+            });
         } catch (error) { if (error.name !== 'AbortError' && !controller.signal.aborted) { notes.replaceChildren(text('p', error.message)); if (summary && summary.textContent === 'Loading distances and packet route…') summary.replaceChildren(text('p', 'Distances and packet route could not be loaded.')); } }
     }
     function cleanup(id) { requests.get(id)?.abort(); dispose(id); }

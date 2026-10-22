@@ -2,6 +2,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{JSDOM}=require
 const dom=new JSDOM('<html><body><iframe id="room-server-frame" src="/rooms?embedded=1"></iframe></body></html>',
   {url:'http://localhost/',runScripts:'outside-only'});
 const w=dom.window,frame=w.document.getElementById('room-server-frame');
+w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
 w.eval(fs.readFileSync('meshcorestation/web/assets/room_embed.js','utf8'));
 const announce=(origin,height,source=frame.contentWindow)=>w.dispatchEvent(
   new w.MessageEvent('message',{origin,source,data:{kind:'meshcorestation-room-iframe-height',height}})

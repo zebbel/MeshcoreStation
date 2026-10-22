@@ -31,7 +31,7 @@
                 }
                 reply.observations.forEach(observation=>{
                     const route=observation.route.map(h=> (h.name||h.prefix)+' ['+h.prefix+'] · '+h.status).join(' → ');
-                    item.append(node('p',new Date(observation.seen_at*1000).toLocaleString()+' · '+observation.latency.toFixed(1)+'s after submission'),
+                    item.append(node('p',window.meshcorestationFormatDate(observation.seen_at)+' · '+observation.latency.toFixed(1)+'s after submission'),
                         node('p',route),
                         node('small','Received at this station: RSSI '+(observation.rssi??'--')+' dBm · SNR '+(observation.snr??'--')+' dB'));
                 });

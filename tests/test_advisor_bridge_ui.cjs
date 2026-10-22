@@ -10,6 +10,7 @@ if(b.action==='login')r={session:'token',admin:true,contact:{public_key:key},fie
 else if(b.action==='read')r={value:values[b.field]};
 else if(b.action==='advisor_write'){if(fail)return {ok:false,json:async()=>({ok:false,error:'timed out'})};values[b.field]=b.value;r={value:b.value};}
 else r={data:{},contact:{public_key:key},sampled_at:1};return {ok:true,json:async()=>({ok:true,...r})};};
+w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
 w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_management.js','utf8'));
 const $=id=>w.document.getElementById(id),settle=()=>new Promise(r=>setImmediate(r));
 let iframe;const send=(type,extra={})=>w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:iframe.contentWindow,data:{type:'meshcorestation-advisor-'+type,request_id:1,...extra}}));

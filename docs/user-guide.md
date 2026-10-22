@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.1.2** on `main`, including the bot, room server,
+This guide covers stable **3.2.0** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 
@@ -130,3 +130,32 @@ and repeater picker. Zoom in or click a group to expand it. Repeaters at the sam
 location spread apart when the group is expanded so each can be selected.
 Show on map reveals the selected repeater even inside a group. Packet-route
 maps retain individual numbered hops.
+
+
+## Display preferences and battery report messages
+
+In Settings, **Date and time display** selects German (`DD.MM.YYYY`), ISO
+(`YYYY-MM-DD`) or US (`MM/DD/YYYY`) dates and a 12- or 24-hour clock. Defaults are
+German dates and 24-hour time. **Save and reload** persists these choices for the
+application, including embedded room/optimizer pages, maps and command history.
+Other open browsers use the saved preferences after reloading. This controls
+presentation only; each report timezone and its `HH:MM` schedule are unchanged.
+
+In Repeater management, select a repeater and open **Battery history / settings**.
+The **Report message template** editor inserts placeholders at the cursor,
+validates supported fields and shows an example preview without sending radio
+traffic. Save settings to apply the template only to the selected repeater.
+**Use default message** restores `Battery {repeater_name}: {reading} | {sample_time}`.
+Placeholders include repeater identity, the last read battery voltage/percentage,
+reading date/time and report timezone. Numeric fields support `.0f` through `.4f`,
+for example `{battery_voltage:.2f}`; `{{` and `}}` represent literal braces.
+Templates use one line and up to 512 UTF-8 bytes. Missing numeric values show
+`unknown`; reports still require a successful saved reading. The default
+`sample_time` retains the previous `DD.MM HH:MM` on-air text. Longer reports split
+into bounded radio messages without changing report slots or destinations.
+
+Dashboard sections start closed and fetch their detailed content when opened.
+Command Details shows saved route information before map scripts or background
+tiles finish. Recent map results are cached for up to 30 seconds (32 results per
+browser page); reopening after that refreshes saved positions. Discovery maps
+load clustering only when needed. Background tiles still require Internet access.

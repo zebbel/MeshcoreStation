@@ -9,7 +9,8 @@ w.fetch=async(url,options)=>{
  ]})};
 };
 (async()=>{
- w.eval(fs.readFileSync('meshcorestation/web/assets/reply_tracking.js','utf8'));
+ w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
+w.eval(fs.readFileSync('meshcorestation/web/assets/reply_tracking.js','utf8'));
  w.document.querySelector('button').click();await new Promise(r=>setTimeout(r,30));
  const section=w.document.getElementById('reply-tracking');
  assert(section.textContent.includes('Repeater A [aa] · forwarding observed'));

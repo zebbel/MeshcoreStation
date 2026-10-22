@@ -44,7 +44,7 @@
         summary.textContent = 'Details'; box.className = 'contact-details'; box.append(summary);
         const data = contact.details || {}, device = data.device || {};
         const zone = data.timezone || 'Europe/Berlin';
-        const stamp = value => Number.isFinite(value) && value > 0 ? new Date(value * 1000).toLocaleString(undefined, {timeZone: zone}) + ' · ' + zone : 'Not available';
+        const stamp = value => Number.isFinite(value) && value > 0 ? window.meshcorestationFormatDate(value,zone) + ' · ' + zone : 'Not available';
         function section(title, fields) {
             const heading = document.createElement('h4'), list = document.createElement('dl'); heading.textContent = title;
             for (const [label, value] of fields) { const term = document.createElement('dt'), definition = document.createElement('dd'); term.textContent = label; definition.textContent = value === undefined || value === null || value === '' ? 'Not available' : String(value); list.append(term, definition); }

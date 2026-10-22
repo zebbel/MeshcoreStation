@@ -1,7 +1,7 @@
 (() => {
     let dialog, busy=false, timer=null, requestId=0, knownRepeaters=[], autoRefreshPaused=false, collectionEnabled=false;
     const el=(tag,value,cls)=>{const node=document.createElement(tag);if(value!=null)node.textContent=value;if(cls)node.className=cls;return node;};
-    const date=value=>value ? new Date(value*1000).toLocaleString(undefined,{timeZone:'Europe/Berlin'}) : 'No observations yet';
+    const date=value=>value ? window.meshcorestationFormatDate(value,'Europe/Berlin') : 'No observations yet';
     function message(value){dialog.querySelector('.stats-message').textContent=value;}
     function table(title,headers,rows){
         const section=el('section',null,'stats-section');section.append(el('h3',title));

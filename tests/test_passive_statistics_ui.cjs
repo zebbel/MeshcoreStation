@@ -6,7 +6,8 @@ const key='76'.repeat(32),calls=[];let selected=false;
 w.fetch=async(url,opts)=>{calls.push({url,opts});if(opts.method==='POST')selected=true;return {ok:true,json:async()=>({ok:true,selection:selected?{public_key:key,since:100}:null,repeaters:[{public_key:key,name:'My <script>repeater</script>'}],usefulness:{unique:2,active_hours:1,hours:24,routes:1,neighbors:0,replies:{forwarded:1,total:2},trend:null,activity:[true,false],partial:true,summary:'Forwarding observed'},days:1,copies:3,unique:2,repeated:1,ratio:1/3,unidentified:0,ambiguous:1,earliest:100,health:{running:true,heartbeat:200,dropped:2,radio:'Running'},timeline:[{at:100,copies:3,unique:2}],types:{Advertisement:3},roles:{First:2,Middle:1,Final:0},scoped:1,previous:[{key:'aa',name:'Before',status:'unknown',count:2}],following:[],routes:[{path:[{key:'76',name:'My <script>repeater</script>',status:'matched'}],count:3}]})}};
 const settle=()=>new Promise(r=>setImmediate(r));
 (async()=>{
-    w.eval(fs.readFileSync('meshcorestation/web/assets/aa_dialog.js','utf8'));
+    w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
+w.eval(fs.readFileSync('meshcorestation/web/assets/aa_dialog.js','utf8'));
     w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_statistics.js','utf8'));
     const disclosure=w.document.getElementById('repeater-statistics-disclosure');
     assert.equal(calls.length,0);disclosure.open=true;disclosure.dispatchEvent(new w.Event('toggle'));await settle();

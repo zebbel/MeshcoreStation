@@ -1,11 +1,11 @@
 (() => {
-    let dialog, snapshot = null, busy = false, wantedKey = '', timer = null, dirty = false, channelsCache = [];
+    let dialog, snapshot = null, busy = false, wantedKey = '', timer = null, dirty = false, channelsCache = [], templateValid = false, previewTimer, previewSerial = 0;
     const el = id => document.getElementById(id);
     const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
     function message(text, bad = false) { el('voltage-message').textContent = text; el('voltage-message').classList.toggle('voltage-error', bad); }
     function controls() {
-        dialog.querySelectorAll('button,input,select').forEach(n => n.disabled = busy);
-        el('voltage-save').disabled = busy || !snapshot;
+        dialog.querySelectorAll('button,input,select,textarea').forEach(n => n.disabled = busy);
+        el('voltage-save').disabled = busy || !snapshot || !templateValid;
         el('voltage-read').disabled = busy || !snapshot || dirty || !snapshot.config.public_key;
     }
     async function request(body) {
@@ -19,7 +19,30 @@
         if (!response.ok || !result.ok) throw new Error(result.error || 'Voltage request failed.');
         return result;
     }
-    function date(stamp, zone) { return new Date(stamp * 1000).toLocaleString(undefined, {timeZone: zone, dateStyle: 'short', timeStyle: 'short'}); }
+    function previewTemplate() {
+        clearTimeout(previewTimer);const serial=++previewSerial;templateValid=false;controls();
+        el('voltage-template-error').textContent='Checking template…';
+        previewTimer=setTimeout(async()=>{
+            try{
+                const response=await fetch('/api/battery-report-preview',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},body:JSON.stringify({template:el('voltage-template').value})});
+                const data=await response.json();if(serial!==previewSerial)return;
+                if(!response.ok||!data.ok)throw Error(data.error||'Preview unavailable.');
+                el('voltage-template-preview').textContent=data.preview;
+                el('voltage-template-error').textContent='';templateValid=true;
+            }catch(error){if(serial!==previewSerial)return;el('voltage-template-error').textContent=error.message;el('voltage-template-preview').textContent='Preview unavailable';}
+            finally{if(serial===previewSerial)controls();}
+        },250);
+    }
+    function templateEditor(data) {
+        el('voltage-template').value=data.config.report_template||data.report_default;
+        const box=el('voltage-placeholders');box.replaceChildren();
+        for(const item of data.report_placeholders||[]){
+            const token='{'+item.name+'}',chip=node('button',token);chip.type='button';chip.title=item.description;
+            chip.onclick=()=>{const field=el('voltage-template');field.setRangeText(token,field.selectionStart,field.selectionEnd,'end');field.focus();dirty=true;previewTemplate();};box.append(chip);
+        }
+        previewTemplate();
+    }
+    function date(stamp, zone) { return window.meshcorestationFormatDate(stamp,zone,{seconds:false}); }
     function chart(samples, zone, days) {
         window.MeshcoreStationBattery.chart(el('voltage-chart'), el('voltage-chart-note'), samples, zone, days, snapshot.server_time);
     }
@@ -66,6 +89,7 @@
             el('voltage-enabled').checked=c.enabled; el('voltage-reports').checked=c.reports_enabled;
             el('voltage-interval').value=c.interval_minutes; el('voltage-lpp').value=c.voltage_channel;
             el('voltage-time1').value=c.report_time_1; el('voltage-time2').value=c.report_time_2; el('voltage-zone').value=c.timezone;
+            templateEditor(data);
             dirty = !!wantedKey && wantedKey!==c.public_key;
         }
         const latest=data.latest;
@@ -94,8 +118,8 @@
         wantedKey=key;dirty=false;load(true);
     }
     async function save(event) {
-        event.preventDefault(); if(busy || !snapshot || !el('voltage-form').reportValidity()) return;
-        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value),report_target:el('voltage-target').value};
+        event.preventDefault(); if(busy || !snapshot || !templateValid || !el('voltage-form').reportValidity()) return;
+        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value),report_target:el('voltage-target').value,report_template:el('voltage-template').value};
         busy=true;controls();
         try { await request({operation:'save',expected_revision:snapshot.config.revision,value});wantedKey=value.public_key;dirty=false;message('Settings saved. The bot applies them automatically.'); }
         catch(error) { message(error.message+' Refresh before retrying.',true); return; }
@@ -109,7 +133,7 @@
         catch(error){message(error.message,true);}
         finally{busy=false;controls();}
     }
-    function close() {if(!busy && (!dirty || window.confirm('Discard unsaved battery settings?'))) {dialog.close();clearInterval(timer);timer=null;} }
+    function close() {if(!busy && (!dirty || window.confirm('Discard unsaved battery settings?'))) {dialog.close();clearInterval(timer);timer=null;clearTimeout(previewTimer);++previewSerial;} }
     function create() {
         dialog=document.createElement('dialog');dialog.id='voltage-dialog';dialog.setAttribute('aria-labelledby','voltage-title');
         dialog.innerHTML=`<div class="dialog-header"><h2 id="voltage-title">Repeater battery</h2><button type="button" id="voltage-close" aria-label="Close battery history">×</button></div>
@@ -125,6 +149,7 @@
         <label class="voltage-wide voltage-toggle"><input type="checkbox" id="voltage-reports"> Send two daily reports</label>
         <label>First report<input id="voltage-time1" type="time" required></label><label>Second report<input id="voltage-time2" type="time" required></label>
         <label>Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label>Send battery reports to<select id="voltage-target" required></select></label></div></fieldset></div>
+        <section class="voltage-template-editor"><h3>Report message template</h3><label for="voltage-template">Message</label><textarea id="voltage-template" rows="3" maxlength="512" required></textarea><div id="voltage-placeholders" class="template-placeholders"></div><p class="muted">Click a placeholder to insert it at the cursor. Numeric formatting: {battery_voltage:.2f}. Uses the last successful reading; missing values show “unknown”. Longer reports are split into radio messages.</p><button type="button" id="voltage-template-default">Use default message</button><h4>Live preview · example reading</h4><pre id="voltage-template-preview"></pre><p id="voltage-template-error" role="status" class="voltage-error"></p></section>
         <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Reports may follow the bot or use a private chat or enabled room. Previous history is kept.</p>
         <div class="voltage-actions"><button id="voltage-save" type="submit">Save settings</button><button id="voltage-read" type="button">Read now</button><button id="voltage-refresh" type="button">Refresh</button></div></form>
         <details><summary>Select from repeater list</summary><input id="voltage-search" type="search" aria-label="Search repeaters" placeholder="Search name or public key"><ul id="voltage-repeaters"></ul></details>
@@ -134,6 +159,8 @@
         <details><summary>Recent report attempts</summary><ul id="voltage-report-log"></ul><p class="muted">Queued means accepted by the companion, not confirmed delivery. Missed report times have a 10-minute grace period; interrupted sends are not retried automatically.</p></details>`;
         window.meshcorestationPrepareDialog(dialog);
         document.body.append(dialog);
+        el('voltage-template').addEventListener('input',previewTemplate);
+        el('voltage-template-default').onclick=()=>{el('voltage-template').value=snapshot.report_default;dirty=true;previewTemplate();};
         el('voltage-close').addEventListener('click',close);dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
         el('voltage-form').addEventListener('submit',save);
         el('voltage-map').onclick=()=>pick(snapshot);

@@ -56,7 +56,22 @@
         }
     });
     document.addEventListener('toggle', event => {
+        if(event.target.id==='command-history-disclosure'){
+            window.dash_clientside?.set_props('history-visible',{data:event.target.open});
+            window.dash_clientside?.set_props('history-refresh',{disabled:!event.target.open||document.hidden});
+        }
+        if(event.target.id==='room-server-disclosure'){
+            document.getElementById('room-server-frame')?.contentWindow?.postMessage({kind:'meshcorestation-room-visible',visible:event.target.open},location.origin);
+        }
+        if (event.target.id === 'room-server-disclosure' && event.target.open) {
+            const iframe = document.getElementById('room-server-frame');
+            if (iframe?.dataset.src) { iframe.src = iframe.dataset.src; delete iframe.dataset.src; }
+        }
         if (event.target.id === 'command-history-disclosure' && event.target.open && box && body) requestAnimationFrame(restore);
     }, true);
+    document.addEventListener('visibilitychange',()=>{
+        window.dash_clientside?.set_props('refresh',{disabled:document.hidden});
+        window.dash_clientside?.set_props('history-refresh',{disabled:document.hidden||!document.getElementById('command-history-disclosure')?.open});
+    });
     attach();
 })();

@@ -79,7 +79,7 @@
     renderMembers();
     $('posts').replaceChildren(...room.posts.map(p => {
       const row=document.createElement('article'), label=document.createElement('small'), text=document.createElement('p');
-      label.textContent=new Date(p.timestamp*1000).toLocaleString()+' · '+(p.author===room.public_key?'Room':contactName(p.author) || shortKey(p.author));label.title=p.author;text.textContent=p.text;row.append(label,text);return row;
+      label.textContent=window.meshcorestationFormatDate(p.timestamp)+' · '+(p.author===room.public_key?'Room':contactName(p.author) || shortKey(p.author));label.title=p.author;text.textContent=p.text;row.append(label,text);return row;
     }));
     if (!room.posts.length) $('posts').textContent='No messages yet.';
   }
@@ -135,7 +135,12 @@
   $('copy').onclick=async()=>{try {await navigator.clipboard.writeText(current().contact_uri);}catch { $('error').textContent='Copy this link: '+current().contact_uri; }};
   $('room').onchange=()=>{selected=Number($('room').value);render({rooms,status:lastStatus},true);};
   let lastStatus={running:false,sessions:0,dropped_packets:0};
-  async function refresh(first=false){if(busy||document.hidden)return;busy=true;updateRoomActions();try{const result=await request();lastStatus=result.status;render(result,first);}catch(e){$('error').textContent=e.message;}finally{busy=false;updateRoomActions();}}
+  let embeddedActive=true;
+  window.addEventListener('message',event=>{
+    if(event.origin!==location.origin||event.source!==window.parent||event.data?.kind!=='meshcorestation-room-visible'||typeof event.data.visible!=='boolean')return;
+    embeddedActive=event.data.visible;if(embeddedActive)refresh();
+  });
+  async function refresh(first=false){if(busy||document.hidden||!embeddedActive)return;busy=true;updateRoomActions();try{const result=await request();lastStatus=result.status;render(result,first);}catch(e){$('error').textContent=e.message;}finally{busy=false;updateRoomActions();}}
   if(embedded) {
     const resize=()=>{
       if(window.parent===window)return;
