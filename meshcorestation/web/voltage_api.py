@@ -4,7 +4,7 @@ import sqlite3
 import time
 from contextlib import closing
 from meshcorestation.web.data import DB_PATH
-from meshcorestation.storage.voltage_store import FIELDS, config, configurations, ensure_repeater, validate, latest
+from meshcorestation.storage.voltage_store import FIELDS, config, configurations, ensure_repeater, validate, latest, latest_temperature
 from meshcorestation.config import DATA_DIR
 from meshcorestation.rooms.service import RoomService
 from meshcorestation import battery_templates
@@ -18,10 +18,14 @@ def payload(db, selected_key, days):
         ORDER BY name COLLATE NOCASE, public_key''')]
     if key and key not in {r['public_key'] for r in repeaters}:
         raise ValueError('Unknown repeater.')
-    samples = [dict(r) for r in db.execute('''SELECT sampled_at,voltage,error,voltage_channel,interval_seconds
+    samples = [dict(r) for r in db.execute('''SELECT sampled_at,voltage,error,voltage_channel,interval_seconds,temperature,temperature_channel,temperature_error
         FROM voltage_samples WHERE public_key=? AND voltage_channel=? AND sampled_at>=?
         ORDER BY sampled_at DESC, id DESC LIMIT 9000''', (key, cfg['voltage_channel'], time.time() - days * 86400))]
     samples.reverse()
+    temperature_samples=[dict(r) for r in db.execute('''SELECT sampled_at,temperature,temperature_error,temperature_channel,interval_seconds
+        FROM voltage_samples WHERE public_key=? AND temperature_channel=? AND sampled_at>=?
+        ORDER BY sampled_at DESC,id DESC LIMIT 9000''',(key,cfg['temperature_channel'],time.time()-days*86400))]
+    temperature_samples.reverse()
     row = db.execute('SELECT channel_name FROM bot_settings WHERE id=1').fetchone()
     worker = db.execute('SELECT * FROM voltage_worker WHERE id=1').fetchone()
     reports = [dict(r) for r in db.execute('SELECT * FROM voltage_reports WHERE public_key=? ORDER BY attempted_at DESC LIMIT 6', (key,))]
@@ -32,7 +36,8 @@ def payload(db, selected_key, days):
         managed_keys = list(dict.fromkeys(managed_keys + [row[0] for row in stats_db.execute(
             "SELECT public_key FROM subscriptions UNION SELECT public_key FROM selection WHERE public_key != ''")]))
     return {'ok': True, 'config': cfg, 'repeaters': repeaters, 'managed_repeaters': managed_keys, 'history_key': key,
-            'samples': samples, 'latest': latest(db, dict(cfg, public_key=key)),
+            'samples': samples, 'temperature_samples':temperature_samples,
+            'latest_temperature':latest_temperature(db,dict(cfg,public_key=key)), 'latest': latest(db, dict(cfg, public_key=key)),
             'bot_channel': row['channel_name'] if row else None, 'rooms': rooms,
             'worker': dict(worker) if worker else None, 'reports': reports, 'server_time': time.time(),
             'report_placeholders': battery_templates.catalog(),
@@ -64,7 +69,7 @@ def voltage_request(request):
                 db.execute('BEGIN IMMEDIATE')
                 value_body = body.get('value')
                 if value_body is not None and not isinstance(value_body, dict):
-                    raise ValueError('Invalid voltage settings fields.')
+                    raise ValueError('Invalid telemetry settings fields.')
                 key = body.get('public_key') or request.args.get('public_key') or (value_body or {}).get('public_key')
                 if key is not None and not isinstance(key, str):
                     raise ValueError('Select a repeater.')
@@ -77,7 +82,7 @@ def voltage_request(request):
                     db.execute('''UPDATE voltage_config SET managed=0,enabled=0,reports_enabled=0,
                         request_seq=0,handled_seq=0,revision=revision+1,interval_minutes=30,
                         report_time_1='08:00',report_time_2='20:00',timezone='Europe/Berlin',
-                        voltage_channel=1,report_target='bot',report_template='Battery {repeater_name}: {reading} | {sample_time}',updated_at=? WHERE public_key=?''', (time.time(), key))
+                        voltage_channel=1,temperature_channel=1,report_target='bot',report_template='Battery {repeater_name}: {reading} | {sample_time}',updated_at=? WHERE public_key=?''', (time.time(), key))
                     db.execute('DELETE FROM voltage_samples WHERE public_key=?', (key,))
                     db.execute('DELETE FROM voltage_reports WHERE public_key=?', (key,))
                     with closing(passive_stats.connect()) as stats_db, stats_db:
@@ -128,7 +133,7 @@ def voltage_request(request):
     except (ValueError, TypeError) as exc:
         return {'ok': False, 'error': str(exc)}, 400
     except sqlite3.Error:
-        return {'ok': False, 'error': 'Voltage database unavailable. Start the updated bot once; check MESHCORESTATION_DATA_DIR and permissions.'}, 503
+        return {'ok': False, 'error': 'Telemetry database unavailable. Start the updated bot once; check MESHCORESTATION_DATA_DIR and permissions.'}, 503
 
 
 def register_battery_template_routes(server):

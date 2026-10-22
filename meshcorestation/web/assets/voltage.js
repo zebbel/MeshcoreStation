@@ -16,7 +16,7 @@
         const response = await fetch('/api/bot/voltage?' + q, options);
         let result;
         try { result = await response.json(); } catch { throw new Error('Unreadable response. Check the dashboard logs and refresh.'); }
-        if (!response.ok || !result.ok) throw new Error(result.error || 'Voltage request failed.');
+        if (!response.ok || !result.ok) throw new Error(result.error || 'Telemetry request failed.');
         return result;
     }
     function previewTemplate() {
@@ -87,28 +87,31 @@
             reportDestinations(data);
             const c=data.config;
             el('voltage-enabled').checked=c.enabled; el('voltage-reports').checked=c.reports_enabled;
-            el('voltage-interval').value=c.interval_minutes; el('voltage-lpp').value=c.voltage_channel;
+            el('voltage-interval').value=c.interval_minutes; el('voltage-lpp').value=c.voltage_channel; el('temperature-lpp').value=c.temperature_channel??1;
             el('voltage-time1').value=c.report_time_1; el('voltage-time2').value=c.report_time_2; el('voltage-zone').value=c.timezone;
             templateEditor(data);
             dirty = !!wantedKey && wantedKey!==c.public_key;
         }
         const latest=data.latest;
-        el('voltage-latest').textContent=latest ? `${latest.voltage===null?'Reading failed':window.MeshcoreStationBattery.reading(latest.voltage)} · ${date(latest.sampled_at,data.config.timezone)}${latest.error?' · '+latest.error:''}` : 'No readings yet.';
+        el('voltage-latest').textContent=latest ? `Voltage: ${latest.voltage===null?'Reading failed':window.MeshcoreStationBattery.reading(latest.voltage)} · ${date(latest.sampled_at,data.config.timezone)}${latest.error?' · '+latest.error:''}` : 'Voltage: No readings yet.';
+        const temperature=data.latest_temperature;
+        el('temperature-latest').textContent=temperature ? `Temperature: ${Number.isFinite(temperature.temperature)?temperature.temperature.toFixed(1)+' °C':'Not available'} · ${date(temperature.sampled_at,data.config.timezone)}${temperature.temperature_error?' · '+temperature.temperature_error:''}` : 'Temperature: No readings yet.';
         const worker=data.worker, active=worker && worker.state!=='stopped' && data.server_time-worker.heartbeat<150;
         const target = data.config.report_target || 'bot';
         const room = (data.rooms || []).find(r => 'room:' + r.id === target);
         const destination = target === 'bot' ? 'bot chat / room' : target.startsWith('channel:') ? 'chat ' + target.slice(8) : room ? 'room ' + room.name : target;
         el('voltage-worker').textContent=`${active?'Bot monitor: '+worker.state:'Bot monitor offline'} · Reports to: ${destination}.`;
         el('voltage-chart-note').textContent=''; chart(data.samples,data.config.timezone,Number(el('voltage-days').value));
+        window.MeshcoreStationBattery.temperatureChart(el('temperature-chart'),el('temperature-chart-note'),data.temperature_samples||[],data.config.timezone,Number(el('voltage-days').value),data.server_time);
         const rows=el('voltage-recent'); rows.replaceChildren();
-        for (const p of [...data.samples].slice(-10).reverse()) { const tr=document.createElement('tr'); for(const t of [date(p.sampled_at,data.config.timezone),p.voltage===null?'—':window.MeshcoreStationBattery.reading(p.voltage),p.error||'OK']) tr.append(node('td',t)); rows.append(tr); }
+        for (const p of [...data.samples].slice(-10).reverse()) { const tr=document.createElement('tr'); for(const t of [date(p.sampled_at,data.config.timezone),p.voltage===null?'—':window.MeshcoreStationBattery.reading(p.voltage),p.temperature_channel===data.config.temperature_channel&&Number.isFinite(p.temperature)?p.temperature.toFixed(1)+' °C':'—',p.error||p.temperature_error||'OK']) tr.append(node('td',t)); rows.append(tr); }
         const reports=el('voltage-report-log'); reports.replaceChildren();
         for (const r of data.reports) reports.append(node('li',`${date(r.attempted_at,data.config.timezone)} · ${r.status} · ${r.channel_name||'no channel'} · ${r.detail}`));
     }
     async function load(form = false, silent = false) {
         if (busy || (silent && dirty)) return;
         busy=true;controls();
-        if (!silent) message('Loading voltage history…');
+        if (!silent) message('Loading telemetry history…');
         try { if(form) await refreshChannels(); render(await request(),form); if (!silent) message(dirty?'Repeater selected. Save to use it for monitoring.':'History refreshed.'); }
         catch(error) { message(error.message,true); if(form) snapshot=null; }
         finally { busy=false;controls(); }
@@ -119,7 +122,7 @@
     }
     async function save(event) {
         event.preventDefault(); if(busy || !snapshot || !templateValid || !el('voltage-form').reportValidity()) return;
-        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value),report_target:el('voltage-target').value,report_template:el('voltage-template').value};
+        const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value),temperature_channel:Number(el('temperature-lpp').value),report_target:el('voltage-target').value,report_template:el('voltage-template').value};
         busy=true;controls();
         try { await request({operation:'save',expected_revision:snapshot.config.revision,value});wantedKey=value.public_key;dirty=false;message('Settings saved. The bot applies them automatically.'); }
         catch(error) { message(error.message+' Refresh before retrying.',true); return; }
@@ -133,29 +136,29 @@
         catch(error){message(error.message,true);}
         finally{busy=false;controls();}
     }
-    function close() {if(!busy && (!dirty || window.confirm('Discard unsaved battery settings?'))) {dialog.close();clearInterval(timer);timer=null;clearTimeout(previewTimer);++previewSerial;} }
+    function close() {if(!busy && (!dirty || window.confirm('Discard unsaved telemetry settings?'))) {dialog.close();clearInterval(timer);timer=null;clearTimeout(previewTimer);++previewSerial;} }
     function create() {
         dialog=document.createElement('dialog');dialog.id='voltage-dialog';dialog.setAttribute('aria-labelledby','voltage-title');
-        dialog.innerHTML=`<div class="dialog-header"><h2 id="voltage-title">Repeater battery</h2><button type="button" id="voltage-close" aria-label="Close battery history">×</button></div>
+        dialog.innerHTML=`<div class="dialog-header"><h2 id="voltage-title">Repeater telemetry</h2><button type="button" id="voltage-close" aria-label="Close telemetry history">×</button></div>
         <p id="voltage-message" role="status" aria-live="polite"></p><p id="voltage-worker" class="muted"></p>
         <form id="voltage-form"><div class="voltage-fields">
         <div class="voltage-wide voltage-repeater-choice"><label>Repeater<select id="voltage-repeater"></select></label><button type="button" id="voltage-map">Select repeater on map</button></div>
         <fieldset class="voltage-wide voltage-group"><legend>Monitoring</legend><div class="voltage-fields">
         <label class="voltage-wide voltage-toggle"><input type="checkbox" id="voltage-enabled"> Enable monitoring</label>
         <label>Read every (minutes)<input id="voltage-interval" type="number" min="5" max="1440" required></label>
-        <label>Voltage LPP channel<input id="voltage-lpp" type="number" min="1" max="255" required></label>
+        <label>Voltage LPP channel<input id="voltage-lpp" type="number" min="1" max="255" required></label><label>Temperature LPP channel<input id="temperature-lpp" type="number" min="0" max="255" required></label>
         </div></fieldset>
         <fieldset class="voltage-wide voltage-group"><legend>Daily reports</legend><div class="voltage-fields">
         <label class="voltage-wide voltage-toggle"><input type="checkbox" id="voltage-reports"> Send two daily reports</label>
         <label>First report<input id="voltage-time1" type="time" required></label><label>Second report<input id="voltage-time2" type="time" required></label>
-        <label>Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label>Send battery reports to<select id="voltage-target" required></select></label></div></fieldset></div>
+        <label>Timezone<input id="voltage-zone" required placeholder="Europe/Berlin"></label><label>Send daily reports to<select id="voltage-target" required></select></label></div></fieldset></div>
         <section class="voltage-template-editor"><h3>Report message template</h3><label for="voltage-template">Message</label><textarea id="voltage-template" rows="3" maxlength="512" required></textarea><div id="voltage-placeholders" class="template-placeholders"></div><p class="muted">Click a placeholder to insert it at the cursor. Numeric formatting: {battery_voltage:.2f}. Uses the last successful reading; missing values show “unknown”. Longer reports are split into radio messages.</p><button type="button" id="voltage-template-default">Use default message</button><h4>Live preview · example reading</h4><pre id="voltage-template-preview"></pre><p id="voltage-template-error" role="status" class="voltage-error"></p></section>
-        <p class="muted">Guest telemetry; no password. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Reports may follow the bot or use a private chat or enabled room. Previous history is kept.</p>
+        <p class="muted">Guest telemetry; no password. Voltage and temperature come from one telemetry response. Missing temperature does not affect voltage monitoring. Reading adds the selected repeater to companion Contacts if it is missing. Channel 1 is the usual battery sensor; use the reported voltage channel if different. Save changes to switch monitoring. Reports may follow the bot or use a private chat or enabled room. Previous history is kept.</p>
         <div class="voltage-actions"><button id="voltage-save" type="submit">Save settings</button><button id="voltage-read" type="button">Read now</button><button id="voltage-refresh" type="button">Refresh</button></div></form>
         <details><summary>Select from repeater list</summary><input id="voltage-search" type="search" aria-label="Search repeaters" placeholder="Search name or public key"><ul id="voltage-repeaters"></ul></details>
-        <h3 id="voltage-latest">No readings yet.</h3><label>Chart period <select id="voltage-days"><option value="1" selected>24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
-        <div id="voltage-chart"></div><p id="voltage-chart-note" class="muted"></p>
-        <details><summary>Recent readings</summary><table><thead><tr><th>Time</th><th>Voltage</th><th>Result</th></tr></thead><tbody id="voltage-recent"></tbody></table></details>
+        <h3 id="voltage-latest">Voltage: No readings yet.</h3><h3 id="temperature-latest">Temperature: No readings yet.</h3><label>Chart period <select id="voltage-days"><option value="1" selected>24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
+        <h3>Battery voltage</h3><div id="voltage-chart"></div><p id="voltage-chart-note" class="muted"></p><h3>Temperature</h3><div id="temperature-chart"></div><p id="temperature-chart-note" class="muted"></p>
+        <details><summary>Recent readings</summary><table><thead><tr><th>Time</th><th>Voltage</th><th>Temperature</th><th>Result</th></tr></thead><tbody id="voltage-recent"></tbody></table></details>
         <details><summary>Recent report attempts</summary><ul id="voltage-report-log"></ul><p class="muted">Queued means accepted by the companion, not confirmed delivery. Missed report times have a 10-minute grace period; interrupted sends are not retried automatically.</p></details>`;
         window.meshcorestationPrepareDialog(dialog);
         document.body.append(dialog);
@@ -177,7 +180,7 @@
     }
     function pick(data) {
         if (!data) return;
-        document.dispatchEvent(new CustomEvent('stats-picker-open', {detail: {repeaters:data.repeaters,selected:dialog?.open ? el('voltage-repeater').value : data.config.public_key,selectionEvent:'battery-picker-selected',title:'Select battery repeater'}}));
+        document.dispatchEvent(new CustomEvent('stats-picker-open', {detail: {repeaters:data.repeaters,selected:dialog?.open ? el('voltage-repeater').value : data.config.public_key,selectionEvent:'battery-picker-selected',title:'Select telemetry repeater'}}));
     }
     document.addEventListener('battery-picker-selected',event=>{if(dialog?.open)choose(event.detail);else open(event.detail);});
     document.addEventListener('click',async event=>{

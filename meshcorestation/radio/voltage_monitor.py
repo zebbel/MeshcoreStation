@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from meshcore import EventType
 from meshcorestation.radio.channels_control import channel_type
 from meshcorestation.radio.contacts_control import new_contact
-from meshcorestation.storage.voltage_store import initialize, config, configurations, latest, latest_reading, extract_voltage, due_slots
+from meshcorestation.storage.voltage_store import initialize, config, configurations, latest, latest_reading, extract_voltage, extract_temperature, due_slots
 
 
 class VoltageMonitor:
@@ -39,7 +39,7 @@ class VoltageMonitor:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.companion.logger.warning('Voltage monitoring: %s', exc)
+                self.companion.logger.warning('Telemetry monitoring: %s', exc)
                 self.heartbeat('error: ' + str(exc)[:200])
             await asyncio.sleep(10)
 
@@ -48,7 +48,7 @@ class VoltageMonitor:
         key = cfg['public_key']
         row = self.db.execute('SELECT name,latitude,longitude FROM repeaters WHERE lower(public_key)=?', (key,)).fetchone()
         name = row['name'] if row and row['name'] else key[:12]
-        voltage, error = None, None
+        voltage, error, temperature, temperature_error = None, None, None, None
         self.heartbeat('reading telemetry')
         try:
             result = await self.companion.mc.commands.get_contacts()
@@ -93,12 +93,22 @@ class VoltageMonitor:
                 raise ValueError('Guest login succeeded, but telemetry timed out. Check the radio path and guest telemetry support.') from None
             if telemetry is None:
                 raise ValueError('Guest login succeeded, but no telemetry response arrived. Check the radio path and guest telemetry support.')
-            voltage = extract_voltage(telemetry, cfg['voltage_channel'])
+            # Parse each sensor independently from this one radio response.
+            try:
+                voltage = extract_voltage(telemetry, cfg['voltage_channel'])
+            except ValueError as exc:
+                error=str(exc)[:300]
+                self.companion.logger.warning('Voltage read for %s failed: %s',key[:12],error)
+            try:
+                temperature = extract_temperature(telemetry, cfg.get('temperature_channel',1))
+            except ValueError as exc:
+                temperature_error=str(exc)[:300]
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             error = (str(exc) or type(exc).__name__)[:300]
-            self.companion.logger.warning('Voltage read for %s failed: %s', key[:12], error)
+            temperature_error=error
+            self.companion.logger.warning('Telemetry read for %s failed: %s', key[:12], error)
         stamp = time.time()
         with self.db:
             self.db.execute('BEGIN IMMEDIATE')
@@ -106,9 +116,10 @@ class VoltageMonitor:
             if not current.get('managed', 1) or current['revision'] != cfg['revision']:
                 return None
             self.db.execute('''INSERT INTO voltage_samples
-                (public_key,name,sampled_at,voltage,error,voltage_channel,interval_seconds)
-                VALUES (?,?,?,?,?,?,?)''', (key, name, stamp, voltage, error,
-                                          cfg['voltage_channel'], cfg['interval_minutes'] * 60))
+                (public_key,name,sampled_at,voltage,error,voltage_channel,interval_seconds,temperature,temperature_channel,temperature_error)
+                VALUES (?,?,?,?,?,?,?,?,?,?)''', (key, name, stamp, voltage, error,
+                                          cfg['voltage_channel'], cfg['interval_minutes'] * 60,
+                                          temperature, cfg.get('temperature_channel',1), temperature_error))
         self.heartbeat('idle')
         return latest(self.db, cfg)
 

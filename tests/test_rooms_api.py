@@ -141,7 +141,7 @@ def test_room_deletion_blocks_managed_battery_report_destinations(client):
                         ('ab'*32, f'room:{rid}'))
     denied = post(action='delete', room=rid, confirm_delete=True, expected=expected)
     assert denied.status_code == 400
-    assert 'battery report destination' in denied.json['error']
+    assert 'telemetry report destination' in denied.json['error']
     assert RoomService(path / 'rooms.db').config(rid)['public_key'] == room['public_key']
     with sqlite3.connect(path / 'station.db') as station:
         station.execute("UPDATE voltage_config SET report_target='bot' WHERE id=1")

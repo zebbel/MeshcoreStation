@@ -32,8 +32,8 @@
 .shell > .history { margin-bottom: 18px; }
 #battery-overview-latest { margin-top: 0; }
 #battery-overview-error:empty { display: none; }
-#battery-chart-disclosure > summary { cursor: pointer; color: var(--accent); padding: 8px 0; }
-#battery-chart-disclosure > label { display: block; margin: 10px 0 14px; }
+#battery-chart-disclosure > summary, #temperature-chart-disclosure > summary { cursor: pointer; color: var(--accent); padding: 8px 0; }
+#battery-chart-disclosure > label, .telemetry-period { display: block; margin: 10px 0 14px; }
 #battery-overview-note { margin-bottom: 0; }
 @media(max-width:700px) { #battery-overview { padding: 0 16px 18px; } }
 

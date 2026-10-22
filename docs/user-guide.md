@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.2.0** on `main`, including the bot, room server,
+This guide covers stable **3.3.0** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 
@@ -54,7 +54,7 @@ needs additional protocol information and is not added by this refactor.
 Outgoing reply observations report overheard evidence. They cannot prove that
 all repeaters or the final recipient received a message.
 
-## Repeater battery and statistics
+## Repeater telemetry and statistics
 
 Open **Repeater management** and use **Add repeater from map** to save each
 repeater to the station's managed list. The dropdown controls the displayed
@@ -63,7 +63,7 @@ browsers; each browser remembers which repeater it last viewed.
 
 Each repeater has separate sampling intervals, telemetry channel, report times,
 timezone and destination. New repeaters start with battery polling disabled;
-enable it in that repeater's **Battery history / settings**. Disabling one
+enable it in that repeater's **Telemetry history / settings**. Disabling one
 repeater does not affect the others. Manual reads target the selected repeater.
 Polling is serial, with one due read per worker cycle, so heavy schedules may
 run later than their nominal interval.
@@ -141,7 +141,7 @@ application, including embedded room/optimizer pages, maps and command history.
 Other open browsers use the saved preferences after reloading. This controls
 presentation only; each report timezone and its `HH:MM` schedule are unchanged.
 
-In Repeater management, select a repeater and open **Battery history / settings**.
+In Repeater management, select a repeater and open **Telemetry history / settings**.
 The **Report message template** editor inserts placeholders at the cursor,
 validates supported fields and shows an example preview without sending radio
 traffic. Save settings to apply the template only to the selected repeater.
@@ -159,3 +159,35 @@ Command Details shows saved route information before map scripts or background
 tiles finish. Recent map results are cached for up to 30 seconds (32 results per
 browser page); reopening after that refreshes saved positions. Discovery maps
 load clustering only when needed. Background tiles still require Internet access.
+
+
+## Temperature and chart selection
+
+Open **Repeater telemetry → Telemetry history / settings** to choose the voltage
+and temperature LPP channels. The temperature channel defaults to **1** and can
+be set to **0–255** to match the repeater's reported temperature sensor. Voltage
+and temperature come from the **same** guest telemetry response; temperature does
+not cause additional radio requests. Temperature is stored in °C with the same
+read timestamp, including zero and negative readings. Missing, ambiguous or
+invalid temperature is shown as unavailable while voltage monitoring continues.
+
+Both the dashboard telemetry section and the history/settings window have
+separate voltage and temperature charts. The period selector supports **24
+hours**, **7 days** and **30 days**. Histories are filtered by their respective
+sensor channels. Legacy battery records remain intact and have no invented
+temperature. Missing readings break chart lines. Voltage keeps its fixed
+3.0–4.2 V scale; temperature uses a scale fitted to the recorded values.
+
+Click with the mouse or tap either chart to highlight the nearest recorded
+measurement. The selected value appears **inside that chart**, for example
+`3.92 V` or `24.6 °C`, with no popup or selected timestamp. Selecting another point
+replaces the value. Selection survives an ordinary background refresh while the
+point remains in the displayed history. Keyboard users can focus the chart and
+use Enter and the arrow keys to select measurements.
+
+Battery report templates can optionally include `{repeater_temperature}` or
+`{repeater_temperature:.1f} °C`. The placeholder is the temperature from the same
+stored reading used by the report and the currently configured temperature
+channel; unavailable values show `unknown`. It adds no radio request. Templates
+that omit it produce their existing messages, on the existing schedule and to
+the existing destination.

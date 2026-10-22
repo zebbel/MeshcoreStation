@@ -16,7 +16,7 @@
     window.meshcorestationRepeaterActions = (box, repeater, close) => {
         const key = repeater.public_key.toLowerCase();
         const button = document.createElement('button'), battery = document.createElement('button'), status = document.createElement('p');
-        button.type = battery.type = 'button'; button.textContent = 'Checking contacts…'; battery.textContent = 'Battery history';
+        button.type = battery.type = 'button'; button.textContent = 'Checking contacts…'; battery.textContent = 'Telemetry history';
         button.disabled = battery.disabled = true; status.setAttribute('role', 'status');
         box.append(button, battery, status);
         let snapshot;
@@ -28,7 +28,7 @@
         contacts().then(render).catch(error => {button.textContent = 'Contacts unavailable';status.textContent = error.message;});
         request('/api/bot/voltage?days=1').then(data => {
             battery.disabled = data.config.public_key?.toLowerCase() === key;
-            if (battery.disabled) battery.title = 'Already selected for battery monitoring';
+            if (battery.disabled) battery.title = 'Already selected for telemetry monitoring';
         }).catch(error => {status.textContent = error.message;});
         battery.onclick = () => {close();document.dispatchEvent(new CustomEvent('meshcore-voltage-open', {detail: {public_key: key}}));};
         button.onclick = async () => {

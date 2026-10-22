@@ -32,7 +32,7 @@
     async function change() {
         const next = $('optimizer-enabled').checked;
         if (busy || enabled === null) return;
-        if (!next && !confirm('Disable Repeater Optimizer and delete ALL optimizer data for ALL repeaters? Observations, summaries, neighbors, roles, polling schedules and change history will be deleted. Battery history and general repeater statistics are kept. This cannot be undone.')) {
+        if (!next && !confirm('Disable Repeater Optimizer and delete ALL optimizer data for ALL repeaters? Observations, summaries, neighbors, roles, polling schedules and change history will be deleted. Telemetry history and general repeater statistics are kept. This cannot be undone.')) {
             $('optimizer-enabled').checked = enabled; return;
         }
         busy = true; $('optimizer-enabled').disabled = true;

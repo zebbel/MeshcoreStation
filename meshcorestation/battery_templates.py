@@ -10,6 +10,7 @@ CATALOG = {
     'repeater_public_key': ('Repeater public key', 'ab'*32),
     'battery_voltage': ('Last read voltage, without V', 3.86),
     'battery_percent': ('Approximate 1S LiPo charge, without %', 52),
+    'repeater_temperature': ('Repeater temperature in °C, without unit; unknown when missing',24.6),
     'reading': ('Last read voltage with unit', '3.86 V'),
     'sample_time': ('Reading time, DD.MM HH:MM, in report timezone', '22.10 08:00'),
     'date': ('Reading date in report timezone', '22.10.2026'),
@@ -22,7 +23,7 @@ def validate(value):
     # Share brace parsing, control character checks, numeric format validation,
     # length limits and non-recursive rendering with the command editor.
     aliases = {'repeater_name':'sender_name', 'repeater_public_key':'sender_public_key',
-               'reading':'result', 'sample_time':'uptime', 'timezone':'scope_name'}
+               'reading':'result', 'sample_time':'uptime', 'timezone':'scope_name', 'repeater_temperature':'altitude'}
     import string
     if not isinstance(value,str) or not value.strip() or len(value.encode('utf-8'))>512:
         raise ValueError('Enter a battery report template of 1–512 UTF-8 bytes.')
@@ -49,20 +50,22 @@ def render(value, sample, cfg):
     name=''.join(ch for ch in sample['name'] if ord(ch)>=32 and ord(ch)!=127)
     name=name.encode('utf-8')[:31].decode('utf-8',errors='ignore')
     voltage=sample.get('voltage')
+    temperature=sample.get('temperature') if (sample.get('temperature_channel')==cfg.get('temperature_channel',1)
+        and not sample.get('temperature_error')) else None
     return templates.render(converted,{
         'sender_name':name, 'sender_public_key':cfg['public_key'],
-        'battery_voltage':voltage, 'battery_percent':battery_percent(voltage),
+        'altitude':temperature, 'battery_voltage':voltage, 'battery_percent':battery_percent(voltage),
         'result':f'{voltage:.2f} V' if voltage is not None else 'unavailable (no valid reading)',
         'uptime':stamp.strftime('%d.%m %H:%M'), 'date':stamp.strftime('%d.%m.%Y'),
         'time':stamp.strftime('%H:%M:%S'), 'scope_name':cfg['timezone']})
 
 
 def catalog():
-    return [{'name':name,'description':description,'numeric':name in ('battery_voltage','battery_percent')}
+    return [{'name':name,'description':description,'numeric':name in ('battery_voltage','battery_percent','repeater_temperature')}
             for name,(description,_) in CATALOG.items()]
 
 
 def preview(value):
     # Render via exactly the same validation/expansion as the scheduled worker.
-    return render(value,{'sampled_at':1792648800,'name':'Hill repeater','voltage':3.86},
+    return render(value,{'sampled_at':1792648800,'name':'Hill repeater','voltage':3.86,'temperature':24.6,'temperature_channel':1},
                   {'timezone':'Europe/Berlin','public_key':'ab'*32})

@@ -37,7 +37,7 @@ def delete_room_with_battery_guard(service, rid, expected):
                     (f'room:{rid}',)
                 ).fetchone()
                 if used:
-                    raise ValueError('This room is used as a repeater battery report destination. '
+                    raise ValueError('This room is used as a repeater telemetry report destination. '
                                      'Change the destination in Repeater management before deleting it.')
         service.delete(rid, expected['name'], expected['public_key'])
         station.commit()

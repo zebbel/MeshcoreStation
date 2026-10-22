@@ -4,8 +4,20 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.2.0. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.3.0. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.3.0
+
+- Repeater Battery is now **Repeater telemetry**. Voltage and optional temperature
+  in °C are saved together from one telemetry response; each has an LPP channel
+  setting. Missing temperature does not interrupt battery monitoring or reports.
+- Separate voltage and temperature charts show 24-hour, 7-day and 30-day history.
+  Click or tap either chart to highlight the nearest recorded measurement and
+  show just its value inside the chart, such as `3.92 V` or `24.6 °C`.
+- Battery report templates optionally support `{repeater_temperature}` (without
+  a unit). Existing templates, schedules, destinations and voltage history are
+  preserved by an additive database migration.
 
 ## Changes in 3.2.0
 

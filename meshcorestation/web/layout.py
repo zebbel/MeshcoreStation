@@ -49,7 +49,7 @@ def build_layout():
             ], className="managed-repeater-controls"),
             html.P(id="managed-repeater-message", role="status"),
             html.Section([
-                html.Div([html.H2("Repeater battery"), html.Button("Battery history / settings", id="open-voltage", className="info-button")], className="toolbar"),
+                html.Div([html.H2("Repeater telemetry"), html.Button("Telemetry history / settings", id="open-voltage", className="info-button")], className="toolbar"),
                 html.Div(id="battery-overview")
             ], className="managed-repeater-section"),
             html.Details([

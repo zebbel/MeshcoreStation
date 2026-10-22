@@ -5,7 +5,7 @@ from meshcorestation import battery_templates
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'report_time_1', 'report_time_2', 'timezone', 'voltage_channel', 'report_target', 'report_template')
+FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'report_time_1', 'report_time_2', 'timezone', 'voltage_channel', 'report_target', 'report_template', 'temperature_channel')
 
 
 def initialize(db):
@@ -37,6 +37,16 @@ def initialize(db):
 
     if 'report_template' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
         db.execute("ALTER TABLE voltage_config ADD COLUMN report_template TEXT NOT NULL DEFAULT 'Battery {repeater_name}: {reading} | {sample_time}'")
+
+    # Add optional telemetry fields in place; legacy voltage rows keep their IDs
+    # and values, and NULL temperature means it was never measured.
+    if 'temperature_channel' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
+        db.execute('ALTER TABLE voltage_config ADD COLUMN temperature_channel INTEGER NOT NULL DEFAULT 1')
+    sample_columns = {row[1] for row in db.execute('PRAGMA table_info(voltage_samples)')}
+    for name, kind in (('temperature','REAL'), ('temperature_channel','INTEGER'), ('temperature_error','TEXT')):
+        if name not in sample_columns:
+            db.execute(f'ALTER TABLE voltage_samples ADD COLUMN {name} {kind}')
+    db.execute('CREATE INDEX IF NOT EXISTS voltage_samples_temperature_time ON voltage_samples(public_key,temperature_channel,sampled_at)')
 
     if 'managed' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
         db.execute('ALTER TABLE voltage_config ADD COLUMN managed INTEGER NOT NULL DEFAULT 1')
@@ -75,14 +85,14 @@ def config(db, public_key=None):
         if row is None:
             return dict(id=None, public_key=public_key, enabled=False, interval_minutes=30,
                         reports_enabled=True, report_time_1='08:00', report_time_2='20:00',
-                        timezone='Europe/Berlin', voltage_channel=1, report_target='bot', report_template=battery_templates.DEFAULT,
+                        timezone='Europe/Berlin', voltage_channel=1, temperature_channel=1, report_target='bot', report_template=battery_templates.DEFAULT,
                         revision=0, updated_at=0, request_seq=0, handled_seq=0)
     else:
         row = db.execute('SELECT * FROM voltage_config WHERE managed=1 ORDER BY public_key=\'\',id LIMIT 1').fetchone()
     if row is None:
         return dict(id=None, public_key='', enabled=False, interval_minutes=30, reports_enabled=False,
                     report_time_1='08:00', report_time_2='20:00', timezone='Europe/Berlin',
-                    voltage_channel=1, report_target='bot', report_template=battery_templates.DEFAULT, revision=0, updated_at=0, request_seq=0, handled_seq=0)
+                    voltage_channel=1, temperature_channel=1, report_target='bot', report_template=battery_templates.DEFAULT, revision=0, updated_at=0, request_seq=0, handled_seq=0)
     result = dict(row)
     for key in ('enabled', 'reports_enabled'):
         result[key] = bool(result[key])
@@ -90,8 +100,9 @@ def config(db, public_key=None):
 
 
 def validate(value, db):
-    if not isinstance(value, dict) or set(value) not in (set(FIELDS),set(FIELDS)-{'report_template'}):
-        raise ValueError('Invalid voltage settings fields.')
+    if (not isinstance(value, dict) or not set(FIELDS)-{'report_template','temperature_channel'} <= set(value)
+            or not set(value) <= set(FIELDS)):
+        raise ValueError('Invalid telemetry settings fields.')
     result = dict(value)
     for key in ('enabled', 'reports_enabled'):
         if type(result[key]) is not bool:
@@ -101,7 +112,9 @@ def validate(value, db):
         raise ValueError('Select a repeater from the list or map.')
     result['public_key'] = key = key.lower()
     # Preserve saved text when an older client only edits schedules.
-    result.setdefault('report_template',config(db,key)['report_template'])
+    saved=config(db,key)
+    result.setdefault('report_template',saved['report_template'])
+    result.setdefault('temperature_channel',saved['temperature_channel'])
     battery_templates.validate(result['report_template'])
     if key and not db.execute('SELECT 1 FROM repeaters WHERE lower(public_key)=? AND adv_type=2', (key,)).fetchone():
         raise ValueError('Selected repeater is not in the known repeater list.')
@@ -123,7 +136,7 @@ def validate(value, db):
             raise ValueError('Choose a valid companion channel.')
     else:
         raise ValueError('Choose a battery report destination.')
-    for field, lo, hi in (('interval_minutes', 5, 1440), ('voltage_channel', 1, 255)):
+    for field, lo, hi in (('interval_minutes', 5, 1440), ('voltage_channel', 1, 255), ('temperature_channel', 0, 255)):
         if type(result[field]) is not int or not lo <= result[field] <= hi:
             raise ValueError(f'{field} must be a whole number from {lo} to {hi}.')
     for field in ('report_time_1', 'report_time_2'):
@@ -144,6 +157,13 @@ def latest(db, cfg):
     row = db.execute('''SELECT * FROM voltage_samples WHERE public_key=? AND voltage_channel=?
                         ORDER BY sampled_at DESC, id DESC LIMIT 1''',
                      (cfg['public_key'], cfg['voltage_channel'])).fetchone()
+    return dict(row) if row else None
+
+
+def latest_temperature(db, cfg):
+    row = db.execute("""SELECT * FROM voltage_samples WHERE public_key=? AND temperature_channel=?
+                        ORDER BY sampled_at DESC,id DESC LIMIT 1""",
+                     (cfg['public_key'],cfg['temperature_channel'])).fetchone()
     return dict(row) if row else None
 
 
@@ -168,6 +188,20 @@ def extract_voltage(telemetry, channel):
     if type(v) not in (int, float) or not math.isfinite(v) or not 0 < v <= 100:
         raise ValueError('Missing or invalid battery voltage; zero is not stored as a reading.')
     return round(float(v), 3)
+
+
+def extract_temperature(telemetry, channel):
+    """Optional LPP temperature in Celsius. Zero and negative values are valid."""
+    if not isinstance(telemetry,list):
+        raise ValueError('No telemetry response from repeater.')
+    matches = [r.get('value') for r in telemetry if isinstance(r,dict)
+               and r.get('type')=='temperature' and r.get('channel')==channel]
+    if len(matches)!=1:
+        raise ValueError(f'Expected one temperature on LPP channel {channel}; received {len(matches)}.')
+    value=matches[0]
+    if type(value) not in (int,float) or not math.isfinite(value) or not -273.15<=value<=1000:
+        raise ValueError('Missing or invalid temperature reading.')
+    return round(float(value),3)
 
 
 def due_slots(cfg, now):
