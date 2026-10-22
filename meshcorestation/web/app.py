@@ -8,7 +8,7 @@ from meshcorestation.web.map_routes import register_map_routes
 
 
 def create_app():
-    app = Dash(__name__, title="MeshcoreStation", update_title=None, assets_folder=str(Path(__file__).with_name("assets")), assets_ignore=r"vendor/leaflet(?:\.markercluster)?\.js$")
+    app = Dash(__name__, title="MeshcoreStation", update_title=None, assets_folder=str(Path(__file__).with_name("assets")), assets_ignore=r"^leaflet(?:\.markercluster)?\.js$", assets_path_ignore=[r"vendor/leaflet(?:\.markercluster)?\.js$"])
     app.index_string = app.index_string.replace("{%favicon%}", '<link rel="icon" type="image/png" href="/assets/meshcore-logo.png?v=1.2">')
     from meshcorestation.updater import local_revision
     try:
