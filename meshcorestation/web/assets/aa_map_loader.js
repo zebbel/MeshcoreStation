@@ -10,6 +10,19 @@
             document.head.append(element);
         });
     }
+    // Pre-fetch during browser idle without executing Leaflet until a map is requested.
+    // This makes the first map faster while leaving the initial dashboard responsive.
+    window.addEventListener('load', () => {
+        const warmCache = () => {
+            if (window.L) return;
+            for (const url of ['/assets/vendor/leaflet.js', '/assets/vendor/leaflet.markercluster.js']) {
+                const link = document.createElement('link');
+                link.rel = 'prefetch'; link.as = 'script'; link.href = url;
+                document.head.append(link);
+            }
+        };
+        if (window.requestIdleCallback) window.requestIdleCallback(warmCache);
+    }, {once: true});
     window.meshcorestationLoadMapLibrary = () => {
         if (window.L?.markerClusterGroup) return Promise.resolve();
         if (!pending) {

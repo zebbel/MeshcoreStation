@@ -21,3 +21,18 @@ def test_overview_returns_saved_counts_and_latest_without_full_history(tmp_path,
     cards = next(node for node in page.children if getattr(node, "className", None) == "cards")
     assert cards.children[0].children[1].children == "Running"
     assert cards.children[1].children[1].children == "2"
+
+
+def test_map_libraries_are_lazy_but_still_served():
+    from meshcorestation.web.app import create_app
+
+    app = create_app()
+    client = app.server.test_client()
+    response = client.get("/")
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "aa_map_loader.js" in page
+    assert "/assets/vendor/leaflet.js" not in page
+    assert "/assets/vendor/leaflet.markercluster.js" not in page
+    assert client.get("/assets/vendor/leaflet.js").status_code == 200
+    assert client.get("/assets/vendor/leaflet.markercluster.js").status_code == 200
