@@ -39,5 +39,5 @@
 #temperature-chart svg { display: block; width: 100%; min-width: 560px; }
 #temperature-chart text { font: 12px system-ui; fill: var(--muted); }
 .telemetry-chart-svg { cursor: crosshair; }
-.telemetry-selected-point { fill: var(--panel); stroke: var(--accent); stroke-width: 3; }
-#voltage-chart svg text.telemetry-selected-value, #temperature-chart svg text.telemetry-selected-value, .battery-chart svg text.telemetry-selected-value { font: 600 18px system-ui; fill: var(--text); stroke: var(--panel); stroke-width: 5px; paint-order: stroke fill; pointer-events: none; }
+.telemetry-selected-point { fill: var(--panel); stroke: var(--accent); stroke-width: 4; }
+#voltage-chart svg text.telemetry-selected-value, #temperature-chart svg text.telemetry-selected-value, .battery-chart svg text.telemetry-selected-value { font: 700 18px system-ui, sans-serif; fill: var(--text); stroke: var(--panel); stroke-width: 1.5px; stroke-linejoin: round; paint-order: stroke fill; pointer-events: none; }

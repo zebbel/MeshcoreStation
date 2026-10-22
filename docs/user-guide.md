@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.3.0** on `main`, including the bot, room server,
+This guide covers stable **3.3.1** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 

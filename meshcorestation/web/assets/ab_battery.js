@@ -55,8 +55,8 @@ window.MeshcoreStationBattery = (() => {
         function select(p){
             highlight?.remove();text?.remove();
             highlight=shape('circle',{cx:x(p.sampled_at),cy:y(bounded(value(p))),r:7,class:'telemetry-selected-point'});
-            text=shape('text',{x:Math.max(left+65,Math.min(w-right-65,x(p.sampled_at))),
-                y:Math.max(top+20,Math.min(h-bottom-10,y(bounded(value(p)))-16)),
+            text=shape('text',{x:Math.max(left+90,Math.min(w-right-90,x(p.sampled_at))),
+                y:Math.max(top+30,Math.min(h-bottom-10,y(bounded(value(p)))-18)),
                 'text-anchor':'middle',class:'telemetry-selected-value'},format(p));
             selections.set(box,{at:p.sampled_at,value:value(p)});
             svg.setAttribute('aria-label',label+'. Selected '+format(p));

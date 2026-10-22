@@ -4,8 +4,13 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.3.0. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.3.1. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.3.1
+
+- Improve tapped/clicked chart values with a thinner outline and stronger font
+  weight while retaining the original 18px text size. Keep labels inside the chart.
 
 ## Changes in 3.3.0
 
