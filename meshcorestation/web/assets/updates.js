@@ -100,7 +100,7 @@
         if (!dialog || panel) return;
         panel = document.createElement('section'); panel.id = 'update-panel'; panel.className = 'companion-section';
         panel.innerHTML = '<h3>Updates / version</h3><label>Branch <select class="update-branch"></select></label><p class="update-branch-note muted">Loading branches from GitHub…</p><p class="muted">All repository branches are listed. Check compatibility and changes before installing a different branch.</p><p class="update-version muted"></p><p class="update-latest muted"></p><p>Updates come from zebbel/MeshcoreStation on GitHub. Backups are kept on this Pi.</p><div class="companion-toolbar"><button type="button" class="update-check">Check for updates</button><button type="button" class="update-install" disabled>Install update</button><a class="update-changes" target="_blank" rel="noopener noreferrer" hidden>View changes on GitHub ↗</a><button type="button" class="update-reload" hidden>Reload dashboard</button></div><p class="update-message" role="status" aria-live="polite"></p><details><summary>Update progress</summary><pre class="update-progress" style="white-space:pre-wrap;max-height:180px;overflow:auto"></pre></details>';
-        dialog.querySelector('.companion-grid').append(panel);
+        dialog.append(panel);
         panel.querySelector('.update-branch').addEventListener('change', event => {
             selectedBranch = event.target.value; checking = null;
             panel.querySelector('.update-latest').textContent = 'Check the selected version before installing.';

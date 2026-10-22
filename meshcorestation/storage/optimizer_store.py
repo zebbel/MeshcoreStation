@@ -1,10 +1,22 @@
 """Persist per-repeater roles, opted-in neighbor schedules and bounded snapshots."""
 import re
-import math
 import sqlite3
 import time
+import threading
+from functools import wraps
 from contextlib import closing
 from meshcorestation.config import DATA_DIR
+
+LOCK = threading.RLock()
+
+
+def synchronized(fn):
+    @wraps(fn)
+    def call(*args, **kwargs):
+        with LOCK:
+            return fn(*args, **kwargs)
+    return call
+
 
 FILE = DATA_DIR / 'repeater-optimizer.db'
 ROLES = ('unknown', 'local', 'regional', 'hybrid')
@@ -20,12 +32,14 @@ def connect():
     return db
 
 
+@synchronized
 def initialize():
     with closing(connect()) as db, db:
         db.executescript("""
-          CREATE TABLE IF NOT EXISTS downtime (
-            id INTEGER PRIMARY KEY, public_key TEXT NOT NULL, start REAL NOT NULL, end REAL NOT NULL);
-          CREATE INDEX IF NOT EXISTS downtime_key ON downtime(public_key,start);
+          DROP TABLE IF EXISTS downtime;
+          CREATE TABLE IF NOT EXISTS lifecycle (
+            id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL, since REAL NOT NULL);
+          INSERT OR IGNORE INTO lifecycle VALUES(1,1,0);
           CREATE TABLE IF NOT EXISTS profiles (
             public_key TEXT PRIMARY KEY, role TEXT NOT NULL DEFAULT 'unknown',
             polling TEXT NOT NULL DEFAULT 'manual', next_poll REAL,
@@ -54,6 +68,7 @@ def config():
         return {**DEFAULTS, **dict(db.execute('SELECT name,value FROM config'))}
 
 
+@synchronized
 def update_config(values):
     limits = {'retention_days': (1,180), 'neighbor_days':(7,365),
               'summary_days':(30,730), 'budget_mb':(256,16384), 'reserve_mb':(1024,16384)}
@@ -75,7 +90,10 @@ def profile(key):
                                       'next_poll':None,'last_poll':None,'last_error':''}
 
 
+@synchronized
 def update_profile(key, role, polling):
+    if not status()['enabled']:
+        raise ValueError('Repeater Optimizer is disabled. Enable it in Settings.')
     valid_key(key)
     if role not in ROLES or polling not in INTERVALS:
         raise ValueError('Invalid repeater role or polling interval.')
@@ -91,6 +109,8 @@ def update_profile(key, role, polling):
 
 
 def due(now=None):
+    if not status()['enabled']:
+        return None
     now = time.time() if now is None else now
     with closing(connect()) as db:
         row = db.execute("""SELECT * FROM profiles WHERE polling!='manual'
@@ -98,8 +118,11 @@ def due(now=None):
         return dict(row) if row else None
 
 
+@synchronized
 def claim_poll(key, now=None):
     """Advance deadline before RF; never queue missed polls or auto-retry."""
+    if not status()['enabled']:
+        return False
     now = time.time() if now is None else now
     with closing(connect()) as db, db:
         row = db.execute('SELECT polling FROM profiles WHERE public_key=?', (key,)).fetchone()
@@ -110,12 +133,20 @@ def claim_poll(key, now=None):
     return True
 
 
-def poll_error(key, reason):
+@synchronized
+def poll_error(key, reason, started_at=None):
+    state = status()
+    if not state['enabled'] or (started_at is not None and started_at < state['since']):
+        return
     with closing(connect()) as db, db:
         db.execute('UPDATE profiles SET last_error=? WHERE public_key=?', (str(reason)[:160],key))
 
 
-def save_neighbors(key, data, source='manual'):
+@synchronized
+def save_neighbors(key, data, source='manual', started_at=None):
+    state = status()
+    if not state['enabled'] or (started_at is not None and started_at < state['since']):
+        return None
     valid_key(key)
     if source not in ('manual','scheduled') or not isinstance(data,dict) or not isinstance(data.get('neighbours'),list):
         raise ValueError('Invalid neighbor response.')
@@ -166,6 +197,7 @@ def snapshots(key, limit=15):
         return result
 
 
+@synchronized
 def cleanup(now=None):
     cutoff=(time.time() if now is None else now)-config()['neighbor_days']*86400
     with closing(connect()) as db, db:
@@ -173,6 +205,7 @@ def cleanup(now=None):
         db.execute('DELETE FROM snapshots WHERE at<?',(cutoff,))
 
 
+@synchronized
 def remove_repeater(key):
     """Discard optimizer role, polling and snapshots for a removed managed repeater."""
     valid_key(key)
@@ -183,52 +216,52 @@ def remove_repeater(key):
                    '(SELECT id FROM snapshots WHERE public_key=?)', (key,))
         db.execute('DELETE FROM snapshots WHERE public_key=?', (key,))
         db.execute('DELETE FROM profiles WHERE public_key=?', (key,))
-        db.execute('DELETE FROM downtime WHERE public_key=?', (key,))
 
 
-def downtimes(key):
-    valid_key(key)
-    if not FILE.exists():
-        return []
+@synchronized
+def status():
+    """Read persisted lifecycle state; migrate an existing installation on first use."""
     with closing(connect()) as db:
-        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='downtime'").fetchone():
-            return []  # Older databases have no recorded downtime.
-        return [dict(row) for row in db.execute('SELECT * FROM downtime WHERE public_key=? ORDER BY start DESC,id DESC',(key,))]
+        exists = db.execute("SELECT 1 FROM sqlite_master WHERE name='lifecycle'").fetchone()
+    if not exists:
+        initialize()
+    with closing(connect()) as db:
+        row = db.execute('SELECT enabled,since FROM lifecycle WHERE id=1').fetchone()
+        return {'enabled': bool(row['enabled']), 'since': row['since']}
 
 
-def add_downtime(key, start, end):
-    valid_key(key)
-    if any(type(v) not in (int,float) or not math.isfinite(v) for v in (start,end)) or not 0 < start < end <= time.time():
-        raise ValueError('Enter a valid past offline interval with the end after the start.')
-    initialize()
-    with closing(connect()) as db, db:
-        db.execute('BEGIN IMMEDIATE')
-        if db.execute('SELECT COUNT(*) FROM downtime WHERE public_key=?',(key,)).fetchone()[0]>=100:
-            raise ValueError('Maximum 100 downtime entries per repeater; remove obsolete entries first.')
-        db.execute('INSERT INTO downtime(public_key,start,end) VALUES(?,?,?)',(key,start,end))
+@synchronized
+def reset(enabled=None):
+    """Clear optimizer-owned tables globally, preserving ordinary statistics.
+
+    The collector and other optimizer writers share LOCK. The cutoff also
+    rejects packets and radio responses queued before the reset.
+    """
+    from meshcorestation.storage import passive_stats, advisor_history
+    state = status()
+    if enabled is not None and type(enabled) is not bool:
+        raise ValueError('Enabled must be true or false.')
+    enabled = state['enabled'] if enabled is None else enabled
+    passive_stats.initialize()
+    with advisor_history.database():
+        pass
+    with closing(connect()) as db:
+        db.execute('ATTACH DATABASE ? AS packets', (str(passive_stats.STATS_PATH),))
+        db.execute('ATTACH DATABASE ? AS audit', (str(advisor_history.FILE),))
+        with db:
+            db.execute('UPDATE lifecycle SET enabled=?,since=? WHERE id=1', (int(enabled),time.time()))
+            for table in ('neighbors','snapshots','profiles'):
+                db.execute('DELETE FROM '+table)
+            db.execute('DELETE FROM packets.network_observations')
+            db.execute('DELETE FROM packets.network_daily')
+            db.execute('DELETE FROM audit.changes')
+    return status()
 
 
-def remove_downtime(key, ident):
-    valid_key(key)
-    if type(ident) is not int or ident<=0:
-        raise ValueError('Invalid downtime entry.')
-    with closing(connect()) as db, db:
-        if db.execute('DELETE FROM downtime WHERE public_key=? AND id=?',(key,ident)).rowcount!=1:
-            raise ValueError('Downtime entry not found for this repeater.')
-
-
-def offline_intervals(key, start, end):
-    """Clip and merge recorded [start,end) intervals so overlaps count once."""
-    intervals=sorted((max(start,r['start']),min(end,r['end'])) for r in downtimes(key)
-                     if r['start']<end and r['end']>start)
-    merged=[]
-    for a,b in intervals:
-        if merged and a<=merged[-1][1]:
-            merged[-1]=(merged[-1][0],max(b,merged[-1][1]))
-        else:
-            merged.append((a,b))
-    return merged
-
-
-def exclusion_sql(intervals):
-    return ''.join(' AND NOT (at>=? AND at<?)' for _ in intervals), [v for pair in intervals for v in pair]
+@synchronized
+def set_enabled(enabled):
+    if type(enabled) is not bool:
+        raise ValueError('Enabled must be true or false.')
+    if status()['enabled'] == enabled:
+        return status()
+    return reset(enabled)

@@ -144,35 +144,27 @@ Network-wide observations remain because they are shared evidence.
 Analysis remains local and passive. Manual radio reads, verified writes,
 and explicitly opted-in 12h/24h neighbor polling retain their prior safeguards.
 
-## 3.0.6rc1 · Known repeater downtime
+## 3.0.8rc1 · Optimizer controls
 
-In Repeater Optimizer, **Known repeater downtime** records a completed offline
-period using the browser's local timezone. Enter the time it went offline and the
-time it returned, then select **Record downtime**. Records are per repeater and
-require the existing administrator session. This only changes local metadata;
-it sends no LoRa command. Silence is never automatically classified as downtime.
+Settings now has an independent **Repeater Optimizer** enable switch. Existing
+installations remain enabled. Disabling requires confirmation and deletes
+optimizer observations, daily summaries, all neighbor snapshots, repeater roles,
+polling schedules and change history for **all repeaters**. Collection and
+scheduled neighbor reads stop. Enabling starts fresh with manual polling.
 
-Within the selected analysis window, overlapping records are combined and their
-observations excluded from packet counts, path distributions, active days and
-charts. The optimizer shows the excluded hours, requires at least 72 remaining
-hours as well as its normal traffic/active-day checks, and requires a neighbor
-snapshot newer than the recorded outage. Those remaining hours are not proof of
-continuous uptime: unrecorded outages and unseen packets remain unknown.
+**Clear optimizer storage…** in the optimizer tab performs the same global reset
+while keeping the optimizer enabled. Storage limits are retained. Battery history,
+managed repeater selections, general repeater statistics and bot/room data are
+preserved. Freed database pages can be reused by subsequent collection.
 
-A before/after comparison overlapping recorded downtime in either 24-hour sample
-or the one-hour settling interval is unavailable. It is not shortened or
-rescaled, which could misleadingly attribute outage effects to a setting change.
-Old comparisons outside these periods remain available.
+Queued packets and neighbor reads started before a reset cannot repopulate the
+new optimizer dataset. An already transmitted radio request cannot be recalled,
+but its old response is not saved. Known downtime controls and exclusion rules
+have been removed; existing downtime records are deleted during migration.
 
-Packet observations are retained. **Remove entry** corrects an incorrectly marked
-period and permits reanalysis of those records. Overlapping entries count time
-only once; remove all overlapping entries to fully restore a period. Maximum:
-100 records per repeater. Removing the managed repeater also removes its downtime
-records. An ongoing outage can be entered once its end time is known. Ordinary
-battery history and general dashboard statistics are not rewritten by this feature.
+The optimizer displays **Loading optimizer data…** while fetching and analyzing
+stored observations, prevents overlapping actions, and offers a retry if loading
+fails. Disabled optimizers display instructions to enable them in Settings.
 
-This release includes main 3.0.6 and its repeater map clustering. Known downtime can now be excluded from optimizer evidence and before/after comparisons.
-
-## 3.0.7rc1 · Integration with main
-
-Includes main 3.0.7 with reduced repeater map clustering distance, preserving optimizer functionality and known-downtime exclusions.
+The branch includes main 3.0.8, including the collapsed companion-settings section
+and the reduced map clustering distance from 3.0.7.

@@ -25,6 +25,11 @@ class RepeaterControl:
         now = time.monotonic()
         self.sessions = {k: v for k, v in self.sessions.items() if v['expires'] > now}
         action, key = request.get('action'), request.get('public_key', '')
+        optimizer_started = time.time()
+        if request.get('optimizer') is True or action == 'advisor_write':
+            from meshcorestation.storage import optimizer_store
+            if not optimizer_store.status()['enabled']:
+                raise ValueError('Repeater Optimizer is disabled. Enable it in Settings.')
         if not isinstance(key, str) or not re.fullmatch(r'[0-9a-f]{64}', key):
             raise ValueError('Invalid repeater key.')
         if action == 'logout':
@@ -63,6 +68,7 @@ class RepeaterControl:
                 elif action == 'telemetry':
                     data = await commands.req_telemetry_sync(contact, timeout=TIMEOUT)
                 elif action == 'neighbors':
+                    neighbor_started = time.time()
                     data = await commands.req_neighbours_sync(contact, count=15, offset=request.get('offset', 0), timeout=TIMEOUT)
                 else:
                     data = await commands.req_acl_sync(contact, timeout=TIMEOUT)
@@ -73,7 +79,7 @@ class RepeaterControl:
                     from meshcorestation.storage import optimizer_store
                     optimizer_store.initialize()
                     # This read was explicitly requested in management.
-                    saved_snapshot = optimizer_store.save_neighbors(key,data,'manual')
+                    saved_snapshot = optimizer_store.save_neighbors(key,data,'manual',started_at=neighbor_started)
                     data = with_neighbor_names(self.companion.database.db, data)
                 return {'ok': True, 'data': data, 'neighbor_snapshot': saved_snapshot,
                         'sampled_at': time.time(), 'admin': admin,
@@ -122,6 +128,10 @@ class RepeaterControl:
                     if current != request['expected']:
                         session['values'].pop(field, None)
                         raise ValueError('This setting changed on the repeater. Read the section again.')
+                if action == 'advisor_write':
+                    state=optimizer_store.status()
+                    if not state['enabled'] or optimizer_started < state['since']:
+                        raise ValueError('Optimizer was disabled or reset. Reload and review fresh data before applying.')
                 prefix = FIELDS[field].get('write', 'set ' + field)
                 history_id = None
                 if action == 'advisor_write':

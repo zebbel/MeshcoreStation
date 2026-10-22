@@ -54,6 +54,10 @@
         if (busy || (dirty() && !window.confirm('Discard unsaved repeater edits?'))) return;
         forget(); dialog.close();
     }
+    window.addEventListener('meshcorestation-optimizer-state',()=>{
+        const frame=$('repeater-advisor-frame');
+        if(frame?.contentWindow)frame.contentWindow.postMessage({type:'meshcorestation-optimizer-refresh'},window.location.origin);
+    });
     function tab(name) {
         if (name === 'advisor') {
             if (!admin || !session) { message('Connect as administrator to use Repeater Optimizer.', true); return; }
@@ -234,7 +238,7 @@
             !['meshcorestation-advisor-request','meshcorestation-advisor-apply','meshcorestation-advisor-return',
               'meshcorestation-optimizer-neighbors','meshcorestation-optimizer-ready',
               'meshcorestation-optimizer-profile','meshcorestation-optimizer-storage',
-              'meshcorestation-optimizer-clear-history','meshcorestation-optimizer-downtime'].includes(event.data?.type)) return;
+              'meshcorestation-optimizer-clear-history'].includes(event.data?.type)) return;
         if(event.data.type==='meshcorestation-optimizer-ready'){
             if(dialog.open && admin && session)
                 frame.contentWindow.postMessage({type:'meshcorestation-optimizer-context',public_key:contact.public_key,name:contact.name},window.location.origin);
@@ -249,19 +253,17 @@
         if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
         const progress=text=>{if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
         progress('Management connected. Checking administrator session…');
-        const options=['meshcorestation-optimizer-profile','meshcorestation-optimizer-storage','meshcorestation-optimizer-clear-history','meshcorestation-optimizer-downtime'].includes(payload.type);
+        const options=['meshcorestation-optimizer-profile','meshcorestation-optimizer-storage','meshcorestation-optimizer-clear-history'].includes(payload.type);
         if(options){
             if(payload.public_key!==contact.public_key){send({error:'Selected repeater changed. Reopen Optimizer.'});return;}
             run(async()=>{
                 try {
                     const body={action:payload.type==='meshcorestation-optimizer-profile'?'profile':
-                        payload.type==='meshcorestation-optimizer-storage'?'storage':
-                        payload.type==='meshcorestation-optimizer-downtime'?'downtime':'clear_history',
+                        payload.type==='meshcorestation-optimizer-storage'?'storage':'clear_history',
                         public_key:contact.public_key,session};
                     if(body.action==='profile'){
                         body.role=payload.role;body.polling=payload.polling;
                     }else if(body.action==='storage') body.settings=payload.settings;
-                    else if(body.action==='downtime'){body.start=payload.start;body.end=payload.end;body.remove=payload.remove;}
                     else if(body.action==='clear_history') body.confirm=payload.confirm===true;
                     const res=await fetch('/api/repeater-optimizer',{method:'POST',cache:'no-store',
                         headers:{'Content-Type':'application/json','X-Meshcore-Control':'1'},body:JSON.stringify(body)});
@@ -277,7 +279,7 @@
             run(async()=>{
                 try {
                     progress('Reading one neighbor page over LoRa…');
-                    const data=await request({action:'neighbors',offset:0});
+                    const data=await request({action:'neighbors',offset:0,optimizer:true});
                     send({public_key:contact.public_key,neighbors:data.data,
                         snapshot:data.neighbor_snapshot,neighbor_read:true});
                     message('Neighbor snapshot received and stored.');
@@ -302,7 +304,7 @@
                     // Preflight every selected field before any write; write rechecks it again.
                     for(const item of changes) {
                         progress('Checking current '+item.field+' before changes…');
-                        const read=await request({action:'read',field:item.field});
+                        const read=await request({action:'read',field:item.field,optimizer:true});
                         if(String(read.value)!==item.expected)throw Error(item.field+' changed on the repeater. Read and review again.');
                     }
                     for(const item of changes) {
@@ -317,7 +319,7 @@
                 } else {
                     for(const field of advisorFields) {
                         progress('Reading '+field+' ('+(advisorFields.indexOf(field)+1)+'/'+advisorFields.length+')… Waiting for repeater reply.');
-                        try {current[field]=(await request({action:'read',field})).value;
+                        try {current[field]=(await request({action:'read',field,optimizer:true})).value;
                             if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text:'Received '+field+'.',field,value:current[field]},window.location.origin);}
                         catch(error) {errors[field]=error.message;if(!session || /timed out|two minutes|Administrator/i.test(error.message))break;}
                     }

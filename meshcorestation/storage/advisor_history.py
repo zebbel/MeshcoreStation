@@ -3,6 +3,7 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from meshcorestation.config import DATA_DIR
+from meshcorestation.storage import optimizer_store
 
 FILE = DATA_DIR / 'repeater-advisor-history.db'
 
@@ -17,14 +18,19 @@ def database():
     finally: db.close()
 
 
+@optimizer_store.synchronized
 def begin(key,field,before,value):
+    if not optimizer_store.status()['enabled']:
+        return None
     with database() as db:
-        ident=db.execute('INSERT INTO changes(at,public_key,field,before_value,requested,status) VALUES(?,?,?,?,?,?)',
-                         (time.time(),key,field,str(before),str(value),'pending / outcome unknown')).lastrowid
+        # Do not reuse an erased row ID: an in-flight readback may still finish.
+        ident=db.execute('INSERT INTO changes(id,at,public_key,field,before_value,requested,status) VALUES(?,?,?,?,?,?,?)',
+                         (max(time.time_ns()//1000, db.execute('SELECT COALESCE(MAX(id),0)+1 FROM changes').fetchone()[0]),time.time(),key,field,str(before),str(value),'pending / outcome unknown')).lastrowid
         db.execute('DELETE FROM changes WHERE at<?',(time.time()-365*86400,))
         return ident
 
 
+@optimizer_store.synchronized
 def finish(ident,actual,status):
     with database() as db:
         db.execute('UPDATE changes SET actual=?,status=? WHERE id=?',(None if actual is None else str(actual),status,ident))
@@ -36,6 +42,7 @@ def recent(key):
 
 
 
+@optimizer_store.synchronized
 def clear_verified_flood(key):
     """Clear verified optimizer changes for ONE repeater only.
 

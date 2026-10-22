@@ -12,7 +12,7 @@
     function controls() {
         dialog.setAttribute('aria-busy', String(busy));
         // Serial controls remain independently available when the companion is offline.
-        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel, #firmware-panel, #scope-settings')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
+        dialog.querySelectorAll('input, button').forEach(element => { if (element.closest('#serial-panel, #update-panel, #firmware-panel, #scope-settings, #optimizer-settings')) return; element.disabled = busy || (!settings && (element.tagName === 'INPUT' || element.type === 'submit')); });
         if (positionMarker) positionMarker.dragging[busy || !settings ? 'disable' : 'enable']();
         networkControls();
     }
@@ -241,7 +241,7 @@
             return `<form class="companion-section" data-group="${group}"><h3>${titles[group]}</h3><p class="muted" ${group === 'tx_power' ? 'id="companion-power-limit"' : ''}>${note}</p><div class="companion-fields">${fields}</div><button type="submit" class="info-button">Save ${group === 'radio' ? 'radio settings…' : titles[group].toLowerCase()}</button></form>`;
         }).join('');
 
-        dialog.innerHTML = `<div class="dialog-header"><h2 id="companion-title">Companion settings</h2><button type="button" id="close-companion" aria-label="Close companion settings">×</button></div><section id="serial-panel" class="companion-section serial-panel" aria-label="Serial port settings"></section><p id="companion-identity" class="muted">Connected through your bot</p><div class="companion-toolbar"><button type="button" id="reload-companion">Reload</button><span class="muted">Each section is saved separately.</span></div><p id="companion-message" role="status" aria-live="polite"></p><div class="companion-grid">${sections}</div>`;
+        dialog.innerHTML = `<div class="dialog-header"><h2 id="companion-title">Settings</h2><button type="button" id="close-companion" aria-label="Close settings">×</button></div><details id="companion-settings-disclosure"><summary>Companion settings</summary><div class="companion-settings-body"><section id="serial-panel" class="companion-section serial-panel" aria-label="Serial port settings"></section><p id="companion-identity" class="muted">Connected through your bot</p><div class="companion-toolbar"><button type="button" id="reload-companion">Reload</button><span class="muted">Each section is saved separately.</span></div><p id="companion-message" role="status" aria-live="polite"></p><div class="companion-grid">${sections}</div></div></details>`;
         window.meshcorestationPrepareDialog(dialog);
         document.body.append(dialog);
         createPositionPicker();
@@ -257,7 +257,7 @@
         if (!dialog) create();
         if (dialog.open) return;
         settings = null; network = null;
-        dialog.querySelectorAll('input').forEach(element => { if(element.closest('#scope-settings'))return; element.value = ''; element.defaultValue = ''; });
+        dialog.querySelectorAll('input').forEach(element => { if(element.closest('#scope-settings, #optimizer-settings'))return; element.value = ''; element.defaultValue = ''; });
         dialog.showModal(); load();
     });
 })();

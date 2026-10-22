@@ -28,6 +28,9 @@ const settle=()=>new Promise(r=>setImmediate(r));
 assert.equal(posts.length,1);assert.equal(posts[0].type,'meshcorestation-optimizer-ready');
 w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,
  data:{type:'meshcorestation-optimizer-context',public_key:key,name:'Hill'}}));
+assert.equal($('load-status').textContent,'Loading optimizer data…');
+assert.equal(w.document.querySelector('main').getAttribute('aria-busy'),'true');
+assert($('analyze').disabled);
 await settle();
 assert.equal(reqs.length,1);assert.equal(reqs[0].method,'GET');
 assert.equal($('neighbors').querySelectorAll('article').length,1,'Only the most recent read is displayed');
@@ -60,8 +63,8 @@ await settle();
 assert.equal($('back'),null);
 assert.equal(w.document.querySelectorAll('.scope-field').length,2);
 assert.equal(w.document.querySelectorAll('.period-field').length,1);
-assert.equal(w.document.querySelectorAll('.storage-field').length,7);
-assert.equal(w.document.querySelectorAll('.storage-grid .storage-field').length,7);
+assert.equal(w.document.querySelectorAll('.storage-field').length,5);
+assert.equal(w.document.querySelectorAll('.storage-grid .storage-field').length,5);
 for(const id of ['role','polling','days','retention_days','neighbor_days','summary_days','budget_gb','reserve_gb']){
   assert(w.document.querySelector('label[for="'+id+'"]'),'Control needs its own label: '+id);
 }
@@ -127,16 +130,37 @@ assert($('neighbors').textContent.includes('2 saved / 2 reported'));
 assert($('neighbors').textContent.includes('Prefix 00ffaa11'));
 assert.equal($('neighbors').querySelectorAll('article').length,1,'A new read replaces the previous entry');
 assert(!$('neighbors').textContent.includes('Prefix 1234abcd'),'Previous neighbor read is hidden');
-$('downtime-start').value='2026-01-01T10:00';$('downtime-end').value='2026-01-02T10:00';
-$('save-downtime').click();sent=posts.at(-1);
-assert.equal(sent.type,'meshcorestation-optimizer-downtime');assert.equal(sent.end-sent.start,86400);
-sample.downtime=[{id:9,start:sent.start,end:sent.end}];sample.statistics.excluded_downtime_seconds=86400;
-w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,data:{type:'meshcorestation-advisor-values',request_id:sent.request_id,saved:true}}));await settle();
-assert($('downtime-summary').textContent.includes('24.0 hours excluded'));
-$('downtime-list').querySelector('button').click();sent=posts.at(-1);assert.equal(sent.remove,9);
-sample.downtime=[];
-w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,data:{type:'meshcorestation-advisor-values',request_id:sent.request_id,saved:true}}));await settle();
-const beforeInvalid=posts.length;$('downtime-end').value='2025-01-01T10:00';$('save-downtime').click();assert.equal(posts.length,beforeInvalid);
+assert.equal($('save-downtime'),null);
+assert.equal($('optimizer-content').hidden,false);
+// Clearing is explicit and global, then the visible state reloads.
+w.fetch=async(url,options)=>{
+ const payload=options.body?JSON.parse(options.body):{};
+ if(payload.action==='clear'){
+   assert.equal(url,'/api/repeater-optimizer/settings');assert.equal(payload.confirm,true);
+   sample.neighbor_snapshots=[];sample.history=[];sample.statistics.copies=0;
+ }
+ return {ok:true,json:async()=>sample};
+};
+$('clear-storage').click();await settle();
+assert(confirms.at(-1).includes('ALL repeaters'));
+assert($('message').textContent.includes('storage cleared'));
+assert.equal($('neighbors').querySelectorAll('article').length,0);
+// Loading feedback stays visible for a slow request and disabled data is hidden.
+let finishLoad;
+w.fetch=()=>new Promise(resolve=>{finishLoad=resolve;});
+$('analyze').click();
+assert.equal($('load-status').textContent,'Loading optimizer data…');
+assert($('analyze').disabled && $('days').disabled);
+finishLoad({ok:true,json:async()=>({ok:true,enabled:false})});await settle();
+assert.equal($('optimizer-content').hidden,true);
+assert.equal($('disabled-message').hidden,false);
+// A failed load provides a working retry without a permanent loading state.
+w.fetch=async()=>{throw Error('Network unavailable');};
+w.dispatchEvent(new w.MessageEvent('message',{origin:'http://localhost',source:parent,
+ data:{type:'meshcorestation-optimizer-refresh'}}));await settle();
+assert.equal($('load-status').textContent,'Network unavailable');assert(!$('retry-load').hidden);
+w.fetch=async()=>({ok:true,json:async()=>sample});$('retry-load').click();await settle();
+assert.equal($('optimizer-content').hidden,false);assert($('retry-load').hidden);
 dom.window.close();
 console.log('Optimizer passive GET/analysis, explicit polling opt-in and manual LoRa button passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

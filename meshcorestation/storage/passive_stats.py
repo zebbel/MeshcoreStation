@@ -213,12 +213,15 @@ class Collector:
                     logical_used=max(0,used-freed*page_size)
                 writable=(logical_used < limits['budget_mb']*1048576 and
                           free > limits['reserve_mb']*1048576)
-                with closing(connect()) as db, db:
+                with optimizer_store.LOCK, closing(connect()) as db, db:
+                    optimizer_state=optimizer_store.status()
                     if not writable:
                         self.dropped+=len(batch)
                         self.error='Passive collection paused: storage budget or free-space reserve reached.'
                     else:
                         for at,packet in batch:
+                            if not optimizer_state['enabled'] or at < optimizer_state['since']:
+                                continue
                             db.execute("""INSERT INTO network_observations
                               (at,kind,scoped,path_len,hash_size,route,digest,rssi,snr)
                               VALUES(?,?,?,?,?,?,?,?,?)""",
@@ -324,13 +327,8 @@ def network_snapshot(key, days=7):
     if not isinstance(key,str) or not re.fullmatch('[0-9a-f]{64}', key):
         raise ValueError('Invalid repeater public key.')
     now=time.time(); cutoff=now-days*86400
-    from meshcorestation.storage import optimizer_store
-    excluded=optimizer_store.offline_intervals(key,cutoff,now)
-    exclude_sql,exclude_args=optimizer_store.exclusion_sql(excluded)
-    offline_seconds=sum(b-a for a,b in excluded)
     with closing(connect()) as db:
         db.execute('BEGIN')
-        from meshcorestation.storage import optimizer_store
         other_keys={r['public_key'] for r in known_repeaters()}
         other_keys.add(key)
         prefixes=[key[:n] for n in (2,4,6)]
@@ -338,8 +336,8 @@ def network_snapshot(key, days=7):
         predicates=' OR '.join("('|' || route || '|') LIKE ?" for _ in prefixes)
         parameters=['%|'+p+'|%' for p in prefixes]
         query=f"""SELECT at,kind,scoped,path_len,hash_size,route,digest,rssi,snr
-                    FROM network_observations WHERE at>=? AND at<=? AND ({predicates}){exclude_sql}"""
-        selected=db.execute(query,(cutoff,now,*parameters,*exclude_args))
+                    FROM network_observations WHERE at>=? AND at<=? AND ({predicates})"""
+        selected=db.execute(query,(cutoff,now,*parameters))
         scope={label:{'count':0,'target':0,'hist':{}} for label in ('scoped','unscoped')}
         matches=0;ambiguous=0;active=set()
         for item in selected:
@@ -360,18 +358,15 @@ def network_snapshot(key, days=7):
                 hist=scope[label]['hist']
                 hist[hops]=hist.get(hops,0)+1
             active.add(int(item['at']//86400))
-        totals=db.execute(f"""SELECT COUNT(*) copies,COUNT(DISTINCT digest) unique_digests,
+        totals=db.execute("""SELECT COUNT(*) copies,COUNT(DISTINCT digest) unique_digests,
                           COALESCE(SUM(scoped=0),0) unscoped
-                          FROM network_observations WHERE at>=? AND at<=? {exclude_sql}""",(cutoff,now,*exclude_args)).fetchone()
+                          FROM network_observations WHERE at>=? AND at<=?""",(cutoff,now)).fetchone()
         health=db.execute('SELECT * FROM health WHERE id=1').fetchone()
         first=db.execute('SELECT MIN(at) FROM network_observations').fetchone()[0]
         days_daily=[dict(r) for r in db.execute('SELECT day,kind,scoped,copies FROM network_daily WHERE day>=? ORDER BY day',(int(cutoff//86400),))]
-        if excluded:
-            days_daily=[dict(r) for r in db.execute(f'SELECT CAST(at/86400 AS INTEGER) day,kind,scoped,COUNT(*) copies FROM network_observations WHERE at>=? AND at<=? {exclude_sql} GROUP BY day,kind,scoped ORDER BY day',(cutoff,now,*exclude_args))]
     used=sum(os.path.getsize(p) for p in (str(STATS_PATH),str(STATS_PATH)+'-wal') if os.path.exists(p))
     free=shutil.disk_usage(STATS_PATH.parent).free
-    return {'last_downtime_end':excluded[-1][1] if excluded else None,'excluded_downtime_seconds':offline_seconds,'usable_hours':(now-cutoff-offline_seconds)/3600,
-            'now':now,'days':days,'copies':totals['copies'],
+    return {'now':now,'days':days,'copies':totals['copies'],
             'unique_digests':totals['unique_digests'],'unscoped':totals['unscoped'],
             'matching_copies':matches,'ambiguous':ambiguous,'active_days':len(active),
             'scope':scope,'daily':days_daily,'first_at':first,

@@ -31,26 +31,33 @@ class NeighborPoller:
             if row is None:
                 continue
             key=row['public_key']
+            started_at=time.time()
             if not optimizer_store.claim_poll(key):
                 continue
             # No queued attempts: failed reads are not retried before next interval.
             try:
                 async with self.companion.control_lock:
+                    state=optimizer_store.status()
+                    if not state['enabled'] or started_at < state['since']:
+                        continue
                     transport=RepeaterTransport(self.companion)
                     contact=await transport.contact(key)
                     # A blank login uses existing companion ACL rights.
                     # Passwords are NEVER stored for scheduled polling.
                     await transport.login(contact,'')
+                    state=optimizer_store.status()
+                    if not state['enabled'] or started_at < state['since']:
+                        continue
                     data=await asyncio.wait_for(
                         self.companion.mc.commands.req_neighbours_sync(
                             contact,count=15,offset=0,timeout=TIMEOUT), TIMEOUT+10)
                     if not isinstance(data,dict):
                         raise ValueError('No neighbor response from repeater.')
-                    optimizer_store.save_neighbors(key,data,'scheduled')
+                    optimizer_store.save_neighbors(key,data,'scheduled',started_at=started_at)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                optimizer_store.poll_error(key,str(exc))
+                optimizer_store.poll_error(key,str(exc),started_at=started_at)
                 self.companion.logger.warning('Scheduled neighbor read skipped: %s',type(exc).__name__)
 
     async def close(self):
