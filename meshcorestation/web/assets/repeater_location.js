@@ -45,9 +45,12 @@ window.MeshcoreStationRepeaterLocation = (() => {
         map.on('click', event => select(event.latlng));
         new ResizeObserver(() => { if (dialog.open) map.invalidateSize(); }).observe($('repeater-location-map'));
     }
-    return {open(options) {
+    return {async open(options) {
         if (!options.canEdit()) return;
-        if (!window.L) { options.report('Map library unavailable. Refresh the page or enter coordinates manually.', true); return; }
+        try {
+            if (!window.L) await window.meshcorestationLoadMapLibrary();
+        } catch (error) { options.report('Map library unavailable: ' + error.message + '. Enter coordinates manually.', true); return; }
+        if (!options.canEdit()) return;
         context = options;
         if (!dialog) create();
         picked = position(context.draft) || position(context.current); dialog.showModal(); sync(true);

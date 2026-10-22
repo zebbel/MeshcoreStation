@@ -65,7 +65,13 @@
                 if(!managed.includes(e.detail))throw Error('Addition could not be verified. Reload and try again.');
                 $('managed-repeater-message').textContent='Repeater added. Battery monitoring can be enabled in its settings.';
             }catch(error){$('managed-repeater-message').textContent=error.message;}
-        });load();
+        });
+        // Avoid this extra voltage/repeater request while management is collapsed.
+        const disclosure=$('repeater-management-disclosure');
+        if(disclosure){
+            disclosure.addEventListener('toggle',()=>{if(disclosure.open&&!known.length)load();});
+            if(disclosure.open)load();
+        }
     }
     new MutationObserver(attach).observe(document.documentElement,{childList:true,subtree:true});attach();
 })();

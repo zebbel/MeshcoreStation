@@ -6,7 +6,7 @@ const w=dom.window;
 const calls=[];
 w.fetch=async url=>({ok:true,json:async()=>{calls.push(url);return {nodes:[],segments:[{positions:[[1,2],[3,4]],unresolved:true},{positions:[[3,4],[5,6]],unresolved:false}],notes:[],hops:[{number:1,name:'Hill <b>repeater</b>',hash:'aa',status:'Resolved'}],sender_name:'Alice',bot_name:'Base',direct_distance_km:12.5,route_distance_km:15.3,route_distance_lower_bound:true,path_valid:true};}});
 const lines=[],arrows=[];
-w.L={map:()=>({setView(){return this},remove(){},invalidateSize(){},project(p){return {x:p[1],y:-p[0]}},unproject(p){return p}}),tileLayer:()=>({on(){return this},addTo(){return this}}),polyline:(points,options)=>{lines.push(options);return {addTo(){}}},divIcon:options=>options,marker:(position,options)=>{arrows.push(options);return {addTo(){}}}};
+w.L={map:()=>({setView(){return this},remove(){},invalidateSize(){},fitBounds(){},project(p){return {x:p[1],y:-p[0]}},unproject(p){return p}}),tileLayer:()=>({on(){return this},addTo(){return this}}),polyline:(points,options)=>{lines.push(options);return {addTo(){}}},divIcon:options=>options,marker:(position,options)=>{arrows.push(options);return {addTo(){}}}};
 w.requestAnimationFrame=fn=>fn();
 const settle=()=>new Promise(r=>setImmediate(r));
 (async()=>{

@@ -53,11 +53,20 @@
         dialog.showModal();filter();dialog.querySelector('.stats-picker-close').focus();
         const request=new AbortController();controller=request;
         try{
-            const response=await fetch('/api/maps/repeaters',{cache:'no-store',signal:request.signal});
+            const [response] = await Promise.all([
+                fetch('/api/maps/repeaters', {cache:'no-store',signal:request.signal}),
+                (!window.L || !window.L.markerClusterGroup) ? window.meshcorestationLoadMapLibrary() : Promise.resolve()
+            ]);
             const data=await response.json();if(!response.ok)throw Error(data.error||'Could not load repeater positions.');
             if(request.signal.aborted || !dialog.open)return;
             if(!window.L)throw Error('Map library unavailable. Use the searchable list.');
-            map=L.map(dialog.querySelector('.stats-picker-map')).setView([51,10],5);
+            map=L.map(dialog.querySelector('.stats-picker-map'));
+            // Avoid downloading tiles for Germany before navigating to the selected repeater.
+            const initial=data.nodes.filter(node=>node.role==='repeater'&&repeaters.some(r=>r.public_key===node.public_key));
+            const picked=initial.find(node=>node.public_key===selected);
+            if(picked)map.setView(picked.position,12);
+            else if(initial.length)map.fitBounds(initial.map(node=>node.position),{padding:[30,30],maxZoom:13});
+            else map.setView([51,10],5);
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).on('tileerror',()=>{message.textContent='Map tiles unavailable. Markers and the searchable list remain usable.';}).addTo(map);
             clusters=window.meshcorestationMarkerClusters(map);
             const positions=[];
@@ -77,8 +86,7 @@
                 if(map!==currentMap)return;
                 map.invalidateSize();
                 const current=markers.get(selected);
-                if(current){map.setView(current.getLatLng(),12);window.meshcorestationRevealMarker(map,clusters,current,()=>map===currentMap&&dialog.open);}
-                else if(positions.length)map.fitBounds(positions,{padding:[30,30],maxZoom:13});
+                if(current)window.meshcorestationRevealMarker(map,clusters,current,()=>map===currentMap&&dialog.open);
             });
         }catch(error){if(request.signal.aborted)return;message.textContent=error.message;dialog.querySelector('.stats-map-fallback').open=true;}
     }

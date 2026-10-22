@@ -24,7 +24,12 @@
         if (summary) summary.replaceChildren(text('p', 'Loading distances and packet route…'));
         dispose(id); canvas.replaceChildren(); notes.replaceChildren(text('p', 'Loading map…'));
         try {
-            const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+            // Fetch saved positions while Leaflet loads on demand; neither waits for the other.
+            const needLibrary = !window.L || (id === 'repeater-map' && !window.L.markerClusterGroup);
+            const [response] = await Promise.all([
+                fetch(url, { cache: 'no-store', signal: controller.signal }),
+                needLibrary ? window.meshcorestationLoadMapLibrary() : Promise.resolve()
+            ]);
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Map data could not be loaded.');
             if (controller.signal.aborted) return;
@@ -39,7 +44,10 @@
                 if (data.path_valid && !data.hops.length) summary.append(text('p', 'Direct packet · no repeaters', 'muted'));
             }
             if (!window.L) throw new Error('Map library could not be loaded. Refresh the page and try again.');
-            const map = L.map(canvas, { scrollWheelZoom: true }).setView([51, 10], 5); maps.set(id, map);
+            const map = L.map(canvas, { scrollWheelZoom: true }); maps.set(id, map);
+            // Set final bounds before attaching OSM tiles: no wasted requests at the default location.
+            if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), { padding: [35, 35], maxZoom: 14 });
+            else map.setView([51, 10], 5);
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
                 if (!notes.querySelector('.tile-warning')) notes.append(text('p', 'Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap.', 'tile-warning'));
             }).addTo(map);
@@ -68,7 +76,7 @@
             if (clusters) notes.prepend(text('p', 'Numbered circles group nearby repeaters. Zoom in or click a group to expand it; overlapping markers spread apart when expanded.', 'map-legend'));
             notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
             if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));
-            requestAnimationFrame(() => { if (maps.get(id) !== map) return; map.invalidateSize(); if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), { padding: [35, 35], maxZoom: 14 }); });
+            requestAnimationFrame(() => { if (maps.get(id) === map) map.invalidateSize(); });
         } catch (error) { if (error.name !== 'AbortError' && !controller.signal.aborted) { notes.replaceChildren(text('p', error.message)); if (summary && summary.textContent === 'Loading distances and packet route…') summary.replaceChildren(text('p', 'Distances and packet route could not be loaded.')); } }
     }
     function cleanup(id) { requests.get(id)?.abort(); dispose(id); }
