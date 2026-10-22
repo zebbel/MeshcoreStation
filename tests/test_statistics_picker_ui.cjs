@@ -4,7 +4,7 @@ w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogE
 const icons=[];w.meshcorestationRepeaterActions=()=>{};
 const key='76'.repeat(32),other='ab'.repeat(32),selected=[],popups=[];let fail=false,removed=0;
 w.fetch=async()=>{if(fail)throw Error('Offline');return {ok:true,json:async()=>({nodes:[{role:'repeater',public_key:key,position:[50,8]},{role:'bot',public_key:other,position:[51,8]}]})}};
-w.L={divIcon:options=>{icons.push(options);return options},map:()=>({setView(){return this},invalidateSize(){},fitBounds(){},remove(){removed++}}),tileLayer:()=>({on(){return this},addTo(){}}),marker:position=>({addTo(){return this},bindPopup(node){popups.push(typeof node==='function'?node():node);return this},getLatLng(){return position},openPopup(){}})};
+w.L={markerClusterGroup:()=>({}),divIcon:options=>{icons.push(options);return options},map:()=>({setView(){return this},invalidateSize(){},fitBounds(){},remove(){removed++}}),tileLayer:()=>({on(){return this},addTo(){}}),marker:position=>({addTo(){return this},bindPopup(node){popups.push(typeof node==='function'?node():node);return this},getLatLng(){return position},openPopup(){}})};
 w.document.addEventListener('stats-picker-selected',e=>selected.push(e.detail));
 w.meshcorestationRevealMarker=(map,clusters,marker,isCurrent)=>clusters.zoomToShowLayer(marker,()=>{if(isCurrent())marker.openPopup();});
 let revealed=0;w.meshcorestationMarkerClusters=()=>({zoomToShowLayer(marker,callback){revealed++;callback();}});

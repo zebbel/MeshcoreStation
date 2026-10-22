@@ -3,8 +3,9 @@
     let loading=false, attached=false, generation=0;
     const el=id=>document.getElementById(id);
     async function load(){
-        if(!el('battery-overview-days'))return;loading=true;const id=++generation;const key=window.meshcorestationSelectedRepeater||'';
-        if(window.meshcorestationSelectedRepeater===''){el('battery-overview-latest').textContent='Add a repeater to view its battery history.';el('battery-overview-chart').replaceChildren();el('battery-overview-note').textContent='';el('battery-overview-error').textContent='';return;}
+        if(!el('battery-overview-days')||!el('repeater-management-disclosure')?.open)return;
+        loading=true;const id=++generation;const key=window.meshcorestationSelectedRepeater||'';
+        if(!key){el('battery-overview-latest').textContent='Add a repeater to view its battery history.';el('battery-overview-chart').replaceChildren();el('battery-overview-note').textContent='';el('battery-overview-error').textContent='';return;}
         try{
             const days=Number(el('battery-overview-days').value);
             const response=await fetch('/api/bot/voltage?days='+days+(key?'&public_key='+encodeURIComponent(key):''),{cache:'no-store',headers:{'X-Meshcore-Control':'1'}});
