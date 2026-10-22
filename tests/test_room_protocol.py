@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from meshcorestation.rooms.service import RoomService
 from meshcorestation.rooms.server import RoomEndpoint, RoomWorker, room_rx_metadata
-from meshcorestation.rooms.wire import Identity, Packet, ack, datagram, decrypt, encrypt, u32
+from meshcorestation.rooms.wire import Identity, Packet, ack, datagram, decrypt, encrypt, transport_code, u32
 
 
 def test_firmware_crypto_fixture():
@@ -34,9 +34,12 @@ def mesh(tmp_path):
 def login(endpoint, peer, timestamp=1, since=0, scope=None, password=b'room-test'):
     secret = peer.secret(endpoint.identity.public)
     packet = Packet(7, endpoint.identity.public[:1]+peer.public+encrypt(secret,u32(timestamp)+u32(since)+password),1,0x41,b'\xaa\xbb')
-    responses = endpoint.receive(packet.encode(scope))
+    scopes = [{'scope_key': scope.hex()}] if scope is not None else ()
+    responses = endpoint.receive(packet.encode(scope), scopes)
     response = Packet.parse(responses[0])
-    assert response.kind == 8  # path return with embedded login result
+    assert response.kind == 8  # flooded path return with embedded login result
+    assert response.route == (0 if scope is not None else 1)
+    assert response.path_code == 0x40 and response.path == b''
     clear = decrypt(secret, response.payload[2:])
     assert clear[:4] == b'\x41\xaa\xbb\x01'
     assert clear[8] == 0  # login success
@@ -165,19 +168,48 @@ def test_password_enrolls_unknown_peer_and_invalidates_sessions(mesh):
 
 
 @pytest.mark.parametrize('path_code,path,reverse',[(0,b'',b''),(0x42,b'\x11\x22\x33\x44',b'\x33\x44\x11\x22'),(0x82,b'abcdef',b'defabc')])
-def test_scoped_login_returns_direct_without_scope_key(mesh,path_code,path,reverse):
+@pytest.mark.parametrize('scope', [None, bytes(range(16))])
+def test_flood_login_returns_flooded_path_with_scope(mesh,path_code,path,reverse,scope):
     service,rid,endpoint,writer,reader,now=mesh
     unknown=Identity.generate()
     secret=unknown.secret(endpoint.identity.public)
     payload=endpoint.identity.public[:1]+unknown.public+encrypt(secret,u32(1)+u32(0)+b'room-test')
-    incoming=Packet(7,payload,1,path_code,path).encode(bytes(range(16)))
-    outgoing=Packet.parse(endpoint.receive(incoming)[0])
-    assert outgoing.route==2 and outgoing.codes==b''
-    assert outgoing.path_code==path_code and outgoing.path==reverse
+    incoming=Packet(7,payload,1,path_code,path).encode(scope)
+    known = [{'scope_key': scope.hex()}] if scope is not None else ()
+    outgoing=Packet.parse(endpoint.receive(incoming, known)[0])
+    assert outgoing.route == (0 if scope is not None else 1)
+    assert outgoing.path_code == path_code & 0xC0 and outgoing.path == b''
     assert outgoing.kind==8
+    if scope is not None:
+        assert int.from_bytes(outgoing.codes[:2], 'little') == transport_code(scope, 8, outgoing.payload)
     clear=decrypt(secret,outgoing.payload[2:])
     assert clear[:1+len(path)]==bytes([path_code])+path
+    assert clear[1+len(path)] == 1  # encrypted login result
+    assert clear[2+len(path)+4] == 0  # successful login
+    assert endpoint.sessions[unknown.public.hex()].path == (path_code, reverse)
     assert 'scope_key' not in service.config(rid)
+
+
+def test_unknown_scoped_login_falls_back_to_unscoped_flood(mesh):
+    service,rid,endpoint,writer,reader,now=mesh
+    peer=Identity.generate()
+    secret=peer.secret(endpoint.identity.public)
+    payload=endpoint.identity.public[:1]+peer.public+encrypt(secret,u32(1)+u32(0)+b'room-test')
+    incoming=Packet(7,payload).encode(bytes(range(16)))
+    response=Packet.parse(endpoint.receive(incoming, [{'scope_key': 'ff'*16}])[0])
+    assert response.kind == 8 and response.route == 1
+    assert decrypt(secret,response.payload[2:])[1] == 1
+
+
+def test_direct_login_response_behavior_unchanged(mesh):
+    service,rid,endpoint,writer,reader,now=mesh
+    peer=Identity.generate()
+    secret=peer.secret(endpoint.identity.public)
+    payload=endpoint.identity.public[:1]+peer.public+encrypt(secret,u32(1)+u32(0)+b'room-test')
+    incoming=Packet(7,payload,2).encode()
+    response=Packet.parse(endpoint.receive(incoming)[0])
+    assert response.kind == 1  # existing response type for direct login
+    assert decrypt(secret,response.payload[2:])[4] == 0
 
 
 def test_room_ping_uses_exact_rx_packet_metadata_and_signed_signal(tmp_path):

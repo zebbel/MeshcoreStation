@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.1.0** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.1.1** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -67,6 +67,13 @@ Every published application update must increment `meshcorestation.__version__`
 and update the current-version references in the README and guides. Queue several
 changes under one release version; do not publish changed application code with
 the same version as the previous release.
+
+### 3.1.1
+
+Fixed room login over flood by sending the encrypted login response as a flooded
+PATH packet with the same path-hash width as the request. Known scoped requests
+are answered within their scope; unknown scopes fall back to unscoped flood.
+Direct login behavior is unchanged. Verify real repeater paths after updating.
 
 ### 3.1.0
 

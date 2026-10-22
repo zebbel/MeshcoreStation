@@ -4,8 +4,15 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.1.0. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.1.1. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.1.1
+
+- Fix room login over multi-hop floods: return the encrypted login result via a
+  flooded PATH packet rather than a direct packet sent over the guessed reverse path.
+- Use the incoming flood's path-hash width and matching saved scope key for replies;
+  keep existing direct login behavior. Add protocol regression tests.
 
 ## Changes in 3.1.0
 

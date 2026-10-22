@@ -1,6 +1,6 @@
 # V3 release notes and validation
 
-Stable version: **3.0.8**. Release branch: **main**.
+Stable version: **3.1.1**. Release branch: **main**.
 V3 originated from room-server 2.8.0rc9, commit `f5c6b77`. The former feature
 branches are retired; follow the [update guide](web-version-switching.md).
 

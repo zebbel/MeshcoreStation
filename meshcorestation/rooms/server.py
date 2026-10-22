@@ -78,9 +78,33 @@ class RoomEndpoint:
     def wrap(self, client, kind, clear):
         return self.encode(datagram(self.identity, bytes.fromhex(client.key), client.secret, kind, clear, client.path))
 
-    def reply(self, packet, client, kind, clear):
+    @staticmethod
+    def request_scope(packet, scopes):
+        """Recover a known scoped flood key from its authenticated transport code."""
+        if packet.route != 0 or len(packet.codes) != 4:
+            return None
+        code = int.from_bytes(packet.codes[:2], 'little')
+        keys = set()
+        for entry in scopes:
+            try:
+                key = bytes.fromhex(entry['scope_key'])
+                if len(key) == 16 and key != bytes(16) and transport_code(key, packet.kind, packet.payload) == code:
+                    keys.add(key)
+            except (KeyError, TypeError, ValueError):
+                continue
+        return next(iter(keys)) if len(keys) == 1 else None
+
+    def reply(self, packet, client, kind, clear, scopes=()):
         if packet.route in (0, 1):
-            return self.wrap(client, 8, bytes([packet.path_code]) + packet.path + bytes([kind]) + clear)
+            # Official MeshCore returns the embedded response in a FLOODED
+            # PATH frame, not directly along the reversed request path. The
+            # repeater path carried inside the encryption is sender -> server;
+            # the on-air flood path starts empty with the same hash width.
+            response = datagram(
+                self.identity, bytes.fromhex(client.key), client.secret, 8,
+                bytes([packet.path_code]) + packet.path + bytes([kind]) + clear)
+            response.path_code = packet.path_code & 0xC0
+            return response.encode(self.request_scope(packet, scopes))
         return self.wrap(client, kind, clear)
 
     def acknowledge(self, data, only=None):
@@ -94,7 +118,7 @@ class RoomEndpoint:
                 client.failures = 0
                 return
 
-    def receive(self, raw):
+    def receive(self, raw, scopes=()):
         packet = Packet.parse(raw)
         config, _ = self.refresh_auth()
         if not config['enabled']:
@@ -127,7 +151,7 @@ class RoomEndpoint:
             # Local administration only; do not advertise RF administrator access.
             permissions = 1 if role == 'reader' else 2
             response = u32(int(self.clock())) + bytes([0, 0, 0, permissions]) + os.urandom(4) + b'\x01'
-            return [self.reply(packet, client, 1, response)]
+            return [self.reply(packet, client, 1, response, scopes)]
         if packet.kind not in (0, 2, 8) or len(payload) < 20:
             return []
         for key, client in list(self.sessions.items()):
@@ -346,11 +370,17 @@ class RoomWorker:
                     received = await asyncio.wait_for(self.queue.get(), .25)
                 except asyncio.TimeoutError:
                     received = None
+                scopes = ()
+                if received and received[0] and ((received[0][0] >> 2) & 15) == 7:
+                    try:
+                        scopes = self.companion.database.get_scopes()
+                    except Exception:
+                        pass  # Unknown request scopes fall back to unscoped flood.
                 for endpoint in list(self.endpoints.values()):
                     if received:
                         raw, snr, rssi = received
                         try:
-                            responses = endpoint.receive(raw)
+                            responses = endpoint.receive(raw, scopes)
                         except (ValueError, PermissionError, UnicodeError):
                             responses = []
                         for response in responses:

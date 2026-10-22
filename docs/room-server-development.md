@@ -1,6 +1,6 @@
 # Independent room server
 
-The room server is included in stable **MeshcoreStation 3.0.8** on `main`.
+The room server is included in stable **MeshcoreStation 3.1.1** on `main`.
 See [V3 release notes](v3-review.md) for changes and validation. Enabling a room
 does not flash the companion.
 
@@ -31,11 +31,13 @@ Implemented protocol features:
 - Native encrypted login with a room password and automatic participant enrollment.
 - MeshCore Ed25519 key exchange, AES-128 ECB and truncated HMAC packet protection.
 - Encrypted text posting, duplicate suppression and persistent replay checks.
-- Flood path return with embedded login response and learned direct reply paths.
-- No room scope setting or incoming scope filter. Authenticated scoped and
-  unscoped flood requests receive direct replies along the reversed received
-  path, including multi-byte repeater hashes. Advertisements are unscoped.
-  Repeater forwarding policies still determine which packets reach the station.
+- Flooded path return with embedded login response and learned direct reply paths.
+- No room scope setting or incoming scope filter. Flooded login requests
+  receive flooded encrypted PATH responses with the request's path embedded,
+  retaining the incoming path-hash width. Responses to known scoped floods use
+  a matching saved scope key; unknown scopes fall back to unscoped flood, which
+  may be blocked by repeater policies. Learned reversed paths are still used
+  for direct room traffic. Advertisements are unscoped.
 - Original author prefixes in room pushes, client synchronization cursors,
   keep-alive replies and pending-message counts.
 - Any room can be selected as the MeshcoreStation bot channel. Newly received room posts are matched against the existing configured bot commands and replies are posted back into the same room. Selecting a normal companion channel switches the bot back.
