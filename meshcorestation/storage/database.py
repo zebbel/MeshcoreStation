@@ -92,6 +92,7 @@ class Database:
         if "command_status" not in logger_columns:
             self.db.execute("ALTER TABLE logger ADD COLUMN command_status TEXT")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_logger_recv_time ON logger(recv_time)")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_logger_message_time ON logger(message, recv_time DESC, id DESC)")
 
         from meshcorestation.storage.reply_store import initialize as initialize_replies
         initialize_replies(self.db)

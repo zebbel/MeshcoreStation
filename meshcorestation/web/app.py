@@ -8,7 +8,7 @@ from meshcorestation.web.map_routes import register_map_routes
 
 
 def create_app():
-    app = Dash(__name__, title="MeshcoreStation", update_title=None, assets_folder=str(Path(__file__).with_name("assets")))
+    app = Dash(__name__, title="MeshcoreStation", update_title=None, assets_folder=str(Path(__file__).with_name("assets")), assets_ignore=r"vendor/leaflet(?:\.markercluster)?\.js$")
     app.index_string = app.index_string.replace("{%favicon%}", '<link rel="icon" type="image/png" href="/assets/meshcore-logo.png?v=1.2">')
     from meshcorestation.updater import local_revision
     try:
@@ -16,7 +16,7 @@ def create_app():
     except Exception:
         revision = 'unknown'
     app.index_string = app.index_string.replace('{%metas%}', '{%metas%}<meta name="meshcorestation-revision" content="' + revision + '">')
-    app.layout = build_layout()
+    app.layout = build_layout
     register_callbacks(app)
     register_companion_routes(app.server)
     register_map_routes(app.server)

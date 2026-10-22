@@ -56,6 +56,10 @@
         }
     });
     document.addEventListener('toggle', event => {
+        if (event.target.id === 'room-server-disclosure' && event.target.open) {
+            const iframe = document.getElementById('room-server-frame');
+            if (iframe?.dataset.src) { iframe.src = iframe.dataset.src; delete iframe.dataset.src; }
+        }
         if (event.target.id === 'command-history-disclosure' && event.target.open && box && body) requestAnimationFrame(restore);
     }, true);
     attach();

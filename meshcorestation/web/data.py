@@ -37,3 +37,13 @@ def snapshot(command=None, limit=PAGE_SIZE):
         total = db.execute("SELECT COUNT(*) FROM logger" + where, params).fetchone()[0]
         rows = db.execute("SELECT * FROM logger" + where + " ORDER BY recv_time DESC, id DESC LIMIT ?", params + [limit]).fetchall()
         return {"repeaters": count, "commands": commands, "latest": dict(latest) if latest else None, "total": total, "rows": [dict(row) for row in reversed(rows)]}
+
+
+def overview():
+    """Small, indexed dashboard summary; never fetch the history table to render cards."""
+    with closing(sqlite3.connect(DB_PATH.as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA query_only=ON")
+        count = db.execute("SELECT COUNT(*) FROM repeaters").fetchone()[0]
+        latest = db.execute("SELECT id, message, sender, recv_time FROM logger ORDER BY recv_time DESC, id DESC LIMIT 1").fetchone()
+        return {"repeaters": count, "latest": dict(latest) if latest else None}
