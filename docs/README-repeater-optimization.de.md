@@ -1,4 +1,4 @@
-# Repeater Optimizer · Specification / implementation (3.0.3rc2)
+# Repeater Optimizer · Specification / implementation (3.1.0)
 
 ## Operation
 
@@ -168,3 +168,11 @@ fails. Disabled optimizers display instructions to enable them in Settings.
 
 The branch includes main 3.0.8, including the collapsed companion-settings section
 and the reduced map clustering distance from 3.0.7.
+
+## 3.1.0 · Stable release
+
+Released the Repeater Optimizer on main as MeshcoreStation 3.1.0. Automated
+optimizer and UI checks passed on the feature-branch integration commit;
+physical repeater compatibility and radio reachability still require
+validation on deployed hardware. The optimizer never changes flood limits
+without manual confirmation and verified write-back.

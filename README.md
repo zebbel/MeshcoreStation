@@ -4,8 +4,21 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.0.8. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.1.0. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.1.0
+
+- Introduce the Repeater Optimizer with passive flood-traffic analysis, per-repeater
+  roles and experimental scoped/unscoped hop-limit suggestions.
+- Add manual neighbor snapshots, optional 12h/24h neighbor polling, and
+  before/after reports for explicitly approved, verified flood-setting changes.
+- Add an independent optimizer enable switch, confirmed storage reset, loading
+  feedback, and bounded retention with disk-space safeguards. Disabling or
+  clearing the optimizer removes its data for all repeaters, but preserves battery
+  history and general repeater statistics.
+- Flood settings are never applied automatically; review reachability and keep
+  backups before upgrading.
 
 ## Changes in 3.0.8
 
@@ -77,4 +90,4 @@ No new Python runtime dependencies are introduced by this V3 refactor. Existing
 station and room databases remain in place. Keep a stopped-service backup before
 upgrading, and retain it until the station is working correctly on your hardware.
 
-See [Repeater management](docs/repeater-management.md) for supported configuration controls and the remote Console tab.
+See [Repeater management](docs/repeater-management.md) for supported configuration controls and the remote Console tab. See the [Repeater Optimizer guide](docs/README-repeater-optimization.de.md) for the optimizer's evidence limits and storage behavior.

@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.0.8** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.1.0** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -67,6 +67,16 @@ Every published application update must increment `meshcorestation.__version__`
 and update the current-version references in the README and guides. Queue several
 changes under one release version; do not publish changed application code with
 the same version as the previous release.
+
+### 3.1.0
+
+Promoted the Repeater Optimizer to main. Analyze passively observed scoped and
+unscoped traffic and review experimental flood-limit suggestions without
+automatically changing radio settings. Neighbor snapshots are manual by default;
+12h/24h polling is opt-in per repeater. Confirmed optimizer disable/reset deletes
+optimizer observations and profiles for all repeaters but preserves battery
+history and general repeater statistics. The UI includes loading feedback and
+before/after reviews of verified changes.
 
 ### 3.0.8
 
