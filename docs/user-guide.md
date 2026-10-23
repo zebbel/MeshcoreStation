@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.4.0** on `main`, including the bot, room server,
+This guide covers stable **3.4.1** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 
@@ -228,3 +228,18 @@ Room paths come only from authenticated, replay-checked room posts. Reception
 recording adds no radio traffic and does not change reply routing. Only receptions
 exposed by the companion's RX log can be recorded. Older history retains its
 original saved single path; paths from before this update cannot be recovered.
+
+
+## Known Repeaters map loading
+
+The Known Repeaters map supports large lists with clustered markers. Loading
+progress above the map stays visible while markers are added in batches of up to 100, allowing
+touch input and the close button to remain responsive. The map adjusts to dialog
+size changes. Click groups to expand them and markers to open the existing
+repeater details and actions.
+
+A failed map script, stylesheet, data request or rendering step shows an error
+and **Retry map** button. Stalled asset requests time out after 15 seconds; the
+complete initialization has a 30-second timeout. Closing the dialog stops pending
+map work. If only OpenStreetMap tiles fail, a warning appears and markers remain
+usable. Recent data caching and Command Details route selection are preserved.

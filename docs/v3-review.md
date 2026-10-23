@@ -1,6 +1,6 @@
 # V3 release notes and validation
 
-Stable version: **3.4.0**. Release branch: **main**.
+Stable version: **3.4.1**. Release branch: **main**.
 V3 originated from room-server 2.8.0rc9, commit `f5c6b77`. The former feature
 branches are retired; follow the [update guide](web-version-switching.md).
 
@@ -62,6 +62,17 @@ Recommended checks after upgrading, with a stopped-service backup available:
 7. Measure idle CPU/RAM, command latency and queue counts on the Pi Zero.
 
 ## Local validation result
+
+The 3.4.1 Known Repeaters map fix passed **440 Python tests**, **28 JavaScript UI
+suites**, the offline installation smoke check and whitespace checks. Real Leaflet
+and MarkerCluster integration tests cover 700, 703, 1,000 and 2,000 markers,
+desktop/mobile container sizes, chunk progress, zoom, popups/actions, resize,
+cancellation and reopening. Failed/stalled JS/CSS, failed/malformed API replies,
+string exceptions, deferred rendering errors and tile errors are covered. Python
+API tests verify that large marker lists are returned intact. The reproduced
+root cause was clustering before tiles without a finite map maxZoom; its string
+exception was previously rendered as an empty error. Rendered browser screenshots
+and physical mobile devices were not tested in this environment.
 
 The 3.4.0 reception-path update passed **435 Python tests**, **27 JavaScript UI
 suites**, the offline installation smoke check and whitespace checks. New coverage

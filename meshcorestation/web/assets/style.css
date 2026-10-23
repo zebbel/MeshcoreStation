@@ -103,3 +103,8 @@ button:disabled:hover { background: var(--panel); }
 .route-paths {display:grid;gap:.4rem;margin:.75rem 0;max-height:12rem;overflow:auto}
 .route-paths button {text-align:left;font-weight:400;white-space:normal}
 .route-paths button[aria-pressed="true"] {border-color:var(--accent);box-shadow:inset 3px 0 var(--accent);background:var(--panel)}
+
+/* Keep the map usable inside the scrolling dialog, including narrow screens. */
+#repeater-map, #route-map { min-height: 260px; flex-shrink: 0; }
+.map-loading, .map-ready { color: var(--text); }
+.map-error { color: var(--red); overflow-wrap: anywhere; }

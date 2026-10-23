@@ -88,3 +88,34 @@ def test_missing_metadata_bridges_endpoints_in_red(database):
     result = maps.route_map(1)
     assert result['segments'] == [{'positions': [[50, 8], [50, 9]], 'unresolved': True}]
     assert result['route_distance_km'] is None
+
+
+@pytest.mark.parametrize('count', [700, 703, 1000, 2000])
+def test_large_known_repeater_api_preserves_all_markers(database, count):
+    from flask import Flask
+    from meshcorestation.web.map_routes import register_map_routes
+    database.executemany('INSERT INTO repeaters VALUES (?,?,?,?)',
+        [(f'{i:064x}', f'Repeater {i}', 48+(i%73)*.05, 8+(i//73)*.05) for i in range(count-1)])
+    database.commit()
+    app = Flask(__name__)
+    register_map_routes(app)
+    response = app.test_client().get('/api/maps/repeaters')
+    assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
+    repeaters = [n for n in response.json['nodes'] if n['role'] == 'repeater']
+    assert len(repeaters) == count
+    assert len({n['public_key'] for n in repeaters}) == count
+    assert any(n['role'] == 'bot' for n in response.json['nodes'])
+    assert all(n['position'] for n in repeaters)
+
+
+def test_known_repeater_api_failure_is_meaningful(database):
+    from flask import Flask
+    from meshcorestation.web.map_routes import register_map_routes
+    database.execute('DROP TABLE repeaters')
+    database.commit()
+    app = Flask(__name__)
+    register_map_routes(app)
+    response = app.test_client().get('/api/maps/repeaters')
+    assert response.status_code == 503
+    assert 'Map data unavailable' in response.json['error']

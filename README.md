@@ -4,8 +4,18 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.4.0. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.4.1. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.4.1
+
+- Fix the blank Known Repeaters map: set a finite zoom limit before clustering
+  starts, even when background tiles have not been attached yet.
+- Load large maps in batches of up to 100 markers, yielding between batches.
+  Keep progress visible until initialization finishes and handle dialog resizing.
+- Wait for map styles and scripts, report asset/API/rendering failures with a
+  retry button, and stop pending work when the map closes. Keep Command Details
+  route switching, clustering, popups and repeater actions intact.
 
 ## Changes in 3.4.0
 

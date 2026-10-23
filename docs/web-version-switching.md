@@ -2,7 +2,7 @@
 
 ## Stable branch
 
-**MeshcoreStation 3.4.0** is the stable V3 release on **main**. The room server is
+**MeshcoreStation 3.4.1** is the stable V3 release on **main**. The room server is
 included. `feature/v3` and `feature/room-server` have been retired and removed
 from GitHub; their commit histories are preserved in main.
 
@@ -67,6 +67,15 @@ Every published application update must increment `meshcorestation.__version__`
 and update the current-version references in the README and guides. Queue several
 changes under one release version; do not publish changed application code with
 the same version as the previous release.
+
+### 3.4.1
+
+Fixes Known Repeaters clustering initialization before the tile layer exists.
+Large maps now use batches of up to 100 markers and retain loading progress until
+setup completes. Script and stylesheet requests are awaited, shared and retryable;
+asset timeouts, API failures and rendering failures display a message and retry
+button. No database or dependency migration is needed. Reload the dashboard after
+installing to load the updated JavaScript.
 
 ### 3.4.0
 

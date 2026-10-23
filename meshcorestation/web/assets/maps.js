@@ -1,18 +1,39 @@
 (() => {
-    const maps = new Map(), requests = new Map(), cache = new Map();
+    const maps = new Map(), requests = new Map(), cache = new Map(), observers = new Map();
     const cacheTTL = 30000;
     async function mapData(url, signal) {
         const saved=cache.get(url);
         if(saved && Date.now()-saved.at<cacheTTL){cache.delete(url);cache.set(url,saved);return saved.data;}
         const response=await fetch(url,{cache:"no-store",signal});
-        const data=await response.json();
-        if(!response.ok)throw Error(data.error||"Map data could not be loaded.");
+        let data;
+        try { data=await response.json(); }
+        catch { throw Error('Map API returned an invalid response. Reload the page and try again.'); }
+        if(!response.ok)throw Error(data?.error||`Map data request failed (HTTP ${response.status}). Try again.`);
+        if (!data || !['nodes','segments','notes','hops'].every(key => Array.isArray(data[key])))
+            throw Error('Map API returned incomplete map data. Reload the page and try again.');
         cache.set(url,{at:Date.now(),data});
         while(cache.size>32)cache.delete(cache.keys().next().value);
         return data;
     }
     function text(tag, value, className) { const el = document.createElement(tag); el.textContent = value; if (className) el.className = className; return el; }
-    function dispose(id) { if (maps.has(id)) { maps.get(id).remove(); maps.delete(id); } }
+    function dispose(id) {
+        observers.get(id)?.disconnect(); observers.delete(id);
+        if (maps.has(id)) {
+            try { maps.get(id).remove(); }
+            catch (error) { console.warn('Map cleanup failed:', error); }
+            finally { maps.delete(id); }
+        }
+    }
+    function frame(signal) {
+        return new Promise((resolve, reject) => {
+            if (signal.aborted) { resolve(false); return; }
+            let handle;
+            const abort = () => { window.cancelAnimationFrame?.(handle); resolve(false); };
+            signal.addEventListener('abort', abort, {once:true});
+            try { handle = requestAnimationFrame(() => { signal.removeEventListener('abort', abort); resolve(!signal.aborted); }); }
+            catch (error) { signal.removeEventListener('abort', abort); reject(error); }
+        });
+    }
     function describe(node) {
         const box = document.createElement('div');
         box.append(text('strong', node.label), text('p', node.role === 'repeater' && node.order ? `Repeater hop ${node.order}` : node.role));
@@ -34,11 +55,25 @@
         const summary = id === 'route-map' && document.getElementById('route-summary');
         if (summary) summary.replaceChildren(text('p', 'Loading distances and packet route…'));
         if (summary) document.getElementById('route-paths')?.replaceChildren();
-        dispose(id); canvas.replaceChildren(); notes.replaceChildren(text('p', 'Loading map…'));
+        dispose(id); canvas.replaceChildren();
+        const loading = text('p', 'Loading map…', 'map-loading');
+        loading.setAttribute('role','status');
+        notes.replaceChildren(loading); canvas.setAttribute('aria-busy','true');
+        let timedOut = false, failed = false;
+        function fail(error) {
+            if (failed || requests.get(id) !== controller || (controller.signal.aborted && !timedOut)) return;
+            failed = true; controller.abort();
+            dispose(id); canvas.replaceChildren(); canvas.setAttribute('aria-busy','false');
+            const message = timedOut ? 'Map loading timed out. Check the connection and try again.' : String(error?.message || error || 'Map initialization failed. Try again.');
+            const failure = text('p', message, 'map-error'); failure.setAttribute('role','alert');
+            const retry = text('button','Retry map'); retry.type='button'; retry.addEventListener('click',()=>load(id,url,notesId));
+            notes.replaceChildren(failure,retry);
+            if (summary && summary.textContent === 'Loading distances and packet route…') summary.replaceChildren(text('p', 'Distances and packet route could not be loaded.'));
+        }
+        const timeout = setTimeout(() => { timedOut = true; fail(); }, 30000);
         try {
             // Route details must not wait for map scripts or background tiles.
-            const needLibrary = !window.L || (id === 'repeater-map' && !window.L.markerClusterGroup);
-            const library = needLibrary ? window.meshcorestationLoadMapLibrary({clustering:id==='repeater-map'}) : Promise.resolve();
+            const library = window.meshcorestationLoadMapLibrary({clustering:id==='repeater-map'});
             // Attach a rejection handler immediately while route data is fetched.
             const ready=library.then(()=>null,error=>error);
             const payload = await mapData(url, controller.signal);
@@ -51,6 +86,7 @@
                 const tileWarning = notes.querySelector('.tile-warning');
                 notes.replaceChildren(...data.notes.map(note => text('p', note)));
                 if (tileWarning) notes.append(tileWarning);
+                if (canvas.getAttribute('aria-busy') === 'true') notes.prepend(loading);
                 if (summary) notes.prepend(text('p', 'S = sender · numbered markers = repeaters · B = bot. Blue = resolved route; red dashed = unresolved section. Arrows point toward the bot.', 'map-legend'));
                 if (summary) {
                     const distance = value => typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} km` : 'Not available';
@@ -84,7 +120,9 @@
             if(controller.signal.aborted)return;
             if(libraryError)throw libraryError;
             if (!window.L) throw new Error('Map library could not be loaded. Refresh the page and try again.');
-            const map = L.map(canvas, { scrollWheelZoom: true }); maps.set(id, map);
+            // MarkerCluster needs a finite zoom limit before background tiles exist.
+            if (!await frame(controller.signal)) return;
+            const map = L.map(canvas, { scrollWheelZoom: true, maxZoom: 19 }); maps.set(id, map);
             // Set final bounds before attaching OSM tiles: no wasted requests at the default location.
             const bounds = alternatives.flatMap(route => route.nodes.map(node => node.position));
             if (bounds.length) map.fitBounds(bounds, { padding: [35, 35], maxZoom: 14 });
@@ -111,38 +149,67 @@
                     }
                 }
 
-                for (const node of data.nodes) {
+                if (!clusters) for (const node of data.nodes) {
                     const endpoint = summary && node.role !== 'repeater';
                     if (endpoint && endpointsDrawn) continue;
-                    const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
-                    const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
-                    const layer = L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 });
-                    if (clusters && node.role === 'repeater') layer.addTo(clusters);
-                    else if (endpoint) layer.addTo(map);
+                    const layer = markerFor(node);
+                    if (endpoint) layer.addTo(map);
                     else add(layer);
-                    layer.bindPopup(() => describe(node));
                 }
                 endpointsDrawn = true;
             }
+            function markerFor(node) {
+                const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
+                const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
+                return L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).bindPopup(() => describe(node));
+            }
             redraw = draw;
             draw();
+            if (clusters) {
+                // Bulk cluster insertion avoids an icon/layout update per marker.
+                // Small batches yield to touch input, close events and painting.
+                for (let offset=0; offset<data.nodes.length; offset+=100) {
+                    if (controller.signal.aborted) return;
+                    const batch = [];
+                    for (const node of data.nodes.slice(offset,offset+100)) {
+                        const marker = markerFor(node);
+                        if (node.role === 'repeater') batch.push(marker);
+                        else add(marker);
+                    }
+                    clusters.addLayers(batch);
+                    loading.textContent = `Loading map… ${Math.min(offset+100,data.nodes.length)} / ${data.nodes.length} markers`;
+                    await new Promise(resolve => setTimeout(resolve,0));
+                }
+            }
             if (clusters) notes.prepend(text('p', 'Numbered circles group nearby repeaters. Zoom in or click a group to expand it; overlapping markers spread apart when expanded.', 'map-legend'));
             if (!summary) notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
             if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));
-            requestAnimationFrame(() => {
-                if (maps.get(id) !== map) return;
-                map.invalidateSize();
-                if (bounds.length) map.fitBounds(bounds, {padding:[35,35],maxZoom:14});
-                // Draw the useful overlay first; request tiles only for the final bounds.
-                requestAnimationFrame(() => {
-                    if(maps.get(id)!==map)return;
-                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
-                        if (!notes.querySelector('.tile-warning')) notes.append(text('p', 'Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap.', 'tile-warning'));
-                    }).addTo(map);
+            if (!await frame(controller.signal) || maps.get(id) !== map) return;
+            map.invalidateSize();
+            if (bounds.length) map.fitBounds(bounds, {padding:[35,35],maxZoom:14});
+            // Draw overlays before tiles; await these steps so failures are visible.
+            if (!await frame(controller.signal) || maps.get(id) !== map) return;
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
+                if (!notes.querySelector('.tile-warning')) notes.append(text('p', 'Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap.', 'tile-warning'));
+            }).addTo(map);
+            if (window.ResizeObserver) {
+                const observer = new ResizeObserver(() => {
+                    if (maps.get(id) === map && canvas.clientWidth && canvas.clientHeight) {
+                        try { map.invalidateSize({pan:false}); } catch (error) { fail(error); }
+                    }
                 });
-            });
-        } catch (error) { if (error.name !== 'AbortError' && !controller.signal.aborted) { notes.replaceChildren(text('p', error.message)); if (summary && summary.textContent === 'Loading distances and packet route…') summary.replaceChildren(text('p', 'Distances and packet route could not be loaded.')); } }
+                observers.set(id,observer); observer.observe(canvas);
+            }
+            loading.remove();
+            notes.prepend(text('p', `Map ready · ${data.nodes.length} markers.`, 'map-ready'));
+        } catch (error) {
+            fail(error);
+        } finally {
+            clearTimeout(timeout);
+            if (requests.get(id) === controller) canvas.setAttribute('aria-busy','false');
+        }
     }
+
     function cleanup(id) { requests.get(id)?.abort(); dispose(id); }
     document.addEventListener('click', event => {
         const button = event.target.closest('button');

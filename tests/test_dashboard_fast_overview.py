@@ -37,6 +37,9 @@ def test_map_libraries_are_lazy_but_still_served():
     assert client.get("/assets/vendor/leaflet.js").status_code == 200
     assert client.get("/assets/vendor/leaflet.markercluster.js").status_code == 200
     assert "/assets/vendor/leaflet.css" not in page
+    for name in ('leaflet.css','MarkerCluster.css'):
+        stylesheet=client.get('/assets/vendor/'+name)
+        assert stylesheet.status_code==200 and 'text/css' in stylesheet.content_type
     for path in ("/rooms", "/repeater-optimizer", "/repeater-advisor"):
         tool=client.get(path)
         assert tool.status_code==200
