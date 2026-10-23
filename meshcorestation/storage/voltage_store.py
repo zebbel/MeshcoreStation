@@ -167,6 +167,15 @@ def latest_temperature(db, cfg):
     return dict(row) if row else None
 
 
+def latest_temperature_reading(db, cfg):
+    """Last successful saved temperature for the configured repeater/channel."""
+    row = db.execute("""SELECT * FROM voltage_samples WHERE public_key=? AND temperature_channel=?
+                        AND temperature IS NOT NULL AND temperature_error IS NULL
+                        ORDER BY sampled_at DESC,id DESC LIMIT 1""",
+                     (cfg['public_key'],cfg['temperature_channel'])).fetchone()
+    return dict(row) if row else None
+
+
 def latest_reading(db, cfg):
     """Last successful reading for this repeater and telemetry channel."""
     row = db.execute('''SELECT * FROM voltage_samples WHERE public_key=? AND voltage_channel=?

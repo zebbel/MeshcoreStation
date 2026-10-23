@@ -20,6 +20,7 @@ CATALOG = {
     'node_public_key': ('Companion', 'Connected companion public key', 'cd' * 32, None),
     'battery_voltage': ('Battery', 'Companion voltage, without V', 3.86, 2),
     'battery_percent': ('Battery', 'Approximate 1S LiPo charge, without %', 52, None),
+    'repeater_temperature': ('Repeater telemetry', 'Latest saved temperature of the default (first managed) repeater, in °C without unit; no radio read', 24.6, 1),
     'uptime': ('Status', 'Companion uptime', '2d6h', None),
     'queue_length': ('Status', 'Companion transmit queue', 0, None),
     'error_count': ('Status', 'Companion error count/flags when reported', 0, None),

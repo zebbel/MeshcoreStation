@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.3.1** on `main`, including the bot, room server,
+This guide covers stable **3.3.2** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 
@@ -191,3 +191,18 @@ stored reading used by the report and the currently configured temperature
 channel; unavailable values show `unknown`. It adds no radio request. Templates
 that omit it produce their existing messages, on the existing schedule and to
 the existing destination.
+
+
+### Repeater temperature in command replies
+
+The command editor also offers `{repeater_temperature}` under **Repeater
+telemetry**, including numeric formatting such as `{repeater_temperature:.1f} °C`.
+It reads the last successful saved temperature of the **default repeater**: the
+first managed repeater in the server's management list. The selection in an
+individual browser does not change this source. With multiple repeaters, the
+placeholder does not choose whichever repeater was heard most recently.
+
+Only the configured temperature LPP channel is used. Missing readings show
+`unknown`; failed later reads do not replace the last successful value. This
+placeholder adds no telemetry or status radio request to command processing.
+The editor preview uses example data, as with other command placeholders.

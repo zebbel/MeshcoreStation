@@ -1,6 +1,7 @@
 """Collect only the values needed by a reply, without guessing missing readings."""
 import math
 import re
+import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from meshcorestation.commands.templates import Distance, UnavailableMeasurement, command_list
@@ -46,6 +47,18 @@ async def collect(bot, needed, message, rx, commands, result=None):
                 values['scope_name'] = companion._get_reply_scope(rx)[0]
             except (ValueError, TypeError, KeyError):
                 values['scope_name'] = None
+    if 'repeater_temperature' in needed:
+        # Use persisted telemetry, never add a radio request to a command reply.
+        from meshcorestation.storage.voltage_store import config, latest_temperature_reading
+        values['repeater_temperature'] = None
+        try:
+            cfg = config(db.db)
+            if cfg['public_key'] and cfg.get('managed', 1):
+                sample = latest_temperature_reading(db.db, cfg)
+                if sample:
+                    values['repeater_temperature'] = finite(sample['temperature'])
+        except (sqlite3.Error, OSError):
+            bot.logger.warning('Command placeholder: saved repeater temperature unavailable.')
     own = {}
     if needed & IDENTITY:
         try:

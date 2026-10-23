@@ -4,8 +4,15 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.3.1. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.3.2. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.3.2
+
+- Add `{repeater_temperature}` to command replies, insertion buttons and preview.
+  It uses the last successful saved temperature for the default (first managed)
+  repeater and its configured temperature LPP channel, without a radio request.
+- Use thinner, normal-weight selected chart values while keeping the 18px size.
 
 ## Changes in 3.3.1
 
