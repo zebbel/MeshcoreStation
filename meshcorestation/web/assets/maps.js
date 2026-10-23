@@ -33,6 +33,7 @@
         const canvas = document.getElementById(id), notes = document.getElementById(notesId);
         const summary = id === 'route-map' && document.getElementById('route-summary');
         if (summary) summary.replaceChildren(text('p', 'Loading distances and packet route…'));
+        if (summary) document.getElementById('route-paths')?.replaceChildren();
         dispose(id); canvas.replaceChildren(); notes.replaceChildren(text('p', 'Loading map…'));
         try {
             // Route details must not wait for map scripts or background tiles.
@@ -40,55 +41,98 @@
             const library = needLibrary ? window.meshcorestationLoadMapLibrary({clustering:id==='repeater-map'}) : Promise.resolve();
             // Attach a rejection handler immediately while route data is fetched.
             const ready=library.then(()=>null,error=>error);
-            const data = await mapData(url, controller.signal);
-            if (controller.signal.aborted) return;
-            notes.replaceChildren(...data.notes.map(note => text('p', note)));
-            if (summary) {
-                const distance = value => typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} km` : 'Not available';
-                const sequence = [data.sender_name || 'Sender', ...data.hops.map(hop => hop.status === 'Resolved' || hop.status === 'Coordinates missing' ? hop.name : `${hop.hash} (${hop.status})`), data.bot_name || 'Bot'];
-                if (!data.path_valid) sequence.splice(1, 0, 'Route not recorded / invalid');
-                summary.replaceChildren(
-                    text('p', `Direct distance: ${distance(data.direct_distance_km)} · Route distance: ${data.route_distance_lower_bound ? '≥ ' : ''}${distance(data.route_distance_km)}`, 'route-distances'),
-                    text('p', sequence.join(' → '), 'route-sequence'));
-                if (data.path_valid && !data.hops.length) summary.append(text('p', 'Direct packet · no repeaters', 'muted'));
+            const payload = await mapData(url, controller.signal);
+            const alternatives = payload.reception_paths || [payload];
+            let data = alternatives[0], redraw = null;
+            const selector = summary && document.getElementById('route-paths');
+            if (selector) selector.replaceChildren();
+            function showRoute() {
+                if (controller.signal.aborted) return;
+                const tileWarning = notes.querySelector('.tile-warning');
+                notes.replaceChildren(...data.notes.map(note => text('p', note)));
+                if (tileWarning) notes.append(tileWarning);
+                if (summary) notes.prepend(text('p', 'S = sender · numbered markers = repeaters · B = bot. Blue = resolved route; red dashed = unresolved section. Arrows point toward the bot.', 'map-legend'));
+                if (summary) {
+                    const distance = value => typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} km` : 'Not available';
+                    const sequence = [data.sender_name || 'Sender', ...data.hops.map(hop => hop.status === 'Resolved' || hop.status === 'Coordinates missing' ? hop.name : `${hop.hash} (${hop.status})`), data.bot_name || 'Bot'];
+                    if (!data.path_valid) sequence.splice(1, 0, 'Route not recorded / invalid');
+                    summary.replaceChildren(
+                        text('p', `Direct distance: ${distance(data.direct_distance_km)} · Route distance: ${data.route_distance_lower_bound ? '≥ ' : ''}${distance(data.route_distance_km)}`, 'route-distances'),
+                        text('p', sequence.join(' → '), 'route-sequence'));
+                    if (data.path_valid && !data.hops.length) summary.append(text('p', 'Direct packet · no repeaters', 'muted'));
+                }
             }
+            showRoute();
+            if (selector) alternatives.forEach((route, index) => {
+                const rx = route.reception || {}, button = text('button', '');
+                button.type = 'button';
+                const metric = (value, unit) => typeof value === 'number' ? `${value} ${unit}` : 'Unknown';
+                const hops = route.path_valid ? `${route.hops.length} hops` : 'Unknown / incomplete path';
+                const unresolved = route.hops.some(hop => hop.status !== 'Resolved') ? ' · Unresolved: ' + route.hops.filter(hop => hop.status !== 'Resolved').map(hop => hop.status).join(', ') : '';
+                button.textContent = `Path ${index+1} · ${hops}${unresolved} · RSSI ${metric(rx.rssi,'dBm')} · SNR ${metric(rx.snr,'dB')} · ${rx.recv_time == null ? 'Time unknown' : window.meshcorestationFormatDate(rx.recv_time)}${rx.observations?.length > 1 ? ` · ${rx.observations.length} receptions` : ''}`;
+                button.setAttribute('aria-pressed', String(index === 0));
+                button.addEventListener('click', () => {
+                    if (controller.signal.aborted) return;
+                    data = route;
+                    for (const item of selector.children) item.setAttribute('aria-pressed', String(item === button));
+                    showRoute();
+                    if (redraw) redraw();
+                });
+                selector.append(button);
+            });
             const libraryError=await ready;
             if(controller.signal.aborted)return;
             if(libraryError)throw libraryError;
             if (!window.L) throw new Error('Map library could not be loaded. Refresh the page and try again.');
             const map = L.map(canvas, { scrollWheelZoom: true }); maps.set(id, map);
             // Set final bounds before attaching OSM tiles: no wasted requests at the default location.
-            if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), { padding: [35, 35], maxZoom: 14 });
+            const bounds = alternatives.flatMap(route => route.nodes.map(node => node.position));
+            if (bounds.length) map.fitBounds(bounds, { padding: [35, 35], maxZoom: 14 });
             else map.setView([51, 10], 5);
-            for (const segment of data.segments) {
-                const line = segment.positions, color = segment.unresolved ? '#ef5350' : '#4d8eff';
-                L.polyline(line, { color, weight: 4, opacity: 0.9, dashArray: segment.unresolved ? '9 8' : null }).addTo(map);
-                // Mercator midpoint and screen angle keep the arrow on the rendered line at every zoom.
-                const start = map.project(line[0], 0), end = map.project(line[1], 0);
-                if (Math.hypot(end.x - start.x, end.y - start.y) > 1e-9) {
-                    const midpoint = map.unproject([(start.x + end.x) / 2, (start.y + end.y) / 2], 0);
-                    const arrow = text('span', '', 'route-direction-arrow');
-                    arrow.style.borderLeftColor = color;
-                    arrow.style.transform = `rotate(${Math.atan2(end.y - start.y, end.x - start.x)}rad)`;
-                    arrow.setAttribute('aria-hidden', 'true');
-                    const icon = L.divIcon({html: arrow, className: 'route-arrow-icon', iconSize: [20, 20], iconAnchor: [10, 10]});
-                    L.marker(midpoint, {icon, interactive: false, keyboard: false, zIndexOffset: -100}).addTo(map);
-                }
-            }
-            if (summary) notes.prepend(text('p', 'Blue = resolved route · red dashed = unresolved section between known positions. Arrows point from sender toward bot.', 'map-legend'));
             const clusters = id === 'repeater-map' ? window.meshcorestationMarkerClusters(map) : null;
-            for (const node of data.nodes) {
-                const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
-                const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
-                L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).addTo(clusters && node.role === 'repeater' ? clusters : map).bindPopup(() => describe(node));
+            let overlays = [], endpointsDrawn = false;
+            const add = layer => { overlays.push(layer); return layer.addTo(map); };
+            function draw() {
+                for (const layer of overlays) map.removeLayer(layer);
+                overlays = [];
+                for (const segment of data.segments) {
+                    const line = segment.positions, color = segment.unresolved ? '#ef5350' : '#4d8eff';
+                    add(L.polyline(line, { color, weight: 4, opacity: 0.9, dashArray: segment.unresolved ? '9 8' : null }));
+                    // Mercator midpoint and screen angle keep the arrow on the rendered line at every zoom.
+                    const start = map.project(line[0], 0), end = map.project(line[1], 0);
+                    if (Math.hypot(end.x - start.x, end.y - start.y) > 1e-9) {
+                        const midpoint = map.unproject([(start.x + end.x) / 2, (start.y + end.y) / 2], 0);
+                        const arrow = text('span', '', 'route-direction-arrow');
+                        arrow.style.borderLeftColor = color;
+                        arrow.style.transform = `rotate(${Math.atan2(end.y - start.y, end.x - start.x)}rad)`;
+                        arrow.setAttribute('aria-hidden', 'true');
+                        const icon = L.divIcon({html: arrow, className: 'route-arrow-icon', iconSize: [20, 20], iconAnchor: [10, 10]});
+                        add(L.marker(midpoint, {icon, interactive: false, keyboard: false, zIndexOffset: -100}));
+                    }
+                }
+
+                for (const node of data.nodes) {
+                    const endpoint = summary && node.role !== 'repeater';
+                    if (endpoint && endpointsDrawn) continue;
+                    const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
+                    const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
+                    const layer = L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 });
+                    if (clusters && node.role === 'repeater') layer.addTo(clusters);
+                    else if (endpoint) layer.addTo(map);
+                    else add(layer);
+                    layer.bindPopup(() => describe(node));
+                }
+                endpointsDrawn = true;
             }
+            redraw = draw;
+            draw();
             if (clusters) notes.prepend(text('p', 'Numbered circles group nearby repeaters. Zoom in or click a group to expand it; overlapping markers spread apart when expanded.', 'map-legend'));
-            notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
+            if (!summary) notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
             if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));
             requestAnimationFrame(() => {
                 if (maps.get(id) !== map) return;
                 map.invalidateSize();
-                if (data.nodes.length) map.fitBounds(data.nodes.map(node => node.position), {padding:[35,35],maxZoom:14});
+                if (bounds.length) map.fitBounds(bounds, {padding:[35,35],maxZoom:14});
                 // Draw the useful overlay first; request tiles only for the final bounds.
                 requestAnimationFrame(() => {
                     if(maps.get(id)!==map)return;

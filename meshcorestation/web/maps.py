@@ -59,73 +59,88 @@ def route_map(log_id):
         rows = [dict(r) for r in db.execute("SELECT * FROM repeaters")]
         sender = point(record, "sender", record.get("sender") or "Sender", "sender_", 0)
         bot = bot_point(db)
-        notes = ["Sender → numbered repeaters → bot. Lines show recorded hop order, not the physical radio signal path.", "Sender uses the snapshot saved with this command. Repeaters and bot use latest saved positions, which may differ for older commands."]
-        if not sender["position"]:
-            notes.append("No sender position snapshot in this entry; today's sender position is not substituted.")
-        elif sender["updated_at"] is not None:
-            notes.append("Sender position saved: " + data.timestamp(sender["updated_at"]))
-            try:
-                age = float(record["recv_time"]) - float(sender["updated_at"])
-                notes.append(f"Sender position age at reception: {max(0, int(age)):,} seconds." if age >= 0 else "Sender position timestamp is later than reception; check the clocks.")
-            except (KeyError, TypeError, ValueError, OverflowError):
-                pass
-        if not bot["position"]:
-            notes.append("Bot position is not available. Restart the updated bot to save it.")
-        chain, hops = [sender], []
-        path_valid = True
+        from meshcorestation.storage import reception_store
+        has_paths = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='command_rx_bindings'").fetchone()
+        recorded = reception_store.paths(db, log_id) if has_paths else []
+        variants = recorded or [dict(id='legacy', rx_path=record.get('rx_path'),
+            path_len=record.get('path_len'), path_hash_size=record.get('path_hash_size'),
+            rssi=record.get('rssi'), snr=record.get('snr'), recv_time=record.get('recv_time'), observations=[])]
+        routes = []
+        for variant in variants:
+            route = build_route(dict(record, **{k: variant[k] for k in ('rx_path', 'path_len', 'path_hash_size')}), rows, sender, bot)
+            route['reception'] = variant
+            routes.append(route)
+        return dict(routes[0], reception_paths=routes)
+
+
+def build_route(record, rows, sender, bot):
+    notes = ["Sender → numbered repeaters → bot. Lines show recorded hop order, not the physical radio signal path.", "Sender uses the snapshot saved with this command. Repeaters and bot use latest saved positions, which may differ for older commands."]
+    if not sender["position"]:
+        notes.append("No sender position snapshot in this entry; today's sender position is not substituted.")
+    elif sender["updated_at"] is not None:
+        notes.append("Sender position saved: " + data.timestamp(sender["updated_at"]))
         try:
-            raw = record.get("rx_path")
-            count = int(record["path_len"])
-            count = 0 if count == 255 else count & 63 if count > 63 else count
-            if not 0 <= count <= 63:
-                raise ValueError()
-            # Missing RX metadata is acceptable only for an explicitly direct packet.
-            if count == 0:
-                if raw not in (None, "", b""):
-                    raise ValueError()
-                identifiers = []
-            else:
-                size = int(record["path_hash_size"])
-                if size not in (1, 2, 3):
-                    raise ValueError()
-                path = bytes.fromhex(raw) if isinstance(raw, str) else bytes(raw)
-                if len(path) != count * size:
-                    raise ValueError()
-                identifiers = [path[i:i + size].hex() for i in range(0, len(path), size)]
-            for order, prefix in enumerate(identifiers, 1):
-                matches = [r for r in rows if str(r.get("public_key") or "").lower().startswith(prefix)]
-                node = point(matches[0], "repeater", matches[0].get("name") or prefix, order=order) if len(matches) == 1 else point({}, "repeater", prefix, order=order)
-                state = "Resolved" if node["position"] else "Coordinates missing" if len(matches) == 1 else f"Ambiguous: {len(matches)} matches" if matches else "Unknown repeater"
-                hops.append({"number": order, "hash": prefix, "name": node["label"], "status": state})
-                chain.append(node)
-            if not identifiers:
-                notes.append("Direct packet: no repeater hops recorded.")
+            age = float(record["recv_time"]) - float(sender["updated_at"])
+            notes.append(f"Sender position age at reception: {max(0, int(age)):,} seconds." if age >= 0 else "Sender position timestamp is later than reception; check the clocks.")
         except (KeyError, TypeError, ValueError, OverflowError):
-            path_valid = False
-            notes.append("Received path metadata is missing or invalid; red dashed connections indicate an unknown route.")
-            chain.append(point({}, "gap", "Missing path"))
-        chain.append(bot)
-        segments = []
-        previous = None
-        for index, node in enumerate(chain):
-            if not node["position"]:
-                continue
-            if previous is not None:
-                previous_index, previous_node = previous
-                segments.append({"positions": [previous_node["position"], node["position"]],
-                                 "unresolved": index - previous_index > 1})
-            previous = index, node
-        if any(h["status"] != "Resolved" for h in hops):
-            notes.append("Red dashed lines bridge unknown, ambiguous or unlocated hops between known positions; they do not locate the missing repeaters.")
-        direct = distance_km(sender["position"], bot["position"]) if sender["position"] and bot["position"] else None
-        route = None
-        incomplete = any(not node["position"] for node in chain)
-        if direct is not None and path_valid:
-            located = [node["position"] for node in chain if node["position"]]
-            route = sum(distance_km(a, b) for a, b in zip(located, located[1:]))
-            if incomplete:
-                notes.append("Route distance is a lower bound through confirmed waypoints; red dashed connections bridge unresolved hops without guessing their positions.")
-        return {"nodes": [n for n in chain if n["position"]], "segments": segments, "hops": hops, "notes": notes,
-                "direct_distance_km": direct, "route_distance_km": route,
-                "route_distance_lower_bound": route is not None and incomplete,
-                "path_valid": path_valid, "sender_name": sender["label"], "bot_name": bot["label"]}
+            pass
+    if not bot["position"]:
+        notes.append("Bot position is not available. Restart the updated bot to save it.")
+    chain, hops = [sender], []
+    path_valid = True
+    try:
+        raw = record.get("rx_path")
+        count = int(record["path_len"])
+        count = 0 if count == 255 else count & 63 if count > 63 else count
+        if not 0 <= count <= 63:
+            raise ValueError()
+        # Missing RX metadata is acceptable only for an explicitly direct packet.
+        if count == 0:
+            if raw not in (None, "", b""):
+                raise ValueError()
+            identifiers = []
+        else:
+            size = int(record["path_hash_size"])
+            if size not in (1, 2, 3):
+                raise ValueError()
+            path = bytes.fromhex(raw) if isinstance(raw, str) else bytes(raw)
+            if len(path) != count * size:
+                raise ValueError()
+            identifiers = [path[i:i + size].hex() for i in range(0, len(path), size)]
+        for order, prefix in enumerate(identifiers, 1):
+            matches = [r for r in rows if str(r.get("public_key") or "").lower().startswith(prefix)]
+            node = point(matches[0], "repeater", matches[0].get("name") or prefix, order=order) if len(matches) == 1 else point({}, "repeater", prefix, order=order)
+            state = "Resolved" if node["position"] else "Coordinates missing" if len(matches) == 1 else f"Ambiguous: {len(matches)} matches" if matches else "Unknown repeater"
+            hops.append({"number": order, "hash": prefix, "name": node["label"], "status": state})
+            chain.append(node)
+        if not identifiers:
+            notes.append("Direct packet: no repeater hops recorded.")
+    except (KeyError, TypeError, ValueError, OverflowError):
+        path_valid = False
+        notes.append("Received path metadata is missing or invalid; red dashed connections indicate an unknown route.")
+        chain.append(point({}, "gap", "Missing path"))
+    chain.append(bot)
+    segments = []
+    previous = None
+    for index, node in enumerate(chain):
+        if not node["position"]:
+            continue
+        if previous is not None:
+            previous_index, previous_node = previous
+            segments.append({"positions": [previous_node["position"], node["position"]],
+                             "unresolved": index - previous_index > 1})
+        previous = index, node
+    if any(h["status"] != "Resolved" for h in hops):
+        notes.append("Red dashed lines bridge unknown, ambiguous or unlocated hops between known positions; they do not locate the missing repeaters.")
+    direct = distance_km(sender["position"], bot["position"]) if sender["position"] and bot["position"] else None
+    route = None
+    incomplete = any(not node["position"] for node in chain)
+    if direct is not None and path_valid:
+        located = [node["position"] for node in chain if node["position"]]
+        route = sum(distance_km(a, b) for a, b in zip(located, located[1:]))
+        if incomplete:
+            notes.append("Route distance is a lower bound through confirmed waypoints; red dashed connections bridge unresolved hops without guessing their positions.")
+    return {"nodes": [n for n in chain if n["position"]], "segments": segments, "hops": hops, "notes": notes,
+            "direct_distance_km": direct, "route_distance_km": route,
+            "route_distance_lower_bound": route is not None and incomplete,
+            "path_valid": path_valid, "sender_name": sender["label"], "bot_name": bot["label"]}

@@ -255,3 +255,56 @@ def test_room_ping_uses_exact_rx_packet_metadata_and_signed_signal(tmp_path):
     assert worker.queue.empty()
     worker.on_rx(SimpleNamespace(payload={'raw_hex':'01'}))
     assert worker.queue.empty()
+
+
+def test_duplicate_room_paths_recorded_without_duplicate_command(mesh, tmp_path):
+    from unittest.mock import Mock
+    from meshcorestation.storage.database import Database
+    from meshcorestation.storage import reception_store as store
+    import sqlite3
+    service, rid, endpoint, writer, reader, now = mesh
+    secret = login(endpoint, writer)
+    first = datagram(writer, endpoint.identity.public, secret, 2, u32(2)+b'\0ping', (0,b''))
+    first.route, first.path_code, first.path = 1, 1, b'\xaa'
+    second = Packet.parse(first.encode())
+    second.path_code, second.path = 2, b'\xbb\xcc'
+    db = Database.__new__(Database)
+    db.logger = Mock()
+    db.db = sqlite3.connect(tmp_path/'station.db')
+    db.db.row_factory = sqlite3.Row
+    db.create_database()
+    async def scenario():
+        executions = []
+        companion = SimpleNamespace(database=db, logger=Mock(), room_bot_id=rid,
+            bot=SimpleNamespace(match_command=lambda text: {'trigger':'ping'} if text == 'ping' else None),
+            control_lock=asyncio.Lock())
+        async def on_post(room, post, rx):
+            executions.append(post)
+            command = db.add_logger(dict(name='Alice',message=post['text'],room_id=room),rx,'unscoped','pong')
+            store.bind(db.db, store.room_identity(room,post),command,'room')
+        worker = RoomWorker(companion,service,on_post)
+        worker.endpoints[rid] = endpoint
+        async def transmit(*args): pass
+        worker.transmit = transmit
+        worker.command_task = asyncio.create_task(worker.run_commands())
+        task = asyncio.create_task(worker.run())
+        try:
+            worker.queue.put_nowait((first.encode(),3,-100))
+            worker.queue.put_nowait((second.encode(),5,-90))
+            async def recorded():
+                while db.db.execute('SELECT count(*) FROM command_receptions').fetchone()[0] < 2 or not executions:
+                    await asyncio.sleep(.01)
+            await asyncio.wait_for(recorded(),1)
+            assert len(executions) == 1
+            paths = store.paths(db.db,1)
+            assert [p['rx_path'] for p in paths] == ['aa','bbcc']
+            assert [p['snr'] for p in paths] == [3,5]
+            assert db.db.execute('SELECT count(*) FROM logger').fetchone()[0] == 1
+            assert not worker.error
+        finally:
+            task.cancel()
+            await asyncio.gather(task,return_exceptions=True)
+    try:
+        asyncio.run(scenario())
+    finally:
+        db.close()

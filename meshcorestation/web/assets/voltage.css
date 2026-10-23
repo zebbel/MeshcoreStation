@@ -40,4 +40,4 @@
 #temperature-chart text { font: 12px system-ui; fill: var(--muted); }
 .telemetry-chart-svg { cursor: crosshair; }
 .telemetry-selected-point { fill: var(--panel); stroke: var(--accent); stroke-width: 4; }
-#voltage-chart svg text.telemetry-selected-value, #temperature-chart svg text.telemetry-selected-value, .battery-chart svg text.telemetry-selected-value { font: 400 18px system-ui, sans-serif; fill: var(--text); stroke: var(--panel); stroke-width: 1.5px; stroke-linejoin: round; paint-order: stroke fill; pointer-events: none; }
+#voltage-chart svg text.telemetry-selected-value, #temperature-chart svg text.telemetry-selected-value, .battery-chart svg text.telemetry-selected-value { font: 300 18px system-ui, sans-serif; fill: var(--text); stroke: var(--panel); stroke-width: 0.75px; stroke-linejoin: round; paint-order: stroke fill; pointer-events: none; }

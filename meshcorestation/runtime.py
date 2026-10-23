@@ -145,6 +145,10 @@ class Runtime:
         command = self.companion.bot.match_command(text)
         if command is None:
             return
+        from meshcorestation.storage import reception_store
+        identity = reception_store.room_identity(room, post)
+        if reception_store.existing(self.database.db, identity) is not None:
+            return
         name = await self.companion.room_sender_name(post.get('author'))
         direct = rx.get('path_len') is None
         message = {'message': text, 'raw_text': text, 'name': name,
@@ -161,6 +165,7 @@ class Runtime:
         # The regular channel handler already logs through this table. Use the
         # same history for authenticated room messages, not the room posts table.
         command_id = self.database.add_logger(message, rx, rx.get('room_scope_name') or 'unknown', '')
+        reception_store.bind(self.database.db, identity, command_id, 'room')
         from meshcorestation.commands.delivery import ReplyDelivery
         delivery = ReplyDelivery()
 

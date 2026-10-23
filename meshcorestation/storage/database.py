@@ -97,6 +97,8 @@ class Database:
 
         from meshcorestation.storage.reply_store import initialize as initialize_replies
         initialize_replies(self.db)
+        from meshcorestation.storage.reception_store import initialize as initialize_receptions
+        initialize_receptions(self.db)
         self.db.commit()
 
 ################################################

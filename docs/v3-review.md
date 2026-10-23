@@ -1,6 +1,6 @@
 # V3 release notes and validation
 
-Stable version: **3.3.2**. Release branch: **main**.
+Stable version: **3.4.0**. Release branch: **main**.
 V3 originated from room-server 2.8.0rc9, commit `f5c6b77`. The former feature
 branches are retired; follow the [update guide](web-version-switching.md).
 
@@ -62,6 +62,15 @@ Recommended checks after upgrading, with a stopped-service backup available:
 7. Measure idle CPU/RAM, command latency and queue counts on the Pi Zero.
 
 ## Local validation result
+
+The 3.4.0 reception-path update passed **435 Python tests**, **27 JavaScript UI
+suites**, the offline installation smoke check and whitespace checks. New coverage
+includes authenticated channel duplicates before/during/after execution, scope
+isolation, additive/idempotent migration, room retry observations, legacy paths,
+route distances, late reception and clock changes. Real Leaflet tests under
+jsdom verify path selection during script loading, overlay/arrow updates, fixed
+endpoint markers, unchanged view and map/tile reuse. Radio hardware and rendered
+browser screenshots were not tested in this environment.
 
 The V3 code passed **280 Python tests** and statistics UI checks before its
 promotion to main. Earlier checks covered room, update and firmware UI behavior,

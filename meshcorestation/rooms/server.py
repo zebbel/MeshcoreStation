@@ -31,6 +31,7 @@ class RoomEndpoint:
         self.last_advert = 0
         self.received = self.sent = 0
         self.new_posts = []
+        self.received_posts = []
         self.auth_revision = service.config(room)['auth_revision']
 
     def refresh_auth(self):
@@ -182,6 +183,7 @@ class RoomEndpoint:
                 text_bytes = data[5:].split(b'\0', 1)[0]
                 text = text_bytes.decode('utf-8')
                 post, created = self.service.post(self.room, key, timestamp, text, return_created=True)
+                self.received_posts.append(post)
                 if created:
                     self.new_posts.append(post)
                 self.received += 1
@@ -383,11 +385,23 @@ class RoomWorker:
                             responses = endpoint.receive(raw, scopes)
                         except (ValueError, PermissionError, UnicodeError):
                             responses = []
-                        for response in responses:
-                            await self.transmit(response, endpoint)
                         # A post is emitted only after authenticated decryption
                         # and replay checks in RoomEndpoint.receive(). Bind RX
                         # metadata to exactly that input frame.
+                        observed, endpoint.received_posts = endpoint.received_posts, []
+                        if observed and self.on_post and self.companion.room_bot_id == endpoint.room:
+                            try:
+                                from meshcorestation.storage import reception_store
+                                metadata = room_rx_metadata(raw, snr, rssi, scopes)
+                                for post in observed:
+                                    if self.companion.bot.match_command(post.get('text', '')) is not None:
+                                        reception_store.record(self.companion.database.db,
+                                            reception_store.room_identity(endpoint.room, post), metadata,
+                                            scope='room')
+                            except Exception as exc:
+                                self.companion.logger.warning('Room reception could not be recorded: %s', exc)
+                        for response in responses:
+                            await self.transmit(response, endpoint)
                         posts, endpoint.new_posts = endpoint.new_posts, []
                         if self.on_post and posts:
                             try:

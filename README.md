@@ -4,8 +4,18 @@ MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
 web dashboard, configurable command bot, repeater monitoring and local room
 servers. The radio stays in the companion; the station runs the application.
 
-**Stable version: 3.3.2. Branch: `main`.** V3 includes the room server and all
+**Stable version: 3.4.0. Branch: `main`.** V3 includes the room server and all
 previous V3 improvements. The former feature branches have been retired.
+
+## Changes in 3.4.0
+
+- Record distinct authenticated command reception paths, including duplicate
+  packet receptions, with RSSI, SNR and reception times. Execute and reply once.
+- Select reception paths in Command Details; update route lines, repeater
+  markers, arrows and distance while retaining the map, tiles and endpoints.
+  Unknown, incomplete and ambiguous paths remain explicitly marked.
+- Preserve legacy command history through an additive schema migration.
+- Make selected voltage/temperature chart values lighter at the same 18px size.
 
 ## Changes in 3.3.2
 

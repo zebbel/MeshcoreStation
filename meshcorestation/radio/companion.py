@@ -281,7 +281,15 @@ class Companion:
         if command is not None:
             self.logger.info("%s | sender=%r | path=%r", command['trigger'], message_data['name'], message_data['path'])
             matched_rx = self._find_matching_rx(message_data)
+            from meshcorestation.storage import reception_store
+            identity = reception_store.channel_identity(getattr(self, 'tracking_key', None),
+                message_data.get('sender_timestamp'), message_data['raw_text'])
+            if reception_store.existing(self.database.db, identity) is not None:
+                return  # A duplicate delivery must never execute or reply twice.
             command_id = self.database.add_logger(message_data, matched_rx, 'processing', '')
+            evidence = reception_store.authenticate(matched_rx, self.tracking_key, self.database.get_scopes()) if matched_rx and identity else None
+            scope = evidence[1] if evidence else 'unidentified' if matched_rx and matched_rx.get('route_type') in (0, 3) else None
+            reception_store.bind(self.database.db, identity, command_id, scope)
             self.active_command_id = command_id
             from meshcorestation.commands.delivery import ReplyDelivery
             delivery = ReplyDelivery()
@@ -327,6 +335,18 @@ class Companion:
             except Exception as exc:
                 self.logger.warning('Reply observation could not be recorded: %s',exc)
         
+        if rx.get('payload_type') == 5 and isinstance(getattr(self, 'tracking_key', None), bytes):
+            try:
+                from meshcorestation.storage import reception_store
+                evidence = reception_store.authenticate(rx, self.tracking_key, self.database.get_scopes())
+                if evidence:
+                    identity, scope, text = evidence
+                    _, message = self._parse_channel_message(text)
+                    if self.room_bot_id is None and self.bot.match_command(message) is not None:
+                        reception_store.record(self.database.db, identity, rx, scope)
+            except Exception as exc:
+                self.logger.warning('Command reception could not be recorded: %s', exc)
+
         payload_type = rx.get("payload_type")
         payload_typename = str(rx.get("payload_typename", "")).upper()
 

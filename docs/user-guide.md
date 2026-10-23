@@ -1,6 +1,6 @@
 # Using MeshcoreStation
 
-This guide covers stable **3.3.2** on `main`, including the bot, room server,
+This guide covers stable **3.4.0** on `main`, including the bot, room server,
 repeater monitoring and dashboard. For upgrades from a former feature branch,
 see [Updates and branch migration](web-version-switching.md).
 
@@ -206,3 +206,25 @@ Only the configured temperature LPP channel is used. Missing readings show
 `unknown`; failed later reads do not replace the last successful value. This
 placeholder adds no telemetry or status radio request to command processing.
 The editor preview uses example data, as with other command placeholders.
+
+
+## Multiple command reception paths
+
+Command Details lists each distinct recorded **reception path**, with hop count,
+RSSI, SNR and the first reception time. The first recorded path is selected by
+default. A reception count indicates repeated copies on that same path; each
+copy's measurements and time are retained in the database. Duplicate receptions
+do not execute the command or send another reply.
+
+Choose another path to update the repeater markers, route lines, arrows and
+route distance immediately. The sender and bot markers, map view and background
+tile layer stay in place. Initial bounds include all recorded routes. Unknown,
+incomplete, ambiguous and unlocated hops are marked explicitly; unresolved
+routes never invent repeater coordinates. Consumed direct routes remain unknown.
+
+Channel paths are correlated using authenticated channel content and configured
+scope keys. Unidentifiable or ambiguous scope associations are not guessed.
+Room paths come only from authenticated, replay-checked room posts. Reception
+recording adds no radio traffic and does not change reply routing. Only receptions
+exposed by the companion's RX log can be recorded. Older history retains its
+original saved single path; paths from before this update cannot be recovered.

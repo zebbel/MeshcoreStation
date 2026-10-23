@@ -151,7 +151,7 @@ def test_packet_loop_continues_during_slow_room_command(tmp_path,monkeypatch):
             commands=SimpleNamespace(send_raw_packet=send))
         class Endpoint:
             def __init__(self,service,room):
-                self.room=room;self.sessions={};self.new_posts=[]
+                self.room=room;self.sessions={};self.new_posts=[];self.received_posts=[]
                 self.last_advert=10**12;self.calls=0
             def receive(self,raw,scopes=()):
                 self.calls+=1

@@ -99,3 +99,7 @@ dd { white-space: pre-wrap; font-size: 13px; }
 :where(input[type=checkbox], input[type=radio]) { accent-color: var(--accent); }
 button:disabled:hover { background: var(--panel); }
 .companion-toolbar { flex-wrap: wrap; }
+
+.route-paths {display:grid;gap:.4rem;margin:.75rem 0;max-height:12rem;overflow:auto}
+.route-paths button {text-align:left;font-weight:400;white-space:normal}
+.route-paths button[aria-pressed="true"] {border-color:var(--accent);box-shadow:inset 3px 0 var(--accent);background:var(--panel)}
