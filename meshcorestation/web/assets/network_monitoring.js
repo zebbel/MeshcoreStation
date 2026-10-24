@@ -55,7 +55,7 @@
                 if(inferred)box.append(el('p',relationships().explanation));
                 return box;
             };
-            function connectionPopup(n,relationship){
+            function connectionPopup(n,relationship,resizePopup){
                 const box=el('div',null,'network-connection-popup');
                 for(const [label,node] of [['Selected repeater',identity(key)],['Connected repeater',identity(n.pubkey)]]){
                     const row=el('p');row.append(el('strong',label+': '),node);box.append(row);
@@ -65,7 +65,7 @@
                 const rows=[['weHear',relationship.we],['theyHear',relationship.they],['Analyzer confidence',n.confidence==null?'Unknown (not reported)':n.confidence],['Distance',typeof n.distanceKm==='number'&&Number.isFinite(n.distanceKm)&&n.distanceKm>=0?n.distanceKm+' km':'Unknown']];
                 for(const [label,value] of rows)box.append(el('p',label+': '+val(value)));
                 if(relationship.confidence==='unknown')box.append(el('p','Confidence unknown; dotted line.'));
-                const details=el('details');details.append(el('summary','Public keys'),el('p','Selected repeater: '+key),el('p','Connected repeater: '+n.pubkey));box.append(details,el('p',relationships().explanation));
+                const details=el('details');details.append(el('summary','Public keys'),el('p','Selected repeater: '+key),el('p','Connected repeater: '+n.pubkey));details.addEventListener('toggle',resizePopup);box.append(details,el('p',relationships().explanation));
                 return box;
             }
             function marker(pos,key,selected){
@@ -81,7 +81,12 @@
                 // missing directional counts remain neutral rather than fabricated.
                 const relationship=relationships().describe(n),common={dashArray:relationship.dashArray,opacity:1,lineCap:'round'};
                 L.polyline([points[0],pos],{...common,color:'var(--panel)',weight:8,interactive:false,className:'network-relationship-halo'}).addTo(map);
-                L.polyline([points[0],pos],{...common,color:relationship.color,weight:4,interactive:true,className:'network-relationship network-direction-'+relationship.direction+' network-confidence-'+relationship.confidence}).addTo(map).bindPopup(()=>connectionPopup(n,relationship),{maxWidth:Math.max(160,Math.min(280,canvas.clientWidth-60)),maxHeight:Math.max(130,canvas.clientHeight-100),autoPanPadding:[12,12]});
+                const line=L.polyline([points[0],pos],{...common,color:relationship.color,weight:4,interactive:true,className:'network-relationship network-direction-'+relationship.direction+' network-confidence-'+relationship.confidence}).addTo(map);
+                let popupBox;
+                line.bindPopup(()=>{
+                    if(!popupBox)popupBox=connectionPopup(n,relationship,()=>{if(line.getPopup()?.isOpen())line.getPopup().update();});
+                    names().refresh(popupBox);return popupBox;
+                },{maxWidth:Math.max(160,Math.min(280,canvas.clientWidth-60)),maxHeight:Math.max(130,canvas.clientHeight-100),autoPanPadding:[12,12]});
             }
             if(points.length>1)map.fitBounds(points,{padding:[20,20],maxZoom:13,animate:false});
             mapIdentityHandler=()=>{for(const m of markers)m.layer.getElement?.()?.setAttribute('title',names().label(m.key));};
