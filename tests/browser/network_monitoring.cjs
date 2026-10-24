@@ -52,6 +52,7 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
     await section.scrollIntoViewIfNeeded();
     const geometry=await lines.evaluateAll(paths=>paths.map(p=>({length:p.getTotalLength(),bounds:p.getBBox().width+p.getBBox().height,stroke:getComputedStyle(p).stroke,dashes:getComputedStyle(p).strokeDasharray,svgHeight:p.ownerSVGElement.getBoundingClientRect().height,maxHeight:getComputedStyle(p.ownerSVGElement).maxHeight,mapHeight:p.closest('.network-map').clientHeight})));
     assert(geometry.every(p=>p.length>1&&p.bounds>0&&p.stroke!=='none'&&p.dashes!=='none'&&p.svgHeight>p.mapHeight*.9&&p.maxHeight==='none'),'visible SVG geometry escapes chart sizing rules');
+    await section.screenshot({path:`${output}/relationships-initial-${token}.png`});
     const before=await lines.first().getAttribute('d');await page.locator('.network-map .leaflet-control-zoom-in').click();
     await page.waitForFunction(d=>document.querySelector('.network-map path.network-relationship')?.getAttribute('d')!==d,before);
     await page.waitForFunction(()=>!document.querySelector('.network-map').classList.contains('leaflet-zoom-anim'));
@@ -62,6 +63,7 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
     }
     assert(await page.locator('.network-route').first().innerText().then(t=>t.includes('DE_HE_HP_RPT1')&&t.includes('🐝Heppenheim Nord')&&t.includes('Hemsbergturm')));
     assert(!await page.locator('.network-route').first().locator('..').locator('..').innerText().then(t=>t.includes('Not recorded')),'captured path timestamps remain readable');
+    await page.getByRole('heading',{name:'Packet path patterns (potential hash ambiguity)',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:`${output}/packet-paths-${token}.png`});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no dashboard horizontal overflow');
     await page.locator('#repeater-network-disclosure > summary').click();await page.locator('#repeater-network-disclosure > summary').click();await lines.first().waitFor();assert.equal(await page.locator('.network-map.leaflet-container').count(),1);
     await page.setViewportSize({width:viewport.width===390?430:1180,height:viewport.height});await section.scrollIntoViewIfNeeded();assert.equal(await lines.count(),expectedLines);

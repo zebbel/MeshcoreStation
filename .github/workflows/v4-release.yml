@@ -51,7 +51,6 @@ jobs:
       - name: Verify release version
         run: python -c 'from meshcorestation import __version__; assert __version__ == "4.0.2"'
   publish:
-    if: ${{ false }} # Enable only after inspecting this release's browser evidence.
     needs: validate
     runs-on: ubuntu-latest
     permissions:

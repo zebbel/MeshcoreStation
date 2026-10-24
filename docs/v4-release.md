@@ -24,7 +24,13 @@ Validation includes the full Python/JavaScript suite plus real bundled Leaflet S
 DOM tests. The release workflow additionally runs real Chromium at desktop/mobile
 sizes in light/dark themes, checks projected SVG geometry and marker DOM, exercises
 zoom/pan/resize/reopen/switching, and captures screenshots before release approval.
-Final results and visual inspection are recorded once that workflow completes.
+484 Python tests and all 34 JavaScript suites passed. Real Chromium passed all
+four viewport/theme cases (1280px desktop and 390px mobile, light and dark).
+Rendered screenshots were inspected for marker/link visibility, shared gutters,
+responsive forms/cards and absence of nested analysis scrollbars. Initial map
+fitting is non-animated so overlays are not temporarily scaled on first display.
+Captured ISO path/history timestamps now use the existing shared date formatter
+without changing their values or timezone conversion.
 
 Live Analyzer access and physical radio/mobile hardware remain unverified. Browser
 checks use captured fixtures and simulated tile outages; they establish rendering
