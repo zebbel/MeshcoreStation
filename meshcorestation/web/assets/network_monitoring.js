@@ -86,7 +86,7 @@
                 line.bindPopup(()=>{
                     if(!popupBox)popupBox=connectionPopup(n,relationship,()=>{if(line.getPopup()?.isOpen())line.getPopup().update();});
                     names().refresh(popupBox);return popupBox;
-                },{maxWidth:Math.max(160,Math.min(280,canvas.clientWidth-60)),maxHeight:Math.max(130,canvas.clientHeight-100),autoPanPadding:[12,12]});
+                },{minWidth:120,maxWidth:Math.max(120,Math.min(280,canvas.clientWidth-112)),maxHeight:Math.max(130,canvas.clientHeight-100),autoPanPaddingTopLeft:[58,12],autoPanPaddingBottomRight:[12,12]});
             }
             if(points.length>1)map.fitBounds(points,{padding:[20,20],maxZoom:13,animate:false});
             mapIdentityHandler=()=>{for(const m of markers)m.layer.getElement?.()?.setAttribute('title',names().label(m.key));};
