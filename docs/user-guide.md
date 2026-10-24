@@ -31,8 +31,8 @@ Repeater Optimizer contains three independent disclosures:
   an administrator session. Connect, then return to the analysis using the button
   in management; read, review and explicitly confirm any recommendation. Disconnect
   when finished. Neighbor radio polling stays opt-in.
-- Repeater Network Monitoring: experimental external evidence, disabled by default.
-  Opening reads the cache; authorized refreshes use a five-minute cache. Refresh Now
+- Repeater Network Monitoring: experimental external evidence, available without activation.
+  Opening reads the cache; stale or missing snapshots refresh automatically, using a five-minute cache. Refresh Now
   is manual, with no continuous polling. Errors preserve the last successful data.
 
 Room Server loads only when expanded. Create/enable rooms, manage access and inspect
@@ -44,3 +44,7 @@ preferences remain separate. German/ISO/US dates and 12/24-hour display settings
 persist across browsers; timezone conversion and report schedules are independent.
 See the specialized companion firmware, OLED, room protocol and operations guides
 for those procedures.
+
+The three optimizer subsections share dashboard typography, cards, controls and
+status styling. Analysis grows with its content rather than using an internally
+scrolling fixed-height iframe. Provider access failures remain visible in monitoring.

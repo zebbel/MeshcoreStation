@@ -68,15 +68,16 @@ def build_layout():
             html.Details([
                 html.Summary(html.H2("Optimization Analysis")),
                 html.P("Passive analysis loads on opening. Protected actions require an administrator session and explicit confirmation.", className="muted"),
-                html.Button("Connect as administrator", id="analysis-connect", className="info-button"),
-                html.Button("Disconnect administrator", id="analysis-disconnect", className="info-button"),
+                html.Div([html.Button("Connect as administrator", id="analysis-connect"),
+                          html.Button("Disconnect administrator", id="analysis-disconnect")], className="stats-controls"),
                 html.Div(id="optimization-analysis-inline")
             ], id="optimization-analysis-disclosure", className="panel-disclosure managed-repeater-section"),
             html.Details([
                 html.Summary(html.H2("Repeater Network Monitoring · Experimental")),
-                html.P("External Analyzer observations depend on participating observers. Missing evidence does not prove poor radio connectivity. Inferred relationships are not verified direct radio links. Live access is unverified and disabled by default.", className="muted"),
-                html.Button("Refresh Now", id="network-refresh", className="info-button"),
-                html.P(id="network-status", role="status", **{"aria-live": "polite"}),
+                html.P("External Analyzer observations depend on participating observers. Missing evidence does not prove poor radio connectivity. Inferred relationships are not verified direct radio links. Loads on opening with a five-minute cache. External access may be restricted; live integration remains unverified.", className="muted"),
+                html.Div([html.Span(id="network-selected", className="stats-selected"),
+                          html.Button("Refresh Now", id="network-refresh")], className="stats-controls"),
+                html.P(id="network-status", className="stats-message", role="status", **{"aria-live": "polite"}),
                 html.Div(id="network-content")
             ], id="repeater-network-disclosure", className="panel-disclosure managed-repeater-section")
         ], id="repeater-optimizer-disclosure", className="panel-disclosure"), className="history"),

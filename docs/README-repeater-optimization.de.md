@@ -9,7 +9,7 @@ ausgewählten Repeater. Geschlossene Bereiche laden keine neuen Ansichten.
   und Vorher/Nachher-Vergleiche. Nachbarabfragen sind standardmäßig manuell;
   vorhandene ausdrücklich aktivierte Zeitpläne bleiben erhalten.
 - **Repeater Network Monitoring** zeigt externe Analyzer-Beobachtungen. Die Funktion
-  ist experimentell, standardmäßig deaktiviert und nicht live verifiziert.
+  ist experimentell, ohne separate Aktivierung verfügbar und nicht live verifiziert.
 
 Für geschützte Analyseaktionen **Connect as administrator** verwenden, anmelden und
 im Verwaltungsfenster **Return to Optimization Analysis** wählen. Änderungen müssen
@@ -25,7 +25,8 @@ Externe Daten werden nur beim Öffnen oder mit **Refresh Now** geladen. Der Cach
 ist fünf Minuten gültig; bei Fehlern bleibt der letzte erfolgreiche Stand sichtbar.
 Es gibt kein Hintergrund-Polling und keine zusätzlichen Funkanfragen. HTTP 403 /
 Cloudflare 1010 bedeutet nicht verfügbare Daten, nicht fehlende Netzaktivität.
-Automatisierter Zugriff benötigt vorher eine zulässige, bestätigte Zugriffsmethode.
+Die Verfügbarkeit in der Anwendung gewährt keine Zugriffsrechte beim Anbieter;
+Zugriffsbeschränkungen und Nutzungsbedingungen bleiben verbindlich.
 
 Details: [Externe Daten und Grenzen](network-monitoring.md),
 [Architektur und Tests](architecture.md), [Verwaltung](repeater-management.md).

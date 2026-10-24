@@ -4,7 +4,12 @@
     const $=id=>document.getElementById(id);
     const visible=()=>$('optimization-analysis-disclosure')?.open&&$('repeater-optimizer-disclosure')?.open;
     function post(data){frame?.contentWindow?.postMessage(data,location.origin);}
-    function context(){if(visible())post({type:'meshcorestation-optimizer-context',public_key:selected,name:$('managed-repeater')?.selectedOptions[0]?.textContent||'Repeater'});}
+    function theme(){
+        const styles=getComputedStyle(document.documentElement),palette={};
+        for(const name of ['--bg','--panel','--text','--muted','--border','--accent','--soft','--green','--red','--shadow','--control-radius','--control-padding'])palette[name]=styles.getPropertyValue(name);
+        post({type:'meshcorestation-optimizer-theme',palette});
+    }
+    function context(){if(visible()){theme();post({type:'meshcorestation-optimizer-context',public_key:selected,name:$('managed-repeater')?.selectedOptions[0]?.textContent||'Repeater'});}}
     async function load(){
         if(!visible())return;
         await window.meshcorestationEnsureRepeaterSelection?.();if(!visible())return;
@@ -31,6 +36,15 @@
         };
         $('analysis-disconnect').onclick=()=>document.dispatchEvent(new CustomEvent('analysis-disconnect'));
     }
-    window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===frame?.contentWindow&&event.data?.type==='meshcorestation-optimizer-ready')context();});
+    window.addEventListener('message',event=>{
+        if(event.origin!==location.origin||!frame||event.source!==frame.contentWindow)return;
+        if(event.data?.type==='meshcorestation-optimizer-ready')context();
+        if(event.data?.type==='meshcorestation-optimizer-height'){
+            const height=event.data.height;
+            if(typeof height==='number'&&Number.isFinite(height)&&height>0&&height<=1000000)frame.style.height=Math.ceil(height)+'px';
+        }
+    });
+    window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change',theme);
+    new MutationObserver(()=>{if(visible())theme();}).observe(document.documentElement,{attributes:true,attributeFilter:['class','style','data-theme']});
     new MutationObserver(attach).observe(document.documentElement,{childList:true,subtree:true});attach();
 })();

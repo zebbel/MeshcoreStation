@@ -1,4 +1,4 @@
-# Install and operate MeshcoreStation 4.0.0
+# Install and operate MeshcoreStation V4
 
 ## Installation
 
@@ -82,7 +82,7 @@ compatibility of every peripheral. Test the real companion after an update.
 
 ## External monitoring
 
-Experimental, disabled by default and never polled in the background. Read
-[access and caching](network-monitoring.md) before enabling authorized access.
+Experimental, available on demand without activation and never polled in the
+background. Read [access and caching](network-monitoring.md) for provider limitations.
 403/Cloudflare 1010 means unavailable; cached evidence is retained. V3 remains on
 `main`; V4 updates use `v4.0.0`. Back up all data before branch switching.

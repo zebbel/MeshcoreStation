@@ -1,8 +1,4 @@
+/* Network-only geometry; all visual components use shared statistics styles. */
 #network-content { overflow-wrap:anywhere; min-width:0; }
-#network-content .network-scroll { overflow-x:auto; max-width:100%; }
-#network-content table { width:100%; min-width:32rem; }
-#network-content td, #network-content th { padding:.6rem; text-align:left; }
-#network-content svg { color:#4d8eff; width:100%; height:auto; max-height:210px; }
-#network-status[data-state="blocked"], #network-status[data-state="unavailable"], #network-status[data-state="invalid"] { border-left:3px solid #d88a23; padding-left:1rem; }
-#optimization-analysis-inline iframe { border:0; width:100%; height:950px; display:block; }
-@media(max-width:600px) { #optimization-analysis-inline iframe { height:1100px; } .network-map { height:320px; } }
+#network-content svg { height:auto; max-height:210px; }
+#network-content .network-map { height:clamp(260px, 45vw, 420px); }

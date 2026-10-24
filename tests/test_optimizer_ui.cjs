@@ -71,10 +71,12 @@ for(const id of ['role','polling','days','retention_days','neighbor_days','summa
 }
 assert.equal($('polling').options[0].textContent,'Manual (default)');
 assert.equal($('polling').options[2].textContent,'Every 12 hours');
-assert(html.includes('.scope-field select{display:block;width:100%;max-width:none}'));
-assert(html.includes('.storage-field input{display:block;width:100%;max-width:none}'));
-assert(html.includes('@media(max-width:600px)'));
-assert(html.includes('.storage-grid,.kpis{grid-template-columns:1fr}'));
+const sharedCSS=fs.readFileSync('meshcorestation/web/assets/optimizer_sections.css','utf8');
+assert(html.includes('/assets/repeater_statistics.css'));
+assert(html.includes('/assets/optimizer_sections.css'));
+assert(!html.includes('<style>'),'Standalone design overrides removed');
+assert(sharedCSS.includes('.storage-grid { grid-template-columns:minmax(0,1fr); }'));
+assert.equal(w.document.querySelectorAll('.kpis.stats-metrics .stats-metric').length,4);
 assert(!w.document.body.textContent.includes('Passive by default. Analysis never sends'));
 assert.equal($('budget_gb').value,'3');
 assert.equal($('reserve_gb').value,'4');

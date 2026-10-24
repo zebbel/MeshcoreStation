@@ -29,3 +29,19 @@
 .stats-activity .active { background:var(--green); }
 @media(max-width:1000px){.stats-columns{grid-template-columns:1fr;}}
 @media(max-width:550px){.stats-usefulness .stats-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+/* Shared by all three optimizer subsections, including the analysis document. */
+.stats-section { min-width:0; }
+.stats-section h3 { font-size:1rem; margin:0 0 12px; }
+.stats-metric { overflow-wrap:anywhere; }
+.stats-table-scroll { max-width:100%; }
+.stats-table-scroll .stats-wide-table { min-width:40rem; }
+.stats-section th,.stats-section td { padding:12px 14px; }
+.stats-controls .stats-selected { min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.stats-controls :where(input,select,textarea) { background:var(--panel); }
+.stats-message { color:var(--muted); line-height:1.5; overflow-wrap:anywhere; margin:12px 0; }
+.stats-message[data-state="blocked"],.stats-message[data-state="rate_limited"],
+.stats-message[data-state="unavailable"],.stats-message[data-state="invalid"] {
+ border-left:3px solid var(--red); padding-left:12px; color:var(--text);
+}
+.stats-section svg { color:var(--accent); }

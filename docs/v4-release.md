@@ -1,43 +1,47 @@
-# MeshcoreStation 4.0.0 — dedicated V4 release
+# MeshcoreStation 4.0.1 — V4 branch prerelease
 
-Target branch: `v4.0.0`. Release tag: `v4.0.0` (prerelease, not latest stable). The V3 `main` branch is not a publication target.
+Branch: `v4.0.0`. Release tag: `v4.0.1` (prerelease, not latest stable).
+V3 `main` remains unchanged.
 
-V4 rearranges the dashboard into Command History, Repeater Management, Repeater
-Optimizer and Room Server below the two status cards. Optimizer groups Statistics,
-Optimization Analysis and experimental Network Monitoring as independent, initially
-collapsed subsections following the managed repeater selection.
+Network Monitoring is available without an application activation setting. Opening
+its subsection reads the last saved snapshot and refreshes missing/stale data.
+The five-minute cache, Refresh Now, cancellation, response validation, conservative
+retries, timeouts, 403/429 cooldowns and stale-data preservation remain intact.
+No continuous polling or radio traffic is introduced. Provider restrictions and
+usage conditions still apply; live integration is not verified by fixture tests.
 
-Network Monitoring parses the eight real Firefox response bodies captured on
-24 October 2026. It supports cache-first on-demand loading, five-minute persistent
-snapshots, manual refresh, conditional reads and visible failure/stale states.
-It is disabled by default pending authorized deployment access. A 403/Cloudflare
-1010 response means unavailable, never zero activity. Fixtures do not verify live
-integration; nonempty observer/direct-packet/beacon/sensor shapes remain unverified.
+Optimization Analysis and Network Monitoring now reuse Repeater Statistics'
+visual components and dashboard variables. Analysis retains the same authenticated
+management bridge, explicit confirmation, preflight checks and readback. Its
+iframe grows/shrinks with content, follows the parent theme, and avoids a second
+vertical scrollbar. Charts/maps remain responsive, and long tables scroll within
+their own wrappers as needed.
 
-The integration creates a separate cache without rewriting V3 records. Existing
-telemetry/reporting, passive collection, optimizer permissions and radio safety,
-command paths, clustered maps, rooms, firmware and update behavior are retained.
-Installation/updater version comes from the same `meshcorestation.__version__`;
-branch selection and manual installer updates already follow the checked-out branch.
+The dashboard order, independent disclosures, managed-repeater selection and
+separate local Repeater Optimizer switch are unchanged. There are no schema or
+dependency changes; existing station, room and cache databases remain compatible.
 
-README, user guide, architecture, operations, management, branch switching and
-external monitoring documentation describe V4 behavior. Specialized protocol and
-firmware guides remain because their operating procedures still apply.
+README and current help files describe the activation-free on-demand behavior
+and shared styling. Validation results are recorded below.
 
-Local validation: **481 Python tests and all 30 JavaScript/jsdom suites passed**,
-including the retained 700/703/1,000/2,000-map regressions. The fixture validator,
-compile check, installer shell syntax, dependency check and installation smoke check
-also passed. Fresh-data startup, repeat startup, Dash layout and health API checks
-confirmed version 4.0.0 on v4.0.0 with Analyzer disabled.
+## Validation
 
-The Python suite ran in a fresh isolated venv installed offline from locally
-available wheels and repacked snapshots of this session's installed dependencies.
-This validates isolation but is not a new package-index resolution. CI repeats the
-suite using clean package installation on GitHub's runner. Existing V3 migration
-regressions pass; the new separate cache does not rewrite station/room databases. Live Analyzer,
-physical radio, physical mobile and native systemd installation are not verified
-by fixture or unit tests.
+- 481 Python tests passed in the isolated development environment.
+- All 32 JavaScript/jsdom UI suites passed, including automatic monitoring loads,
+  cache reuse, manual refresh, late-response isolation, inferred-observation labels,
+  administrator actions, iframe growth/shrink, theme and message-origin checks.
+- Shared CSS isolation, palette usage, responsive form/grid rules, table scroll
+  wrappers, and existing 700/703/1,000/2,000 marker regressions passed.
+- Installation smoke, fresh/restarted app HTTP checks, health version 4.0.1,
+  activation-free mocked HTTP 403 handling, Python compilation, dependency check,
+  installer shell syntax and diff whitespace checks passed.
+- Rendered desktop/mobile verification remains pending. A local Chromium download
+  returned an unavailable page rather than a browser archive; the cloud browser
+  could not reach the local server and its security policy disallowed local files.
+  No rendered browser, physical mobile or radio-hardware pass is claimed.
+- Live Analyzer access remains unverified. Tests use the captured formats and mock
+  failures; access restrictions are respected and cannot imply zero traffic.
 
-The V4 release workflow repeats the full suite in a fresh GitHub Actions environment
-and publishes only after validation passes. It creates the release/tag on the V4
-commit, without changing main or marking V4 as the latest stable release.
+No schema change or destructive migration is needed. All existing migration and
+V3 data-preservation regressions pass. This release is published exclusively on
+v4.0.0; main remains unchanged.

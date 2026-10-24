@@ -1,12 +1,11 @@
-"""Optional read-only Analyzer integration. No worker, radio, cookies or browser identity.
+"""On-demand read-only Analyzer integration. No worker, radio, cookies or browser identity.
 
-Fixtures verify response formats only. Live access needs operator approval and is
-explicitly disabled unless MESHCORESTATION_ANALYZER_AUTHORIZED=1 is configured.
+Fixtures verify response formats only, not live access or provider permission.
+Access restrictions are surfaced as errors without any attempt to bypass them.
 """
 from contextlib import contextmanager
 import json
 import math
-import os
 import re
 import sqlite3
 import threading
@@ -49,7 +48,7 @@ class NoRedirect(HTTPRedirectHandler):
 def transport(url, headers, timeout):
     """Fixed-host caller; reject redirects, limit body and socket wait."""
     req = Request(url, headers={'Accept': 'application/json',
-                               'User-Agent': 'MeshcoreStation/4.0.0 (optional analyzer client)', **headers})
+                               'User-Agent': 'MeshcoreStation/4.0.1 (on-demand analyzer client)', **headers})
     try:
         with build_opener(NoRedirect()).open(req, timeout=timeout) as response:
             deadline = time.monotonic() + timeout
@@ -124,10 +123,9 @@ def validate(name, body, key):
 
 
 class AnalyzerService:
-    def __init__(self, path=None, fetch=transport, clock=time.time, approved=None):
+    def __init__(self, path=None, fetch=transport, clock=time.time):
         self.path = path or DATA_DIR / 'analyzer-cache.db'
         self.fetch, self.clock = fetch, clock
-        self.approved = approved if approved is not None else lambda: os.getenv('MESHCORESTATION_ANALYZER_AUTHORIZED') == '1'
         self.lock = threading.Lock()
         self.cache_lock = threading.Lock()
         self.revisions = {}
@@ -170,8 +168,6 @@ class AnalyzerService:
                   'data': previous[1] if previous else None,
                   'fetched_at': previous[0] if previous else None, 'stale': stale,
                   'state': 'cached' if previous else 'empty', 'error': None}
-        if not self.approved():
-            return {**result, 'state': 'disabled', 'error': 'Experimental external monitoring is disabled. Authorized live access has not been confirmed.'}
         if now < self.blocked_until:
             return {**result, 'state': self.blocked_error.state, 'error': str(self.blocked_error)}
         if cache_only: return result

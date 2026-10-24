@@ -21,6 +21,10 @@ let frame;const send=(type,extra={})=>w.dispatchEvent(new w.MessageEvent('messag
  frame.contentWindow.postMessage=d=>replies.push(d);
  send('meshcorestation-optimizer-ready');assert.equal(replies.at(-1).public_key,key);assert(!JSON.stringify(replies).includes('token'));
  send('meshcorestation-optimizer-neighbors');assert(replies.at(-1).error.includes('Connect'));assert.equal(posts.length,0);
+ const resize=(height,origin='http://localhost',source=frame.contentWindow)=>w.dispatchEvent(new w.MessageEvent('message',{origin,source,data:{type:'meshcorestation-optimizer-height',height}}));
+ resize(2300);assert.equal(frame.style.height,'2300px');resize(400);assert.equal(frame.style.height,'400px');
+ for(const invalid of [-1,NaN,Infinity,'800',1000001]){resize(invalid);assert.equal(frame.style.height,'400px');}
+ resize(900,'https://elsewhere');resize(900,'http://localhost',{});assert.equal(frame.style.height,'400px');
  $('analysis-connect').click();await settle();assert($('repeater-login-dialog').open);
  assert.equal(w.document.querySelectorAll('#repeater-advisor-frame').length,1,'management reuses inline frame');
  send('meshcorestation-optimizer-neighbors');assert(replies.at(-1).error.includes('Connect'));assert.equal(posts.length,0);

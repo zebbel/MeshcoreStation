@@ -1,19 +1,18 @@
 # Repeater Network Monitoring (experimental)
 
-The V4 Analyzer client is optional, read-only and disabled by default. The eight
-Firefox response bodies captured on 24 October 2026 establish JSON shapes only.
-They are not permission for automated access. Live integration has not been
-verified from this development environment or the target deployment.
+The V4 Analyzer client is read-only and available automatically for the managed
+repeater selected in the dashboard. No activation switch or environment setting
+is required. Opening the subsection reads cached data and refreshes stale/missing
+data. The eight Firefox bodies captured on 24 October 2026 verify formats only;
+live deployment integration remains unverified.
 
-## Access and configuration
+## External access limitations
 
-Before enabling requests, obtain documented permission or operator approval for
-server-side use of the listed endpoints from your deployment. The application
-cannot obtain that approval on your behalf. Only after approval, add
-`MESHCORESTATION_ANALYZER_AUTHORIZED=1` to the station's service environment and
-restart it. Remove the setting to disable requests again. The UI continues to
-label the feature experimental and live integration unverified; an HTTP success
-alone does not validate permission or end-to-end deployment behavior.
+Availability in MeshcoreStation does not grant access rights to the provider.
+Respect the provider's usage conditions and restrictions. An HTTP success does
+not establish permission, while an HTTP 403 is a real access failure and is never
+converted to zero activity. The application does not impersonate a browser,
+reuse cookies, or attempt to defeat Cloudflare restrictions.
 
 Direct development requests previously returned HTTP 403 / Cloudflare 1010.
 There is no bypass or impersonation implementation. Do not supply browser
@@ -26,8 +25,7 @@ establish a shared five-minute cooldown, including manual refreshes and other ke
 
 ## Loading and storage
 
-Opening the subsection reads the saved snapshot first. If authorized and stale
-(or missing), it starts one refresh. Fresh data is cached for five minutes.
+Opening the subsection reads the saved snapshot first. If stale (or missing), it starts one refresh. Fresh data is cached for five minutes.
 Refresh Now explicitly refreshes within access/cooldown limits. Closing the
 section or parent aborts/ignores the browser request; an already dispatched
 server request can finish. No new refresh is scheduled while closed and there
@@ -54,7 +52,7 @@ in-flight cache write. The cache may be removed while stopped without losing V3 
 | Path sequences | Analyzer patterns; hash prefixes can collide or be incomplete |
 | Clock hash observer counts | Counts only; do not disclose individual observers or signal values |
 | Empty successful arrays | No returned observations for that endpoint/window |
-| Disabled, blocked, timeout, invalid JSON, HTTP failure | Unavailable source; no zero-activity conclusion |
+| Blocked, timeout, invalid JSON, HTTP failure | Unavailable source; no zero-activity conclusion |
 
 The supplied capture has no individual heardBy observers, no direct packets,
 beacons or sensor readings. Neighbor SNR values are null and remain Unknown.
@@ -71,3 +69,12 @@ receiver's final hop. Do not use graph relationships alone to apply radio change
 `tests/fixtures/analyzer` contains the supplied eight JSON bodies, manifest and
 capture README. Tests mock access failures and transport faults. No production
 code loads these fixtures and no tests require the external service.
+
+## Integrated dashboard appearance
+
+All three optimizer subsections share statistics cards, headings, controls,
+tables and status styling from the dashboard. Long tables scroll horizontally
+inside their own wrapper only when needed. Historical charts and maps resize
+with the available width. The selected repeater and snapshot provenance stay
+visible. Optimization Analysis resizes its same-origin iframe to its content;
+the main dashboard supplies the single page scrollbar and shared theme colors.

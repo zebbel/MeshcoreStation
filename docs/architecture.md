@@ -37,9 +37,17 @@ registered routes and HTTP startup; it does not simulate apt/systemd or a radio.
 Tests retain the existing protocol, permissions, telemetry, reporting, routes,
 700/703/1,000/2,000 marker and migration regressions. V4 adds real captured Analyzer
 formats, null/empty data, HTTP/timeout/malformed faults, cache/restart/conditional
-reads, single-flight, disabled access and cross-repeater race coverage. UI tests
-exercise the actual JavaScript under jsdom; they do not verify rendered Chromium
-or physical mobile devices. Do not describe those as hardware/browser validation.
+reads, single-flight, activation-free access and cross-repeater race coverage. UI tests
+exercise the actual JavaScript under jsdom, including resize/theme messaging and
+responsive CSS isolation. They do not verify rendered Chromium or physical mobile devices. Do not describe those as hardware/browser validation.
 
 Do not delete old tests solely to get a pass. Update assertions when V4 intentionally
 changes layout, retaining their behavior coverage. Test fixtures remain test-only.
+
+The three views reuse `repeater_statistics.css`. Analysis-specific CSS contains
+structural layout only. Its same-origin iframe sends measured content heights;
+the parent validates origin, frame identity and finite bounded dimensions before
+resizing. Parent theme variables are sent through the same authenticated-origin
+message boundary. A ResizeObserver handles data changes and narrow viewports.
+The external client has no application enable/disable gate; the local optimizer's
+separate storage/collection switch and administrator controls are unchanged.

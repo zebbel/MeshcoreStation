@@ -1,0 +1,23 @@
+/* Reference styling stays shared; structural rules must not leak to other pages. */
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
+const read=name=>fs.readFileSync('meshcorestation/web/assets/'+name,'utf8');
+const base=read('style.css'),reference=read('repeater_statistics.css'),layout=read('optimizer_sections.css'),network=read('network_monitoring.css'),management=read('repeater_management.css');
+const html=fs.readFileSync('meshcorestation/web/repeater_optimizer.html','utf8');
+assert(html.includes('/assets/repeater_statistics.css'));assert(html.includes('/assets/optimizer_sections.css'));assert(!html.includes('<style>'));
+assert(!/height\s*:\s*(?:950px|1100px|66vh|min\(68vh)/.test(network+management+layout));
+assert(!/#[\da-f]{3,8}\b/i.test(network+layout),'Subsections must use dashboard palette variables');
+assert(layout.includes('grid-template-columns:minmax(0,1fr)'),'mobile form has one flexible column');
+assert(reference.includes('.stats-table-scroll .stats-wide-table { min-width:40rem; }'));
+const dom=new JSDOM('<style>'+base+reference+layout+network+management+'</style><body><section id="unrelated"></section><div class="stats-metric"><p>Metric</p><strong>107</strong></div><section class="stats-section"><div class="stats-table-scroll"><table class="stats-wide-table"><tr><td>Data</td></tr></table></div></section></body>');
+const w=dom.window;
+assert.equal(w.getComputedStyle(w.document.querySelector('.stats-table-scroll')).overflowX,'auto');
+assert.equal(w.getComputedStyle(w.document.querySelector('.stats-metric')).padding,'14px');
+assert.equal(w.getComputedStyle(w.document.querySelector('.stats-metric strong')).fontSize,'27px');
+assert.equal(parseFloat(w.getComputedStyle(w.document.querySelector('.stats-section')).minWidth),0);
+const unrelated=w.getComputedStyle(w.document.querySelector('#unrelated'));
+assert(!unrelated.borderTopWidth||unrelated.borderTopWidth==='0px','Analysis surfaces must not style all dashboard sections');
+const analysis=new JSDOM(html,{runScripts:'outside-only'});
+assert.equal(analysis.window.document.querySelectorAll('.stats-metrics .stats-metric').length,4);
+assert.equal(analysis.window.document.querySelectorAll('section:not(.stats-section)').length,0);
+assert.equal(analysis.window.document.querySelector('style'),null);
+dom.window.close();analysis.window.close();console.log('Shared optimizer surfaces, palette variables, responsive geometry, scroll wrappers and CSS isolation passed.');

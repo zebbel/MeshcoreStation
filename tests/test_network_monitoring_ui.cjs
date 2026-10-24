@@ -8,25 +8,32 @@ w.AbortController=AbortController;w.meshcorestationSelectedRepeater=key;w.meshco
 w.setInterval=()=>{throw Error('No background polling permitted')};
 const maps=[];w.meshcorestationLoadMapLibrary=async o=>{assert.equal(o.clustering,false)};
 w.L={map:(host,options)=>{assert.equal(options.maxZoom,19);const m={removed:false,setView(){return this},fitBounds(){return this},remove(){this.removed=true}};maps.push(m);return m;},marker:()=>({addTo(){return this},bindPopup(){return this}}),polyline:()=>({addTo(){return this}}),tileLayer:()=>({on(){return this},addTo(){return this}})};
-let calls=[],state='disabled',deferred=null;
-function result(k=key){return {ok:true,public_key:k,experimental:true,live_verified:false,state,error:state==='blocked'?'External monitoring unavailable: HTTP 403 / Cloudflare 1010':state==='disabled'?'Authorized live access unconfirmed':null,data:state==='disabled'?null:data,fetched_at:1000,stale:state==='stale'||state==='blocked'};}
-w.fetch=async(url,options)=>{calls.push(url);if(deferred){const fn=deferred;deferred=null;return fn(url);}const k=new URL(url,'http://localhost').searchParams.get('public_key');return {ok:true,json:async()=>result(k)};};
+let calls=[],state='initial',deferred=null;
+function result(k=key,cacheOnly=false){
+ const empty=state==='empty'||(state==='initial'&&cacheOnly);
+ return {ok:true,public_key:k,experimental:true,live_verified:false,state:empty?'empty':state==='initial'?'available':state,
+ error:state==='blocked'?'External monitoring unavailable: HTTP 403 / Cloudflare 1010':null,
+ data:empty?null:data,fetched_at:empty?null:1000,stale:empty||state==='stale'||state==='blocked'};
+}
+w.fetch=async(url,options)=>{calls.push(url);if(deferred){const fn=deferred;deferred=null;return fn(url);}const k=new URL(url,'http://localhost').searchParams.get('public_key');return {ok:true,json:async()=>result(k,url.includes('cache_only=1'))};};
 const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r));};
 const toggle=(id,open)=>{$(id).open=open;$(id).dispatchEvent(new w.Event('toggle'));};
 const select=k=>{w.meshcorestationSelectedRepeater=k;w.document.dispatchEvent(new w.CustomEvent('managed-repeater-selected',{detail:k}));};
 (async()=>{
  w.eval(fs.readFileSync('meshcorestation/web/assets/network_monitoring.js','utf8'));await settle();assert.equal(calls.length,0);
  toggle('repeater-optimizer-disclosure',true);await settle();assert.equal(calls.length,0);
- toggle('repeater-network-disclosure',true);await settle();assert(calls.every(x=>x.includes('cache_only=1')));assert($('network-status').textContent.includes('unconfirmed'));assert.equal($('network-content').textContent,'');
+ toggle('repeater-network-disclosure',true);await settle();assert(calls[0].includes('cache_only=1'));assert(calls.some(x=>!x.includes('cache_only=1')),'stale data automatically fetched with no activation flag');assert($('network-content').textContent.includes('107'));
+ state='available';toggle('repeater-network-disclosure',false);await settle();const fresh=calls.length;toggle('repeater-network-disclosure',true);await settle();assert(calls.slice(fresh).every(x=>x.includes('cache_only=1')),'fresh cache reused');
  state='stale';$('network-refresh').click();await settle();assert(calls.at(-1).includes('refresh=1'));
  assert($('network-content').textContent.includes('107'));assert($('network-content').textContent.includes('inferred-only'));
  assert($('network-content').textContent.includes('Unknown'));assert($('network-status').textContent.includes('Stale'));assert(maps.length);
  state='blocked';$('network-refresh').click();await settle();assert($('network-status').textContent.includes('403'));assert($('network-content').textContent.includes('107'));
+ assert($('network-content').querySelector('.stats-section .stats-table-scroll'));assert($('network-content').querySelector('.stats-metric'));
  assert.equal(maps.filter(m=>!m.removed).length,1,'only one active map after redraws');
  let resolve;deferred=url=>new Promise(r=>{resolve=()=>r({ok:true,json:async()=>result(key)})});
  $('network-refresh').click();await settle();assert(resolve);
- state='disabled';select(other);await settle();assert.equal($('network-content').textContent,'');resolve();await settle();assert.equal($('network-content').textContent,'','old key never renders under new key');
+ state='empty';select(other);await settle();assert.equal($('network-content').textContent,'');resolve();await settle();assert.equal($('network-content').textContent,'','old key never renders under new key');
  toggle('repeater-optimizer-disclosure',false);await settle();const count=calls.length;select(key);await settle();assert.equal(calls.length,count,'no selection request under closed parent');
  toggle('repeater-network-disclosure',false);toggle('repeater-optimizer-disclosure',true);await settle();assert.equal(calls.length,count);
- dom.window.close();console.log('Network monitoring fixtures, disabled/blocked/stale states, maps, on-demand loading and stale-response isolation passed.');
+ dom.window.close();console.log('Network monitoring fixtures, activation-free/blocked/stale states, maps, on-demand loading and stale-response isolation passed.');
 })().catch(e=>{console.error(e);process.exit(1)});

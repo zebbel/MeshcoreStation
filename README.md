@@ -1,11 +1,11 @@
-# MeshcoreStation 4.0.0
+# MeshcoreStation 4.0.1
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
 
 **V4 development/release branch: `v4.0.0`. V3 remains on `main`.**
 V4 preserves existing station and room databases. The external Analyzer feature
-is **experimental and disabled by default**. Offline fixture tests verify formats,
+is **experimental and available on demand without activation**. Offline fixture tests verify formats,
 not live access, service permission, or radio performance.
 
 ## Installation and upgrades
@@ -63,14 +63,14 @@ external monitoring.
 Network Monitoring displays captured-format relay windows, hourly history,
 inferred neighbors, directional reachability, graph metrics, path patterns,
 advertisement history and a map where coordinates exist. It makes no radio requests
-and requires no repeater password. **It makes no external requests unless an
-operator explicitly enables authorized access.** HTTP 403 / possible Cloudflare
+and requires no repeater password. It automatically requests data when its subsection opens and the five-minute
+cache is stale. There is no activation switch or environment setting. HTTP 403 / possible Cloudflare
 1010 is reported as unavailable, never as zero traffic. There is no bypass,
 browser impersonation, cookie reuse or continuous polling.
 
 Snapshots are fetched only on opening the subsection or pressing Refresh Now,
 cached for five minutes in a separate local database, and retained after failures.
-Read [external monitoring](docs/network-monitoring.md) before enabling anything.
+Read [external monitoring](docs/network-monitoring.md) for source-access limits.
 Captured fixture data is used only in tests, never as production fallback data.
 
 ## Existing features and settings

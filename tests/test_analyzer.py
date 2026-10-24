@@ -27,7 +27,7 @@ def client(tmp_path):
         name=next(n for n,t in a.ENDPOINTS.items() if url==a.HOST+t.format(key=KEY))
         calls.append((name,headers,timeout))
         return 200, {'ETag':'"'+name+'"'}, BODIES[name]
-    service=a.AnalyzerService(tmp_path/'cache.db',fetch,lambda:now[0],lambda:True)
+    service=a.AnalyzerService(tmp_path/'cache.db',fetch,lambda:now[0])
     return service,calls,now
 
 
@@ -59,7 +59,7 @@ def test_cache_manual_refresh_restart_and_rolling_counts(client):
     now[0]+=300
     saved=service.snapshot(KEY,cache_only=True)
     assert saved['stale'] and len(calls)==16
-    other=a.AnalyzerService(service.path,service.fetch,lambda:now[0],lambda:True)
+    other=a.AnalyzerService(service.path,service.fetch,lambda:now[0])
     assert other.snapshot(KEY,cache_only=True)['data']==first['data']
     other.snapshot(KEY)
     assert len(calls)==24
@@ -128,12 +128,15 @@ def test_invalid_keys_never_fetch(client,key):
     assert not calls
 
 
-def test_disabled_by_default_and_no_fixture_production_fallback(tmp_path,monkeypatch):
-    monkeypatch.delenv('MESHCORESTATION_ANALYZER_AUTHORIZED',raising=False)
-    def no(*args):pytest.fail('Unexpected remote access')
-    service=a.AnalyzerService(tmp_path/'cache.db',no)
-    r=service.snapshot(KEY,force=True)
-    assert r['state']=='disabled' and r['data'] is None and not r['live_verified']
+def test_available_without_activation_or_fixture_fallback(tmp_path):
+    calls=[]
+    def denied(*args):
+        calls.append(args)
+        return 403, {}, b''
+    service=a.AnalyzerService(tmp_path/'cache.db',denied)
+    r=service.snapshot(KEY)
+    assert len(calls)==1
+    assert r['state']=='blocked' and r['data'] is None and not r['live_verified']
 
 
 def test_singleflight_and_per_key_isolation(client):

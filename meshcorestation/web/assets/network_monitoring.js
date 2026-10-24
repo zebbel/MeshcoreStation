@@ -7,19 +7,19 @@
     const val=v=>v==null?'Unknown':String(v);
     const visible=()=>$('repeater-network-disclosure')?.open && $('repeater-optimizer-disclosure')?.open!==false;
     function dispose(){++mapRender;if(map){map.remove();map=null;}}
-    function invalidate(){++generation;controller?.abort();controller=null;pendingKey=null;dispose();$('network-content')?.replaceChildren();}
+    function invalidate(){++generation;controller?.abort();controller=null;pendingKey=null;dispose();$('network-content')?.replaceChildren();$('network-content')?.setAttribute('aria-busy','false');}
     function table(title,headers,rows){
-        const box=el('section',null,'network-table');box.append(el('h3',title));
+        const box=el('section',null,'stats-section');box.append(el('h3',title));
         if(!rows.length){box.append(el('p','No observations returned for this capture window.'));return box;}
-        const wrap=el('div',null,'network-scroll'),t=el('table'),head=el('tr');headers.forEach(x=>head.append(el('th',x)));const thead=el('thead');thead.append(head);t.append(thead);
+        const wrap=el('div',null,'stats-table-scroll'),t=el('table'),head=el('tr');headers.forEach(x=>head.append(el('th',x)));const thead=el('thead');thead.append(head);t.append(thead);if(headers.length>=4)t.classList.add('stats-wide-table');
         const body=el('tbody');for(const row of rows){const tr=el('tr');row.forEach(v=>tr.append(el('td',val(v))));body.append(tr);}t.append(body);wrap.append(t);box.append(wrap);return box;
     }
     function chart(title,points){
-        const box=el('section');box.append(el('h3',title));
+        const box=el('section',null,'stats-section');box.append(el('h3',title));
         if(!points.length){box.append(el('p','No historical buckets returned.'));return box;}
         const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 800 180');svg.setAttribute('role','img');svg.setAttribute('aria-label',title);
         const max=Math.max(1,...points.map(p=>Number(p.count)||0)),width=760/points.length;
-        points.forEach((p,i)=>{const b=document.createElementNS(ns,'rect'),h=140*(Number(p.count)||0)/max;for(const [k,v] of Object.entries({x:20+i*width,y:150-h,width:Math.max(1,width-2),height:h,fill:'currentColor'}))b.setAttribute(k,v);const title=document.createElementNS(ns,'title');title.textContent=`${date(p.bucket)}: ${val(p.count)}`;b.append(title);svg.append(b);});box.append(svg);
+        points.forEach((p,i)=>{const b=document.createElementNS(ns,'rect'),h=140*(Number(p.count)||0)/max;for(const [k,v] of Object.entries({x:20+i*width,y:150-h,width:Math.max(1,width-2),height:h,fill:'var(--accent)'}))b.setAttribute(k,v);const title=document.createElementNS(ns,'title');title.textContent=`${date(p.bucket)}: ${val(p.count)}`;b.append(title);svg.append(b);});box.append(svg);
         const details=el('details');details.append(el('summary','Show historical values'),table('Buckets',['Time','Count'],points.map(p=>[date(p.bucket),p.count])));box.append(details);return box;
     }
     function status(r){
@@ -53,7 +53,7 @@
         status(r);dispose();const host=$('network-content');host.replaceChildren();if(!r.data)return;
         const d=r.data,detail=d.detail,s=detail.stat,reach=d.reach;
         host.append(el('p',`Analyzer snapshot for ${detail.node.name||key} · ${key}`,'network-identity'));
-        const cards=el('div',null,'stats-metrics');for(const [label,value] of [['Relayed packets / rolling 24h',s.relayCount24h],['Relayed packets / rolling 1h',s.relayCount1h],['Pairs served',s.pairsServed],['Graph degree',d.metrics.degree],['Directional neighbors',reach.neighbours],['Two-way inferred neighbors',reach.twoWayCount],['Direct observers',reach.directObservers]]){const card=el('div',null,'stats-metric');card.append(el('strong',val(value)),el('p',label));cards.append(card);}host.append(cards);
+        const cards=el('div',null,'stats-metrics');for(const [label,value] of [['Relayed packets / rolling 24h',s.relayCount24h],['Relayed packets / rolling 1h',s.relayCount1h],['Pairs served',s.pairsServed],['Graph degree',d.metrics.degree],['Directional neighbors',reach.neighbours],['Two-way inferred neighbors',reach.twoWayCount],['Direct observers',reach.directObservers]]){const card=el('div',null,'stats-metric');card.append(el('p',label,'muted'),el('strong',val(value)));cards.append(card);}host.append(cards);
         host.append(el('p','Rolling counts are replaced on refresh, never accumulated. Graph metrics and directional counts are not signal quality. Path prefixes may be ambiguous. Observer signal measurements describe the final hop only.','muted'));
         host.append(table('Directional reachability (analyzer-derived)',['Repeater','Distance km','Confidence','weHear','theyHear','Two-way'],reach.neighbourList.map(n=>[n.name||n.pubkey,n.distanceKm,n.confidence,n.weHear,n.theyHear,n.twoWay==null?null:n.twoWay?'Yes':'No'])));
         host.append(table('Inferred neighbors',['Repeater','Distance km','Confidence','Provenance','SNR'],d.neighbors.map(n=>[n.Name||n.ID,n.DistanceKm,n.Conf,n.Provenance,n.SNR])));
@@ -65,20 +65,22 @@
         host.append(table('Clock evidence — counts only, no observer identities',['Packet hash','Observer count','Heard at'],d.clock.recentHashEvidence.map(p=>[p.hash,p.observers,date(p.heardAt)])));
         host.append(el('p',`Clock samples: ${val(d.clock.sampleCount)} · Direct packet rows: ${d.direct.rows.length} · Beacons: ${d.beacons.beacons.length} · Sensor readings: ${d.sensors.readings.length}. Empty successful responses are not access failures.`));
         host.append(table('Receiving observer evidence',['Field','Captured value'],detail.heardBy.map(p=>['Observer record',JSON.stringify(p)])));
-        const mapHost=el('section');mapHost.append(el('h3','Observable relationships'));host.append(mapHost);drawMap(d,mapHost,id,key);
+        const mapHost=el('section',null,'stats-section');mapHost.append(el('h3','Observable relationships'));host.append(mapHost);drawMap(d,mapHost,id,key);
     }
     async function load(force=false){
         if(!visible())return;
         await window.meshcorestationEnsureRepeaterSelection?.();
         if(!visible())return;
         const key=window.meshcorestationSelectedRepeater||'';
+        const identity=$('network-selected');
+        if(identity){identity.textContent=key?'Selected: '+(document.getElementById('managed-repeater')?.selectedOptions[0]?.textContent||key):'No repeater selected';identity.title=key;}
         if(!key){invalidate();$('network-status').textContent='Select a repeater in Repeater Management.';return;}
         if(pendingKey===key)return;
         invalidate();current=key;pendingKey=key;const id=generation;
         controller=new AbortController();const requestController=controller,signal=controller.signal;
         let timedOut=false;const timeout=setTimeout(()=>{timedOut=true;requestController.abort();},35000);
-        $('network-refresh').disabled=true;
-        const saved=cache.get(key);if(saved)render(saved,id,key);else $('network-status').textContent='Loading saved external snapshot…';
+        $('network-refresh').disabled=true;$('network-content').setAttribute('aria-busy','true');
+        const saved=cache.get(key);if(saved)render(saved,id,key);else {$('network-status').dataset.state='loading';$('network-status').textContent='Loading saved external snapshot…';}
         async function request(query){
             const response=await fetch('/api/repeater-network?public_key='+encodeURIComponent(key)+query,{headers:{'X-Meshcore-Control':'1'},cache:'no-store',signal});
             const r=await response.json();if(!response.ok||!r.ok)throw Error(r.error||'Monitoring request failed.');
@@ -88,12 +90,12 @@
         const active=()=>id===generation&&current===key&&visible();
         try{
             let r=await request('&cache_only=1');if(!active())return;cache.set(key,r);render(r,id,key);
-            if(r.state!=='disabled'&&(force||r.stale)){
+            if(force||r.stale){
                 $('network-status').textContent+=' Refreshing external observations…';
                 r=await request(force?'&refresh=1':'');if(!active())return;cache.set(key,r);render(r,id,key);
             }
-        }catch(e){if(active()&&(e.name!=='AbortError'||timedOut))$('network-status').textContent='External monitoring unavailable: '+(timedOut?'request timed out.':e.message)+(cache.get(key)?.data?' Saved snapshot retained.':' No network activity conclusion can be drawn.');}
-        finally{clearTimeout(timeout);if(id===generation){pendingKey=null;controller=null;$('network-refresh').disabled=false;}}
+        }catch(e){if(active()&&(e.name!=='AbortError'||timedOut)){$('network-status').dataset.state='unavailable';$('network-status').textContent='External monitoring unavailable: '+(timedOut?'request timed out.':e.message)+(cache.get(key)?.data?' Saved snapshot retained.':' No network activity conclusion can be drawn.');}}
+        finally{clearTimeout(timeout);if(id===generation){pendingKey=null;controller=null;$('network-refresh').disabled=false;$('network-content').setAttribute('aria-busy','false');}}
     }
     function attach(){
         if(attached||!$('network-content'))return;attached=true;

@@ -16,7 +16,7 @@
         const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 900 210');svg.setAttribute('role','img');svg.setAttribute('aria-label','Observed copies and unique payloads over time');
         const max=Math.max(1,...points.map(p=>p.copies)),width=830/Math.max(1,points.length);
         for(let i=0;i<points.length;i++){
-            const p=points[i];for(const [j,key,color] of [[0,'copies','#4d8eff'],[1,'unique','#30b88a']]){
+            const p=points[i];for(const [j,key,color] of [[0,'copies','var(--accent)'],[1,'unique','var(--green)']]){
                 const bar=document.createElementNS(ns,'rect'),h=150*p[key]/max;
                 for(const [attr,value] of Object.entries({x:50+i*width+j*width*.4,y:175-h,width:Math.max(1,width*.35),height:h,fill:color}))bar.setAttribute(attr,value);
                 const title=document.createElementNS(ns,'title');title.textContent=`${date(p.at)} · ${key}: ${p[key]}`;bar.append(title);svg.append(bar);
