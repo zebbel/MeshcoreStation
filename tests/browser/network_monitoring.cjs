@@ -62,6 +62,7 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
      const padding=await page.locator('#'+id+' > .optimizer-section-body').evaluate(n=>({left:getComputedStyle(n).paddingLeft,right:getComputedStyle(n).paddingRight}));assert.deepEqual(padding,gutter);
     }
     assert(await page.locator('.network-route').first().innerText().then(t=>t.includes('DE_HE_HP_RPT1')&&t.includes('🐝Heppenheim Nord')&&t.includes('Hemsbergturm')));
+    assert.equal(await page.locator('.network-route-table td').nth(2).evaluate(n=>getComputedStyle(n).whiteSpace),'nowrap');
     assert(!await page.locator('.network-route').first().locator('..').locator('..').innerText().then(t=>t.includes('Not recorded')),'captured path timestamps remain readable');
     await page.getByRole('heading',{name:'Packet path patterns (potential hash ambiguity)',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:`${output}/packet-paths-${token}.png`});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no dashboard horizontal overflow');

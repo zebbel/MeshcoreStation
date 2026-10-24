@@ -18,7 +18,7 @@
     function table(title,headers,rows){
         const box=el('section',null,'stats-section');box.append(el('h3',title));
         if(!rows.length){box.append(el('p','No observations returned for this capture window.'));return box;}
-        const wrap=el('div',null,'stats-table-scroll'),t=el('table'),head=el('tr');headers.forEach(x=>head.append(el('th',x)));const thead=el('thead');thead.append(head);t.append(thead);if(headers.length>=4)t.classList.add('stats-wide-table');
+        const wrap=el('div',null,'stats-table-scroll'),t=el('table'),head=el('tr');headers.forEach(x=>head.append(el('th',x)));const thead=el('thead');thead.append(head);t.append(thead);if(headers.length>=4)t.classList.add('stats-wide-table');if(title.startsWith('Packet path patterns'))t.classList.add('network-route-table');
         const body=el('tbody');for(const row of rows){const tr=el('tr');row.forEach(v=>{const td=el('td');if(v instanceof Node)td.append(v);else td.textContent=val(v);tr.append(td);});body.append(tr);}t.append(body);wrap.append(t);box.append(wrap);return box;
     }
     function chart(title,points){

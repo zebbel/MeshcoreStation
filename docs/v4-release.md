@@ -1,6 +1,6 @@
-# MeshcoreStation 4.0.2 — V4 branch prerelease
+# MeshcoreStation 4.0.3 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.0.2` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.0.3` (prerelease, not latest stable). V3 main is unchanged.
 
 - Reusable full-key name resolution across selectors, telemetry, statistics,
   analysis, packet patterns and map popups. Known/managed records, existing cached
@@ -35,3 +35,6 @@ without changing their values or timezone conversion.
 Live Analyzer access and physical radio/mobile hardware remain unverified. Browser
 checks use captured fixtures and simulated tile outages; they establish rendering
 behavior, not provider permission or present network coverage.
+
+Packet-path tables preserve readable count/time columns on narrow viewports.
+Routes wrap in their own column; horizontal scrolling stays inside the table wrapper.

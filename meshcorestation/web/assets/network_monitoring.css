@@ -4,3 +4,8 @@
 #network-content .network-map { height:clamp(260px, 45vw, 420px); }
 
 .network-route { display:block; overflow-wrap:anywhere; line-height:1.7; }
+
+/* Keep count/time legible; only the route column wraps, inside its scroll wrapper. */
+#network-content .network-route-table { min-width:36rem; }
+#network-content .network-route-table :is(th,td):nth-child(2) { width:5rem; white-space:nowrap; }
+#network-content .network-route-table :is(th,td):nth-child(3) { width:13rem; white-space:nowrap; }
