@@ -33,6 +33,7 @@ with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory
         if 72<hour<96: continue # An intentional observation gap.
         at=now-hour*3600
         snapshot=copy.deepcopy(sample)
+        snapshot['detail']['stat'].update(pairsServed=31 if hour<48 else 21,pairsSole=2 if hour<48 else 1)
         end=int(at//3600)*3600
         snapshot['detail']['relayTimeline']=[{'bucket':datetime.fromtimestamp(h,timezone.utc).isoformat(),'count':5 if hour<48 else 3} for h in range(end-24*3600,end,3600) if not 72<(now-h)/3600<96]
         performance_store.record_analyzer(key,at,snapshot)
@@ -46,6 +47,11 @@ with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory
                 route=json.dumps([{'key':key,'name':'DE_HE_HP_RPT1','status':'matched'}])
                 db.execute("INSERT INTO observations(target,at,digest,kind,scoped,ambiguous,first_hop,middle_hop,last_hop,route,previous,following) VALUES(?,?,?,5,1,0,1,0,0,?,'[]','[]')",(key,at,'payload-'+str(hour)+'-'+str(i),route))
                 db.execute('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,5,1,1,1,?,?)',(at,key[:2],'payload-'+str(hour)+'-'+str(i)))
+        for hour in range(31*24):
+            if 72<hour<96: continue
+            at=now-hour*3600-10
+            for i in range(3):
+                db.execute('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,5,1,1,1,?,?)',(at,other[:2],'other-'+str(hour)+'-'+str(i)))
     performance_store.marker_change(key,'create',{'description':'Fixture antenna replacement','at':now-2*86400})
     with advisor_history.database() as db:
         db.execute("INSERT INTO changes VALUES(12345,?,?,'flood.max','10','8','8','verified')",(now-2*86400+3600,key))

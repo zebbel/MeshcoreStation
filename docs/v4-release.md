@@ -1,48 +1,39 @@
-# MeshcoreStation 4.2.1 — V4 branch prerelease
+# MeshcoreStation 4.3.0 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.2.1` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.3.0` (prerelease, not latest stable). V3 main is unchanged.
 
-- Corrected the detailed graph display to preserve small nonzero betweenness
-  values and updated chart help to match the original hourly series.
-- Added unattended Analyzer collection every 12 hours for managed repeaters.
-  Durable schedules, crash leases, one-minute repeater spacing and global provider
-  cooldowns handle restarts and connectivity failures without a catch-up burst.
-  No new mesh radio traffic is generated. Existing five-minute caching and manual
-  Network Monitoring refresh remain available; browsers do not poll.
-- Preserved original complete hourly relay buckets, deduplicated by repeater and
-  UTC timestamp. Overlapping responses replace corrections rather than adding
-  rolling totals. Compact snapshot history includes neighbor/bidirectional counts,
-  graph metrics, reported communication pairs and returned route-pattern counts.
-- Simplified Performance Overview to activity, connectivity, contribution and trend
-  with explicit history coverage and collection status. Technical measurements,
-  history charts and the unchanged journal are separately expandable. Sources
-  remain separate, missing hours break chart lines, and neighbor axes are integers.
-- Preserved manual/verified change markers and equal 24h/3d/7d comparisons. Original
-  hourly buckets are preferred; missing hourly evidence withholds relay percentage
-  comparisons and trend assessments. Network traffic context and missing/partial
-  coverage warnings prevent interpreting activity differences as proven improvement.
+- Rebuilt Repeater Performance in the requested reading order: four numerical
+  Mesh Contribution cards; Forwarding Activity; Repeater vs. Mesh Activity;
+  Network Connectivity; Routing Contribution; Performance Assessment;
+  Performance Changes; and expandable Detailed Statistics.
+- Cards explicitly use the latest rolling 24-hour Analyzer window, including
+  bidirectional/neighbor counts and percentage, pairs served and sole-observed
+  route pairs. A nullable historical sole-pair field preserves older records.
+- Four visible line charts preserve source timestamps and gaps. The indexed
+  two-line comparison uses matching Companion observations and starts at 100;
+  Analyzer and Companion traffic are never divided or added together. Pair and
+  neighbor axes use integers. Legends, hover/raw values and explanations cover
+  observed peaks, traffic context, inferred relationships and limitations.
+- Added coverage-aware assessments of all four domains and a combined explanation.
+  Missing observations, incomplete periods and unsupported baselines show
+  Insufficient Data. Increased activity is not labeled a delivery improvement.
+- Kept manual/verified markers, journal CRUD and equal 24h/3d/7d comparisons;
+  before/after analysis now includes four line charts with vertical change markers,
+  a source-aware assessment, overlap warnings and expandable technical values.
 
-The existing performance database gains additive tables; existing records and
-other databases remain compatible. Measurement tables retain up to 400 days and
-250,000 rows each across managed repeaters. Permanent markers are not aged out.
-Existing administrator controls, explicit confirmations/readback, maps, names,
-telemetry, Room Server and unrelated experimental optimization features remain.
+Automatic 12-hour collection, hourly deduplication, five-minute caching, Refresh
+Now, retention, existing data, administrator protections and radio safety remain.
+No additional radio traffic or individual data-lookup requests are introduced.
+No performance score, delivery-success percentage or repeater ranking is added.
 
-Limits: station service/connectivity/provider access are required. Provider history
-cannot recover older missing data after extended outages. Relationships are
-inferred; activity changes, graph metrics and communication-pair counts do not
-prove direct radio links, successful delivery or causation. Historical Companion
-uptime is unknown. Screenshots/tests use captured formats and synthetic local
-history, not a new verification of external API access or RF performance.
+Limits: source access/connectivity are still required; missing historical sole-pair
+values cannot be invented. Comparable Companion history needs the existing
+network-wide observation stream. Sample coverage does not certify receiver uptime.
+Alternative routes may exist beyond Analyzer observations. Activity and inferred
+relationships do not prove delivery, direct RF links or causation.
 
-Validation: full Python and JavaScript regression suites; simulated unattended
-collection across 60 hours with process restarts, overlapping hourly history,
-retention, errors/cooldowns and crash leases; real Chromium desktop/mobile in both
-themes, charts/gaps/marker geometry, local journal CRUD/reload, comparisons, resizing,
-shared selection and existing map/iframe regressions. See release report for counts.
-
-Validated: 514 Python tests and all 36 JavaScript suites passed. Real Chromium
-checks cover desktop (1280px) and mobile (390px), light/dark themes, rendered gaps
-and integer neighbor axes, overview/detail disclosures, persistent journal CRUD,
-marker comparisons, resizing and shared-repeater switching. Existing network-map
-and Optimization Analysis iframe regressions passed; screenshots were inspected.
+Validation includes stored-value/card/chart checks, same-stream normalization,
+ambiguous hashes, missing/partial/zero baselines, retention warnings, exact marker
+boundaries, journal persistence, repeater switching and the existing 60-hour
+collection simulation. Complete Python/JavaScript and real Chromium desktop/mobile
+light/dark regression checks and screenshot inspection gate publication.

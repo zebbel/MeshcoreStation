@@ -50,6 +50,8 @@ def database(path=None):
         INSERT OR IGNORE INTO collection_control(id) VALUES(1);
         CREATE INDEX IF NOT EXISTS performance_marker_key ON markers(public_key,at);
         ''')
+        if 'sole_pairs' not in {r[1] for r in db.execute('PRAGMA table_info(measurement_details)')}:
+            db.execute('ALTER TABLE measurement_details ADD COLUMN sole_pairs REAL')
         with db:
             yield db
     finally:
@@ -89,9 +91,11 @@ def record_analyzer(key, at, data, path=None):
         db.execute('INSERT OR IGNORE INTO measurements VALUES(?,?,?,?,?,?,?,?)',
           (key, int(at * 1000000), at, number(stat.get('relayCount1h')), number(stat.get('relayCount24h')),
            len(peers) if roles_known else None, sum(bidirectional(p) for p in peers.values()) if roles_known else None, number(data['metrics'].get('degree'))))
-        db.execute('INSERT OR IGNORE INTO measurement_details VALUES(?,?,?,?,?,?)',
+        db.execute('INSERT OR IGNORE INTO measurement_details(public_key,at,pairs,routes,betweenness,graph_rank) VALUES(?,?,?,?,?,?)',
           (key,at,number(stat.get('pairsServed')),len(data['detail']['pathsThroughNode']),
            number(data['metrics'].get('betweenness')),number(data['metrics'].get('rank'))))
+        db.execute('UPDATE measurement_details SET sole_pairs=? WHERE public_key=? AND at=? AND sole_pairs IS NULL',
+                   (number(stat.get('pairsSole')),key,at))
         for row in data['detail'].get('relayTimeline',[]):
             # Only complete, explicitly returned hourly buckets. Absent hours are
             # unknown, never inferred zero. UTC offset required; preserve instant.
@@ -353,7 +357,7 @@ def comparison(key, marker, days, now, all_markers):
             'values':{'companion_packets':p['copies'],'distinct_packets':p['unique'],'observed_routes':p['routes'],
                       'companion_network_packets':p['network'],'analyzer_hourly_relays_mean':sum(r['count'] for r in hours)/len(hours) if hours else mean('relay_1h'),
                       'analyzer_neighbors_mean':mean('neighbors'),'analyzer_bidirectional_mean':mean('two_way'),
-                      'analyzer_pairs_mean':detail_mean('pairs'),'analyzer_routes_mean':detail_mean('routes'),
+                      'analyzer_pairs_mean':detail_mean('pairs'),'analyzer_sole_pairs_mean':detail_mean('sole_pairs'),'analyzer_routes_mean':detail_mean('routes'),
                       'optimizer_neighbors_mean':sum(neighbor_readings.values())/len(neighbor_readings) if neighbor_readings else None},
             'optimizer_samples':len(neighbor_readings),
             'analyzer_samples':len(hours) if hours else len(samples),'analyzer_source':'Original hourly buckets' if hours else 'Legacy rolling 1h samples','expected_hourly_samples':expected,'analyzer_snapshot_samples':len(reach_hours),
@@ -448,9 +452,13 @@ def overview(key, days, now=None, marker_id=None, compare_days=7):
               'notes':['Companion values are received packet copies with this repeater in a collision-checked path, not proven direct forwarding or delivery success.',
                        'Analyzer forwarding charts preserve original complete hourly buckets at every selected period length. Reach is the latest snapshot per display interval. Missing hours remain unknown; rolling totals are never added.',
                        'Observations from different sources are shown separately, never added into a performance score.']}
+    from meshcorestation.storage.performance_view import dashboard
+    result['dashboard']=dashboard(key,start,now,step)
     if marker_id is not None:
         marker = next((m for m in journal if m['id']==marker_id),None)
         if not marker:
             raise ValueError('Change marker not found for this repeater.')
         result['comparison']=comparison(key,marker,compare_days,now,journal)
+        width=compare_days*DAY
+        result['comparison']['dashboard']=dashboard(key,marker['at']-width,marker['at']+width,3600 if compare_days==1 else 21600,now=now,split=marker['at'])
     return result

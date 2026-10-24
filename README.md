@@ -1,4 +1,4 @@
-# MeshcoreStation 4.2.1
+# MeshcoreStation 4.3.0
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -9,15 +9,16 @@ is **available on demand without activation**, with live operation confirmed by 
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
 
-## Changes in 4.2.1
+## Changes in 4.3.0
 
-Repeater Performance now starts with a plain-English overview of activity,
-connectivity, contribution and trends. Detailed Statistics, Performance History
-and Performance Changes are separately expandable. The station automatically
-collects Analyzer history every 12 hours for managed repeaters, even with no open
-dashboard. Original hourly buckets are deduplicated across overlapping responses;
-missing evidence stays unknown. Existing journal markers and comparisons remain.
-No performance score, delivery-success claim or extra radio traffic is generated.
+Repeater Performance now displays four numerical Mesh Contribution cards, followed
+by Forwarding Activity, Repeater vs. Mesh Activity, Network Connectivity and Routing
+Contribution line charts. Performance Assessment explains measured changes and
+coverage; the change journal and detailed technical statistics remain secondary.
+The indexed traffic comparison uses a single Companion observation stream. Analyzer
+pair counts include sole-observed routes where recorded. No performance score or
+delivery-success claim is generated. Existing 12-hour automatic history collection,
+five-minute cache, saved records and protected operations are preserved.
 
 See [Repeater Performance](docs/repeater-performance.md) for collection gaps,
 storage bounds, comparisons and change-marker behavior.

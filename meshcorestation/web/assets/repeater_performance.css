@@ -30,3 +30,17 @@
 .performance-disclosure > summary { cursor:pointer; font-weight:600; padding-block:12px; }
 .performance-disclosure[open] > summary { margin-bottom:12px; }
 #performance-content .stats-metric strong { font-size:1.15rem; line-height:1.4; }
+/* The main dashboard follows one reading order; technical details stay last. */
+#performance-content .performance-overview .stats-metric strong { font-size:1.8rem; line-height:1.2; }
+.performance-unit { font-weight:600; font-size:.85rem; }
+.performance-chart-section { margin-block:24px; padding-block:12px; }
+.performance-chart-section h4 { margin-bottom:6px; }
+.performance-chart-section > .muted { max-width:75ch; }
+.performance-assessment-summary { font-weight:600; }
+.performance-assessment-item { padding:12px 0; border-bottom:1px solid var(--border); }
+.performance-assessment-item h4 { margin:0 0 8px; }
+.performance-assessment-item p { margin-block:6px; }
+@media(min-width:750px) {
+ .performance-assessment { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 24px; }
+ .performance-assessment > :is(h3,p) { grid-column:1 / -1; }
+}

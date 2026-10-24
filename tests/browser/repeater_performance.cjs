@@ -14,16 +14,25 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  await page.locator('#repeater-performance-disclosure > summary').click();await page.getByText('Saved observations loaded.',{exact:false}).first().waitFor();
  assert.equal(await page.locator('#performance-selected').innerText(),'DE_HE_HP_RPT1');assert.equal(await page.locator('#performance-content .stats-metric').count(),4);
  const section=page.locator('#repeater-performance-disclosure');
- assert(await page.locator('.performance-overview').innerText().then(t=>t.includes('Performance Trend')&&t.includes('Data completeness')));
- assert.equal(await page.locator('#performance-history').getAttribute('open'),null);
+ const exactOrder=['performance-contribution','performance-forwarding','performance-relative','performance-connectivity','performance-routing','performance-assessment','performance-changes','performance-details'];
+ assert.deepEqual(await page.locator('#performance-content').evaluate(n=>[...n.children].filter(n=>n.tagName==='SECTION'||n.tagName==='DETAILS').map(n=>n.id)),exactOrder);
  assert.equal(await page.locator('#performance-details').getAttribute('open'),null);
- await page.locator('#performance-history > summary').click();
- await page.locator('#performance-changes > summary').click();
+ const stored=await page.request.get('http://127.0.0.1:8050/api/repeater-performance?public_key='+key,{headers:{'X-Meshcore-Control':'1'}}).then(r=>r.json());
+ const cards=section.locator('.stats-metric');
+ assert.deepEqual(await cards.locator('strong').allTextContents(),['107','4 / 14','31','2']);
+ assert.equal(stored.dashboard.cards.sole_pairs,2);assert.equal(stored.dashboard.cards.pairs,31);
+ assert((await section.innerText()).includes('28.57%'));
  await page.locator('.performance-overview').screenshot({path:`${output}/performance-overview-${token}.png`});
- assert.equal(await section.locator('svg.performance-chart').count(),3);assert(await section.locator('.performance-change-line').count()>=3);
+ assert.equal(await section.locator('svg.performance-chart:visible').count(),4);
+ assert.deepEqual(await section.locator('.performance-chart-section > h3').allTextContents(),['Forwarding Activity','Repeater vs. Mesh Activity','Network Connectivity','Routing Contribution']);
+ assert.equal(await section.locator('svg.performance-chart rect:not([fill="transparent"])').count(),0,'all performance charts are lines, not bars');
+ assert(await section.locator('.performance-change-line').count()>=4);
  assert(await section.locator('svg.performance-chart circle').count()>0);
- const reachTicks=await section.locator('svg.performance-chart').nth(2).locator('text[text-anchor="end"]').allTextContents();assert(reachTicks.filter(t=>/^\d/.test(t)).every(t=>!t.includes('.')),'neighbor axes use whole counts');
- const hourlyPaths=await section.locator('svg.performance-chart').nth(1).locator('path[stroke-width="2"]').getAttribute('d');assert((hourlyPaths.match(/M/g)||[]).length>=2,'missing hourly observations break the rendered line');
+ for(const index of [2,3]){const ticks=await section.locator('svg.performance-chart').nth(index).locator('.performance-y-label').allTextContents();assert(ticks.every(t=>!t.includes('.')),'neighbor and pair axes use integer labels');}
+ const hourlyPaths=await section.locator('svg.performance-chart').nth(0).locator('.performance-data-line').getAttribute('d');assert((hourlyPaths.match(/M/g)||[]).length>=2,'missing hourly observations break the rendered line');
+ const normalized=await section.locator('svg.performance-chart').nth(1).locator('circle title').allTextContents();assert(normalized.some(t=>t.includes(': 100 · Companion raw copies:')),'indexed chart starts at 100 and preserves raw hover counts');
+ const lines=await section.locator('.performance-data-line').evaluateAll(nodes=>nodes.map(n=>({length:n.getTotalLength(),stroke:getComputedStyle(n).stroke})));assert(lines.every(n=>n.length>0&&n.stroke!=='none'),'actual visible line geometry');
+ await page.locator('#performance-changes > summary').click();
  const geometry=await section.locator('.performance-marker-line').evaluateAll(nodes=>nodes.map(n=>({length:n.getTotalLength(),width:n.getBBox().width,height:n.getBBox().height,stroke:getComputedStyle(n).stroke})));assert(geometry.every(n=>n.length>100&&n.height>100&&n.stroke!=='none'));
  assert((await section.innerText()).includes('Verified flood.max'));
  assert.equal(requests.filter(r=>r.url.includes('/api/repeater-network')).length,0,'performance does not fetch Analyzer data');
@@ -36,10 +45,13 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  await page.locator('#performance-details > summary').click();
  await section.locator('.performance-change-line').last().click();await page.locator('#performance-comparison').waitFor();
  assert((await page.locator('#performance-comparison').innerText()).includes('Correlation does not prove'));
+ assert.equal(await page.locator('#performance-comparison svg.performance-chart:visible').count(),4);
+ assert(await page.locator('#performance-comparison .performance-marker-line').count()>=4);
  assert((await page.locator('#performance-comparison').innerText()).includes('overlap'));
  for(const days of ['1','3','7']){await Promise.all([page.waitForResponse(r=>r.url().includes('compare_days='+days)&&r.request().method()==='GET'),page.locator('#performance-comparison select').selectOption(days)]);await page.waitForFunction(()=>document.querySelector('#performance-content')?.getAttribute('aria-busy')==='false');assert.equal(await page.locator('#performance-comparison select').inputValue(),days);}
  await page.locator('#performance-comparison').screenshot({path:`${output}/performance-comparison-${token}.png`});
- const comparisonTable=page.locator('#performance-comparison .stats-table-scroll');
+ await page.locator('#performance-comparison > .comparison-values > summary').click();
+ const comparisonTable=page.locator('#performance-comparison > .comparison-values .stats-table-scroll');
  assert.equal(await comparisonTable.locator('td').nth(1).evaluate(n=>getComputedStyle(n).whiteSpace),'nowrap');
  if(viewport.width===390){assert(await comparisonTable.evaluate(n=>n.scrollWidth>n.clientWidth));await comparisonTable.evaluate(n=>{n.scrollLeft=n.scrollWidth;});await comparisonTable.screenshot({path:`${output}/performance-comparison-values-${token}.png`});await comparisonTable.evaluate(n=>{n.scrollLeft=0;});}
 

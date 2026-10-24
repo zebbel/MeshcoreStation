@@ -50,7 +50,7 @@ class NoRedirect(HTTPRedirectHandler):
 def transport(url, headers, timeout):
     """Fixed-host caller; reject redirects, limit body and socket wait."""
     req = Request(url, headers={'Accept': 'application/json',
-                               'User-Agent': 'MeshcoreStation/4.2.1 (read-only analyzer client)', **headers})
+                               'User-Agent': 'MeshcoreStation/4.3.0 (read-only analyzer client)', **headers})
     try:
         with build_opener(NoRedirect()).open(req, timeout=timeout) as response:
             deadline = time.monotonic() + timeout
@@ -108,7 +108,7 @@ def validate(name, body, key):
         else: rows(value[required[0]])
     # Reject unexpected nested values in fields consumed as numbers or labels.
     numeric = {'degree','betweenness','rank','receptions','observers','relayCount24h','relayCount1h',
-               'pairsServed','count','Count','total','toCount','fromCount','weHear','theyHear','twoWayCount',
+               'pairsServed','pairsSole','count','Count','total','toCount','fromCount','weHear','theyHear','twoWayCount',
                'directObservers','distanceKm','DistanceKm','lat','lon','SNR','RSSI','sampleCount'}
     strings = {'name','Name','pubkey','ID','id','Conf','confidence','Provenance','bucket','lastSeen','firstSeen','packetType','hash'}
     def check(v, depth=0):

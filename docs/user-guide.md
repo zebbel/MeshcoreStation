@@ -25,13 +25,13 @@ the latest successful sample with its original timestamp.
 
 Repeater Optimizer contains four independent disclosures:
 
-- Repeater Performance: a simple activity, connectivity, contribution and trend overview;
-  expandable details/history and 24h/7d/30d charts,
-  a local change journal and 24h/3d/7d before/after windows. Saved data loads only
-  when opened. Logging does not transmit or apply configuration changes.
-  Analyzer history collects every 12 hours while the station runs, even without
-  an open dashboard. Missing observations remain gaps.
-  [Performance and comparisons](repeater-performance.md).
+- Repeater Performance: numerical relay, two-way reach and routing-contribution
+  cards, then four line charts and a coverage-aware Performance Assessment.
+  Choose 24h/7d/30d history. Cards retain the latest explicitly labeled rolling
+  24-hour Analyzer window. Performance Changes holds the journal and before/after
+  line charts; Detailed Statistics is last. Logging never sends radio commands.
+  Analyzer collection continues every 12 hours while the station service runs.
+  See [Performance and comparisons](repeater-performance.md).
 - Repeater Statistics: local passive evidence, collection pause/resume, periods,
   charts, route counts and usefulness. Closed panels do not load data.
 - Optimization Analysis: passive analysis and comparisons. Protected actions require

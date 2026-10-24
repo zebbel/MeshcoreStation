@@ -33,53 +33,100 @@ recover hourly buckets still returned by the provider, but cannot reconstruct
 older missing intervals. The overview shows schedule status and history coverage.
 A future collection time is a schedule, not a guarantee of success.
 
-## Simple overview
+## Dashboard reading order
 
-- **Mesh Activity:** forwarding in the latest recorded Analyzer hour and Companion
-  path involvement over the selected period. A zero in one recorded hour does
-  not imply a repeater is faulty or permanently inactive.
-- **Network Reach:** neighboring repeaters and bidirectional relationships inferred
-  from Analyzer observations. Retrieval time and older snapshots are identified.
-- **Mesh Contribution:** reported communication pairs served, distinct Companion
-  packet IDs and route patterns where available. Pairs are rolling-window counts;
-  they are not individual delivery confirmations. Returned Analyzer route counts
-  may be truncated by the provider.
-- **Performance Trend:** higher/lower/unchanged hourly forwarding between equally
-  sized, completed halves of the selected period, only when both halves have all
-  hourly buckets. Missing hours withhold a trend. Higher activity is not
-  automatically better performance. Companion network traffic over the same
-  periods supplies separately labeled context; different source coverage prevents
-  attributing changes to the repeater.
+1. **Mesh Contribution** — four numerical cards: Relay Activity, Two-Way Reach,
+   Communication Pairs Served and Sole-Observed Route Pairs.
+2. **Forwarding Activity** — Analyzer complete hourly relay events.
+3. **Repeater vs. Mesh Activity** — two indexed Companion lines.
+4. **Network Connectivity** — observed neighbors and bidirectional relationships.
+5. **Routing Contribution** — communication pairs and sole-observed route pairs.
+6. **Performance Assessment** — measured changes, coverage and interpretation.
+7. **Performance Changes** — expandable journal and before/after analysis.
+8. **Detailed Statistics** — expandable existing technical values and provenance.
 
-Data completeness states the available/expected complete hourly buckets, first
-and latest original hourly timestamps, and automatic collection status. An hour
-still in progress is excluded. The two comparison halves exclude an unmatched
-oldest hour when the number of completed hours is odd. No arbitrary score,
-unverified delivery rate or reliable improvement claim is derived from gaps.
+All four main charts are visible line charts, with legends, original observation
+instants, hover values and a short What does this mean? explanation. The 24h/7d/30d
+selector updates history and assessment. Mobile tables scroll inside the panel;
+charts resize with it and use the same dashboard theme. Nothing uses example data
+or compares the selected repeater against another repeater.
 
-## Details and charts
+## Numerical cards and periods
 
-Detailed Statistics and Performance History are independently expandable below
-the overview. The former includes raw values and graph degree, betweenness and
-rank. The latter separates Companion received packet counts, Analyzer hourly
-forwarding, and sampled network reach/optimizer neighbor observations.
+Cards use the latest saved Analyzer snapshot, regardless of the selected history
+period. Their rolling 24-hour measurement period and retrieval timestamp are shown
+explicitly. Older snapshots are marked. These values must not be interpreted as
+7-day or 30-day totals, and rolling windows are never added.
 
-Hourly Analyzer points retain original UTC instants and counts at all selected
-period lengths. Absent hours break the line; they are never filled with zero.
-An explicitly returned complete zero-count bucket remains zero. Neighbor axes
-use integers. Companion display buckets are hourly (24h), six-hourly (7d) or daily
-(30d); first/last buckets can be partial. Reach/optimizer curves use the latest
-snapshot per display interval. Blank intervals mean missing observations. Hover
-points or open Show measured values for timestamps and values.
+- Relay Activity is the reported rolling 24-hour relay-event count, not confirmed
+  message deliveries.
+- Two-Way Reach is bidirectional relationships / observed repeater neighbors and
+  that fraction as a percentage. With no known neighbors, the percentage is
+  unavailable rather than an invented zero or success rate.
+- Communication Pairs Served uses Analyzer `pairsServed`: observed pair paths
+  involving this repeater, not proven deliveries.
+- Sole-Observed Route Pairs uses Analyzer `pairsSole`: pairs without an alternative
+  in those Analyzer observations. Other unobserved routes may exist. This is not
+  a claim that the repeater is essential or irreplaceable.
 
-The managed repeater's Repeater Statistics stream is preferred per requested
-window, including with the separate Optimizer disabled. Otherwise the existing
-collision-aware Optimization Analysis network stream is used. Copies appearing
-in both stores are never added. Companion and Analyzer counts are never added
-together. Companion uptime/reception completeness was not historically recorded;
-packet rows cannot certify continuous coverage. Existing Companion retention and
-pauses can cause gaps. Short ambiguous path hashes remain excluded, and public
-keys remain unchanged internally.
+The new nullable sole-pair field preserves old records unchanged. An existing
+saved API response can backfill its own original retrieval instant; older
+snapshots without the field remain unknown. No network lookups are added.
+
+## Four charts and source coverage
+
+Forwarding retains every complete hourly Analyzer bucket and timestamp at every
+selected period length. Explicit zero buckets remain zero; absent hours break the
+line. Traffic peaks or quiet periods may reflect network demand or observer
+coverage, not a change in delivery quality.
+
+Repeater vs. Mesh Activity derives **both** series from the same
+`network_observations` Companion stream, with the same time boundaries and existing
+collision-aware path matching. It never divides Analyzer counts by Companion
+traffic or mixes the managed Statistics stream into this chart. Each line starts
+at index 100 in the first complete bucket with positive repeater and mesh counts:
+`100 × current count / that series' baseline count`. Hover/details preserve raw
+counts. A recorded zero after the baseline is a valid zero involvement count among
+observed paths; missing buckets stay gaps. A zero/unknown baseline has no index.
+Ambiguous short hashes invalidate the involvement bucket instead of guessing.
+
+Companion buckets are hourly (24h), six-hourly (7d) or daily (30d). Partial boundary
+buckets cannot establish an index. If Optimization Analysis did not save the
+network-wide stream, comparable history may be unavailable even when the separate
+Repeater Statistics stream has records. The latter remains in Detailed Statistics;
+its copies are never added to duplicate observations in the network-wide store.
+
+Connectivity and routing charts keep the latest actually recorded snapshot in
+each 12-hour collection interval, at its original retrieval timestamp. They do not
+carry values into empty intervals. Neighbor and pair axes use integer labels;
+these are inferred relationships and rolling-window observations, not time-weighted
+radio guarantees. The original graph degree, betweenness and rank remain technical
+details; they are not used to rank repeater performance.
+
+## Assessment and limitations
+
+Assessment compares equally sized earlier/later halves of the selected history.
+Each domain shows measured means, changes and available/expected intervals. Only
+complete source intervals wholly contained in each half enter the calculation;
+straddling boundary intervals are excluded equally. Hourly forwarding requires
+all expected hourly buckets; sampled connectivity/routing require a value in each
+expected 12-hour interval; comparable traffic requires received observations and
+unambiguous involvement counts in every expected Companion bucket. Missing values,
+ongoing windows, zero relative baselines and Companion retention/collection
+warnings produce **Insufficient Data**, rather than a guessed trend.
+
+The relative assessment compares repeater and mesh percentage changes from the
+same Companion stream. It explains whether observed involvement rose faster,
+tracked observed traffic, or declined relatively. The combined assessment only
+interprets all four domains when each has sufficient coverage. Stable/higher
+connectivity and routing together with increased relative involvement suggest
+increased **observed contribution**, not proven delivery improvement.
+
+Available intervals mean intervals with observations, not certified receiver
+uptime. Companion reception completeness was not historically recorded. Observer
+coverage, traffic demand, path changes and source retention can affect all values.
+No arbitrary score, delivery-success percentage, causal conclusion or comparison
+against other repeaters is made. Inferred relationships do not prove direct RF links.
 
 ## Performance Changes
 
@@ -99,7 +146,12 @@ resets retain the separate journal/archive. Removing/re-adding a repeater starts
 fresh and rejects stale in-flight writes. Include this database in normal backups.
 
 Vertical chart lines are clickable/tappable and keyboard accessible. Compare in
-the journal provides the same action. Choose equal 24-hour, 3-day or 7-day windows
+the journal provides the same action. Before/after analysis shows four line charts
+with vertical change markers: forwarding, indexed Companion activity, connectivity
+and routing contribution. Its separate assessment applies the same source and
+coverage rules as the main dashboard. Detailed legacy comparison values remain
+expandable; they use hourly sampled Analyzer means and exact Companion windows,
+whereas the dashboard connectivity/routing trends sample once per 12-hour interval. Choose equal 24-hour, 3-day or 7-day windows
 (7 days default). Elapsed durations remain equal across daylight-saving changes.
 
 Companion packet/route counts use exact window boundaries. Analyzer relay means
