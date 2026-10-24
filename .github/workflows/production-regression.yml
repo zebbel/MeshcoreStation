@@ -1,7 +1,7 @@
 name: Production regression
 on:
   push:
-    branches: [main, release-3.0.5-integration]
+    branches: [main, v4.0.0, release-3.0.5-integration]
   pull_request:
     paths:
       - 'meshcorestation/**'

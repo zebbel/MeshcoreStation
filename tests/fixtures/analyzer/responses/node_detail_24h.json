@@ -1,0 +1,897 @@
+{
+  "node": {
+    "id": "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+    "name": "DE_HE_HP_RPT1",
+    "role": "Repeater",
+    "power": "Unknown",
+    "lat": 49.640019,
+    "lon": 8.633326,
+    "lastSeen": "2026-10-23T14:37:32.979071Z",
+    "hashSize": 3,
+    "advertCount": 9,
+    "sigStatus": "valid",
+    "sigValidCount": 9,
+    "sigInvalidCount": 0,
+    "isObserver": false,
+    "cloneOf": null
+  },
+  "stat": {
+    "receptions": 0,
+    "observers": 0,
+    "avgSnr": null,
+    "bestSnr": null,
+    "avgHops": null,
+    "packetsToday": 0,
+    "trafficSharePct": 0.00919775777061068,
+    "directObservers": 0,
+    "carried": 107,
+    "bridge": 0.0006164115682053056,
+    "coverage": 0.574551320706299,
+    "redundancy": 0,
+    "usefulness": 0.18222920966188963,
+    "usefulnessGrade": "D",
+    "trafficNorm": 0.0037920802404178876,
+    "irreplaceability": 0.024390243902439025,
+    "pairsServed": 21,
+    "pairsSole": 1,
+    "floodCarried24h": 76,
+    "floodAlsoHeard24h": 61,
+    "topPercent": 45.16829533116178,
+    "rank": 416,
+    "peerGroup": "FRA",
+    "peerCount": 921,
+    "redundancyPairs": 0,
+    "relayActive": true,
+    "relayCount1h": 5,
+    "relayCount24h": 107,
+    "lastRelayed": "2026-10-24T14:00:00Z",
+    "repeatingRelay": false
+  },
+  "heardBy": [],
+  "timeline": [],
+  "packetTypes": [],
+  "hopDist": [],
+  "carriedTypes": [
+    {
+      "type": "6",
+      "count": 34
+    },
+    {
+      "type": "5",
+      "count": 23
+    },
+    {
+      "type": "4",
+      "count": 22
+    },
+    {
+      "type": "2",
+      "count": 8
+    },
+    {
+      "type": "0",
+      "count": 6
+    },
+    {
+      "type": "8",
+      "count": 6
+    },
+    {
+      "type": "7",
+      "count": 5
+    },
+    {
+      "type": "3",
+      "count": 2
+    },
+    {
+      "type": "1",
+      "count": 1
+    }
+  ],
+  "hopTrend": [],
+  "recentPackets": [
+    {
+      "hash": "3bdc090c3a8f2069",
+      "firstSeen": "2026-10-23T14:37:25.922001+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "3c1a48057d485729",
+      "firstSeen": "2026-10-17T17:49:27+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "10fbf5c29bbb9d08",
+      "firstSeen": "2026-10-15T13:35:11+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "feb5a5bb4b76143b",
+      "firstSeen": "2026-10-06T21:39:50+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "e9ee6665d54404e2",
+      "firstSeen": "2026-10-05T18:28:23+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "c19dd446262bae52",
+      "firstSeen": "2026-10-02T16:55:35+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "bf542a2f121c7311",
+      "firstSeen": "2026-10-02T16:29:03+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "1cc6d530434e2745",
+      "firstSeen": "2026-10-02T14:36:01+00:00",
+      "packetType": "Advert"
+    },
+    {
+      "hash": "f509b7489f7c62cf",
+      "firstSeen": "2026-10-02T13:37:23+00:00",
+      "packetType": "Advert"
+    }
+  ],
+  "pathsThroughNode": [
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 93,
+      "width": 3,
+      "lastSeen": "2026-10-24T07:18:23+00:00"
+    },
+    {
+      "path": [
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660"
+      ],
+      "count": 62,
+      "width": 3,
+      "lastSeen": "2026-10-24T13:15:46+00:00"
+    },
+    {
+      "path": [
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 38,
+      "width": 3,
+      "lastSeen": "2026-10-24T11:02:15+00:00"
+    },
+    {
+      "path": [
+        "4099e289e82a1504e6ce0e3b757e3481ad7202850a1ac4af9a04d1895b8ef8ec",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 27,
+      "width": 3,
+      "lastSeen": "2026-10-24T14:53:56+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "026064331ba8785f26a9cce20acbf6d49c69a37df4aedac9e8d57341628f37d3"
+      ],
+      "count": 23,
+      "width": 3,
+      "lastSeen": "2026-10-24T07:25:10+00:00"
+    },
+    {
+      "path": [
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 22,
+      "width": 3,
+      "lastSeen": "2026-10-22T12:23:48+00:00"
+    },
+    {
+      "path": [
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41"
+      ],
+      "count": 17,
+      "width": 3,
+      "lastSeen": "2026-10-24T14:53:56+00:00"
+    },
+    {
+      "path": [
+        "24a16ec1e0699f05732e02d92b82520a5ece02d30c342c43c11b611962f2f5e4",
+        "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 14,
+      "width": 3,
+      "lastSeen": "2026-10-23T04:38:07+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "38306ce650fd0a6d261f2463156f28c6b961be4b388eee21c76d6696a6c64739"
+      ],
+      "count": 13,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:23:46.622898+00:00"
+    },
+    {
+      "path": [
+        "351e7e19096cd5b7abcd57afe50b48c7d80384f9e26ee3d38a9edc16539a6fbc",
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 13,
+      "width": 3,
+      "lastSeen": "2026-10-22T12:23:48+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd"
+      ],
+      "count": 12,
+      "width": 3,
+      "lastSeen": "2026-10-23T12:34:24+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd"
+      ],
+      "count": 12,
+      "width": 3,
+      "lastSeen": "2026-10-23T11:33:11+00:00"
+    },
+    {
+      "path": [
+        "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd"
+      ],
+      "count": 12,
+      "width": 3,
+      "lastSeen": "2026-10-23T04:38:07+00:00"
+    },
+    {
+      "path": [
+        "842c563ef67fc674ca3d26e9cf0ae14734a51a19b3ba89e72c79a5488dbfcf77",
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 11,
+      "width": 2,
+      "lastSeen": "2026-10-19T11:16:41.116887+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "104edd1739e62ad3ce604a3521de366744c8f89cd99a0b1766dcafa96594a91f"
+      ],
+      "count": 10,
+      "width": 3,
+      "lastSeen": "2026-10-24T07:47:39+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd",
+        "1d4771400fa09c9ea6886e0f9069a473138f1cf6f84b6b5f8aac63e47e7f1bf1"
+      ],
+      "count": 10,
+      "width": 3,
+      "lastSeen": "2026-10-24T07:27:44+00:00"
+    },
+    {
+      "path": [
+        "68a18c8d12e6a04ecad281a67cbbb540d4ca93ac4e7492f1350483c8df8186ad",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 9,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:23:50.284395+00:00"
+    },
+    {
+      "path": [
+        "99bb19916354fe47f8185cb76f7cb6350445d35b5cacc926c5c83a531c89baa4",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660"
+      ],
+      "count": 9,
+      "width": 3,
+      "lastSeen": "2026-10-23T09:46:33.431751+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41",
+        "1d4771400fa09c9ea6886e0f9069a473138f1cf6f84b6b5f8aac63e47e7f1bf1"
+      ],
+      "count": 8,
+      "width": 3,
+      "lastSeen": "2026-10-24T14:53:56+00:00"
+    },
+    {
+      "path": [
+        "aa52b6d2320824e7f05209d634b671e14887685f53a04adf8f9d89a95a2a0da7",
+        "68a18c8d12e6a04ecad281a67cbbb540d4ca93ac4e7492f1350483c8df8186ad",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 8,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:23:50.284395+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "1d4771400fa09c9ea6886e0f9069a473138f1cf6f84b6b5f8aac63e47e7f1bf1"
+      ],
+      "count": 8,
+      "width": 3,
+      "lastSeen": "2026-10-24T07:25:11+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd",
+        "d0e321fed29df43245eabede1777b4f857ada51c5e4786e7fd687e8a3c615096"
+      ],
+      "count": 8,
+      "width": 3,
+      "lastSeen": "2026-10-23T09:11:08+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "d5b7304ded03c99ec8d35408666aa8d0d872d54e4a30a7d986d3dbd36c2cce30"
+      ],
+      "count": 7,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:23:47+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41"
+      ],
+      "count": 7,
+      "width": 3,
+      "lastSeen": "2026-10-24T01:42:39+00:00"
+    },
+    {
+      "path": [
+        "221065d8ae98f319f4fd7951b9af8fa23a04885051ad776ad22c8ffe83ce0b73",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660"
+      ],
+      "count": 7,
+      "width": 3,
+      "lastSeen": "2026-10-22T20:53:19+00:00"
+    },
+    {
+      "path": [
+        "221065d8ae98f319f4fd7951b9af8fa23a04885051ad776ad22c8ffe83ce0b73",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 6,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:34:46+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41",
+        "026064331ba8785f26a9cce20acbf6d49c69a37df4aedac9e8d57341628f37d3"
+      ],
+      "count": 6,
+      "width": 3,
+      "lastSeen": "2026-10-24T06:22:52+00:00"
+    },
+    {
+      "path": [
+        "68a18c8d12e6a04ecad281a67cbbb540d4ca93ac4e7492f1350483c8df8186ad",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 6,
+      "width": 3,
+      "lastSeen": "2026-10-24T03:20:22.483527+00:00"
+    },
+    {
+      "path": [
+        "9915f13430f047debd5618838c9e821aa2e3d4cef7f1bf9fb20c7ff44418186f",
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 6,
+      "width": 3,
+      "lastSeen": "2026-10-22T17:28:00+00:00"
+    },
+    {
+      "path": [
+        "3dcb4f6a144dda0c9c88b7d2438e5a0b4b0f5cd9ea501880d78f16082e906f0f",
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 6,
+      "width": 3,
+      "lastSeen": "2026-10-22T13:57:59+00:00"
+    },
+    {
+      "path": [
+        "104edd1739e62ad3ce604a3521de366744c8f89cd99a0b1766dcafa96594a91f",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 5,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:01:55+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 5,
+      "width": 3,
+      "lastSeen": "2026-10-24T07:24:15+00:00"
+    },
+    {
+      "path": [
+        "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 5,
+      "width": 3,
+      "lastSeen": "2026-10-20T15:00:04.287+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "ebe062a71edf450e04cfea22548708f39ed020f7a604f2147fb668a994b15026"
+      ],
+      "count": 5,
+      "width": 3,
+      "lastSeen": "2026-10-09T10:34:52.851326+00:00"
+    },
+    {
+      "path": [
+        "104edd1739e62ad3ce604a3521de366744c8f89cd99a0b1766dcafa96594a91f",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:52:04.308763+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "9ba6c23f2a77a17aa42916387284705dc6024f81ec55e8674099f209725fc155"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:23:50.284395+00:00"
+    },
+    {
+      "path": [
+        "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-24T11:25:21+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd",
+        "026064331ba8785f26a9cce20acbf6d49c69a37df4aedac9e8d57341628f37d3"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-24T07:27:46+00:00"
+    },
+    {
+      "path": [
+        "221065d8ae98f319f4fd7951b9af8fa23a04885051ad776ad22c8ffe83ce0b73",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-23T01:21:19.910944+00:00"
+    },
+    {
+      "path": [
+        "5b52f29ec8f74aa2e79ab5569f20014c61b902afa4c12bc0edb70f863d27e253",
+        "221065d8ae98f319f4fd7951b9af8fa23a04885051ad776ad22c8ffe83ce0b73",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-23T01:21:19.910944+00:00"
+    },
+    {
+      "path": [
+        "b0124261b5f38305b1f7cc15f19e7b9de0f4046ae8f08b9a24c7dce5c5258730",
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-22T21:56:27+00:00"
+    },
+    {
+      "path": [
+        "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-22T13:57:59+00:00"
+    },
+    {
+      "path": [
+        "eb98b963e9917ab22ca1350cd958c1014ad8e10e2eddf4d66f7b9189b37d4183",
+        "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-20T15:00:04.287+00:00"
+    },
+    {
+      "path": [
+        "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660"
+      ],
+      "count": 4,
+      "width": 3,
+      "lastSeen": "2026-10-17T11:51:03.03917+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "cef22e8c1ee1f8a05dbc70e241173d7bdf64d7a1e5f9d73af9eefba2ef4e52f1"
+      ],
+      "count": 3,
+      "width": 3,
+      "lastSeen": "2026-10-24T12:52:04.308763+00:00"
+    },
+    {
+      "path": [
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+        "cb95a719aacad2ec9b9197bb806fa1b340623eb8b5be2c66658406a3d46c83fc"
+      ],
+      "count": 3,
+      "width": 3,
+      "lastSeen": "2026-10-23T14:58:05.832965+00:00"
+    },
+    {
+      "path": [
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd"
+      ],
+      "count": 3,
+      "width": 3,
+      "lastSeen": "2026-10-23T01:56:39+00:00"
+    },
+    {
+      "path": [
+        "842c563ef67fc674ca3d26e9cf0ae14734a51a19b3ba89e72c79a5488dbfcf77",
+        "99bb19916354fe47f8185cb76f7cb6350445d35b5cacc926c5c83a531c89baa4",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff"
+      ],
+      "count": 3,
+      "width": 3,
+      "lastSeen": "2026-10-22T00:37:08.577953+00:00"
+    },
+    {
+      "path": [
+        "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660"
+      ],
+      "count": 3,
+      "width": 3,
+      "lastSeen": "2026-10-18T13:54:33+00:00"
+    },
+    {
+      "path": [
+        "221065d8ae98f319f4fd7951b9af8fa23a04885051ad776ad22c8ffe83ce0b73",
+        "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+        "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41"
+      ],
+      "count": 3,
+      "width": 3,
+      "lastSeen": "2026-10-17T20:23:42+00:00"
+    }
+  ],
+  "snrTrend": [],
+  "relayTimeline": [
+    {
+      "count": 4,
+      "bucket": "2026-10-23T15:00:00+00:00"
+    },
+    {
+      "count": 8,
+      "bucket": "2026-10-23T16:00:00+00:00"
+    },
+    {
+      "count": 2,
+      "bucket": "2026-10-23T17:00:00+00:00"
+    },
+    {
+      "count": 2,
+      "bucket": "2026-10-23T18:00:00+00:00"
+    },
+    {
+      "count": 5,
+      "bucket": "2026-10-23T19:00:00+00:00"
+    },
+    {
+      "count": 3,
+      "bucket": "2026-10-23T20:00:00+00:00"
+    },
+    {
+      "count": 2,
+      "bucket": "2026-10-23T21:00:00+00:00"
+    },
+    {
+      "count": 1,
+      "bucket": "2026-10-23T22:00:00+00:00"
+    },
+    {
+      "count": 5,
+      "bucket": "2026-10-23T23:00:00+00:00"
+    },
+    {
+      "count": 6,
+      "bucket": "2026-10-24T00:00:00+00:00"
+    },
+    {
+      "count": 3,
+      "bucket": "2026-10-24T01:00:00+00:00"
+    },
+    {
+      "count": 3,
+      "bucket": "2026-10-24T02:00:00+00:00"
+    },
+    {
+      "count": 4,
+      "bucket": "2026-10-24T03:00:00+00:00"
+    },
+    {
+      "count": 5,
+      "bucket": "2026-10-24T04:00:00+00:00"
+    },
+    {
+      "count": 2,
+      "bucket": "2026-10-24T05:00:00+00:00"
+    },
+    {
+      "count": 5,
+      "bucket": "2026-10-24T06:00:00+00:00"
+    },
+    {
+      "count": 14,
+      "bucket": "2026-10-24T07:00:00+00:00"
+    },
+    {
+      "count": 4,
+      "bucket": "2026-10-24T08:00:00+00:00"
+    },
+    {
+      "count": 3,
+      "bucket": "2026-10-24T10:00:00+00:00"
+    },
+    {
+      "count": 6,
+      "bucket": "2026-10-24T11:00:00+00:00"
+    },
+    {
+      "count": 12,
+      "bucket": "2026-10-24T12:00:00+00:00"
+    },
+    {
+      "count": 3,
+      "bucket": "2026-10-24T13:00:00+00:00"
+    },
+    {
+      "count": 5,
+      "bucket": "2026-10-24T14:00:00+00:00"
+    }
+  ],
+  "relayNeighbours": [
+    {
+      "name": "🐝Heppenheim Nord",
+      "total": 313,
+      "pubkey": "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+      "toCount": 211,
+      "fromCount": 102
+    },
+    {
+      "name": "Hemsbergturm",
+      "total": 175,
+      "pubkey": "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+      "toCount": 175,
+      "fromCount": 0
+    },
+    {
+      "name": "Donnersberg-SW",
+      "total": 136,
+      "pubkey": "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+      "toCount": 0,
+      "fromCount": 136
+    },
+    {
+      "name": "de.he.schwanheim",
+      "total": 55,
+      "pubkey": "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd",
+      "toCount": 46,
+      "fromCount": 9
+    },
+    {
+      "name": "Melibokus-Solar-Repeat",
+      "total": 46,
+      "pubkey": "df007a349f99b669b7a102adce38ccd024cc54c086496364dfb0a89be367bc41",
+      "toCount": 38,
+      "fromCount": 8
+    },
+    {
+      "name": "Hirschberg",
+      "total": 38,
+      "pubkey": "b2d087be2aad78a4c4382fdb1ecd3cdef701f1bac1da066de32965e789e309fd",
+      "toCount": 0,
+      "fromCount": 38
+    },
+    {
+      "name": "86ad_test",
+      "total": 19,
+      "pubkey": "68a18c8d12e6a04ecad281a67cbbb540d4ca93ac4e7492f1350483c8df8186ad",
+      "toCount": 0,
+      "fromCount": 19
+    },
+    {
+      "name": "Mapos Solar Repeater",
+      "total": 18,
+      "pubkey": "221065d8ae98f319f4fd7951b9af8fa23a04885051ad776ad22c8ffe83ce0b73",
+      "toCount": 0,
+      "fromCount": 18
+    },
+    {
+      "name": "Donnersberg-NO",
+      "total": 15,
+      "pubkey": "99bb19916354fe47f8185cb76f7cb6350445d35b5cacc926c5c83a531c89baa4",
+      "toCount": 0,
+      "fromCount": 15
+    },
+    {
+      "name": "Meerbachtal",
+      "total": 10,
+      "pubkey": "104edd1739e62ad3ce604a3521de366744c8f89cd99a0b1766dcafa96594a91f",
+      "toCount": 0,
+      "fromCount": 10
+    }
+  ],
+  "regionScope": null,
+  "rtcResets": [],
+  "relayRegions": [
+    {
+      "days": 20,
+      "count": 510,
+      "region": "*",
+      "lastSeen": "2026-10-24T13:39:43+00:00"
+    },
+    {
+      "days": 17,
+      "count": 174,
+      "region": "?",
+      "lastSeen": "2026-10-24T14:59:17+00:00"
+    },
+    {
+      "days": 13,
+      "count": 150,
+      "region": "de-mitte",
+      "lastSeen": "2026-10-23T14:43:26+00:00"
+    },
+    {
+      "days": 15,
+      "count": 101,
+      "region": "de",
+      "lastSeen": "2026-10-24T12:52:04.308763+00:00"
+    },
+    {
+      "days": 10,
+      "count": 56,
+      "region": "de-bw",
+      "lastSeen": "2026-10-24T14:53:56+00:00"
+    },
+    {
+      "days": 12,
+      "count": 50,
+      "region": "de-rp",
+      "lastSeen": "2026-10-24T13:15:46+00:00"
+    },
+    {
+      "days": 8,
+      "count": 41,
+      "region": "rhein-neckar",
+      "lastSeen": "2026-10-24T14:59:15+00:00"
+    },
+    {
+      "days": 3,
+      "count": 21,
+      "region": "be",
+      "lastSeen": "2026-10-13T11:45:34.244493+00:00"
+    },
+    {
+      "days": 6,
+      "count": 14,
+      "region": "de-west",
+      "lastSeen": "2026-10-24T14:59:18+00:00"
+    },
+    {
+      "days": 6,
+      "count": 12,
+      "region": "rhein-main",
+      "lastSeen": "2026-10-23T03:32:29+00:00"
+    },
+    {
+      "days": 2,
+      "count": 4,
+      "region": "de-sued",
+      "lastSeen": "2026-10-17T23:13:32+00:00"
+    },
+    {
+      "days": 1,
+      "count": 2,
+      "region": "ioi",
+      "lastSeen": "2026-10-17T04:01:30.542425+00:00"
+    },
+    {
+      "days": 1,
+      "count": 1,
+      "region": "bergstrasse",
+      "lastSeen": "2026-10-22T23:39:50+00:00"
+    },
+    {
+      "days": 1,
+      "count": 1,
+      "region": "beroc",
+      "lastSeen": "2026-10-08T19:27:19+00:00"
+    }
+  ]
+}

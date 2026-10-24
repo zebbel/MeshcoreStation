@@ -1,0 +1,47 @@
+name: V4 branch release
+on:
+  push:
+    branches: [v4.0.0]
+    paths:
+      - meshcorestation/__init__.py
+      - .github/workflows/v4-release.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: v4-branch-release
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/v4.0.0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt pytest
+      - run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --package-lock=false jsdom
+      - name: Complete UI regression
+        run: |
+          for file in tests/*.cjs; do node "$file" || exit 1; done
+      - run: python -m scripts.check_install
+      - name: Verify release version
+        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.0.0"'
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish dedicated V4 prerelease without changing main or latest stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v4.0.0 --target "$GITHUB_SHA" --title "MeshcoreStation 4.0.0 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false

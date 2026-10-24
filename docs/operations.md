@@ -1,8 +1,8 @@
-# Install and operate MeshcoreStation
+# Install and operate MeshcoreStation 4.0.0
 
 ## Installation
 
-Use Raspberry Pi OS / Debian, systemd and Python 3.12 or newer. Clone the stable `main` branch, then run `bash install.sh` as your normal user. Choose
+Use Raspberry Pi OS / Debian, systemd and Python 3.12 or newer. Clone the dedicated `v4.0.0` branch, then run `bash install.sh` as your normal user. Choose
 **Install / repair** and the web port (default 80). The installer creates `.venv`,
 installs dependencies, writes `meshcorestation.env`, installs the service and
 adds serial access through `dialout`.
@@ -45,6 +45,7 @@ clean Git checkout, configured upstream and a fast-forward revision.
 | --- | --- |
 | `meshcorestation.env` | Service configuration |
 | `data/meshcorestation.db` | Station settings, history and monitoring data |
+| `data/analyzer-cache.db` | Optional external snapshots and HTTP validators |
 | `data/rooms.db` | Room identities, password hashes, members and posts |
 | `data/logs/` | Application logs |
 | `.updates/` | Update state and retained rollback backups |
@@ -78,3 +79,10 @@ Web updates keep backup directories rather than deleting them automatically.
 
 The startup health check confirms application availability, not radio delivery or
 compatibility of every peripheral. Test the real companion after an update.
+
+## External monitoring
+
+Experimental, disabled by default and never polled in the background. Read
+[access and caching](network-monitoring.md) before enabling authorized access.
+403/Cloudflare 1010 means unavailable; cached evidence is retained. V3 remains on
+`main`; V4 updates use `v4.0.0`. Back up all data before branch switching.

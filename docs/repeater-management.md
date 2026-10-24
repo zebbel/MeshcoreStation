@@ -1,4 +1,12 @@
-# Repeater management
+# Repeater management in V4
+
+The shared selection and telemetry stay in Repeater Management. Statistics and
+Optimization Analysis now live under the top-level Repeater Optimizer section.
+For protected analysis actions, connect through its administrator button and use
+Return to Optimization Analysis in management. Disconnect after use. Changing
+selection discards the prior analysis view and administrator session. External
+monitoring never uses that session or sends radio requests.
+
 
 Use the dashboard’s **Repeater management** dropdown and **Open repeater management**,
 or open a repeater on the map and choose management. **Add repeater from map**

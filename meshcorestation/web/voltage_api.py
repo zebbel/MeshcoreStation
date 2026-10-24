@@ -96,6 +96,8 @@ def voltage_request(request):
                     from meshcorestation.storage import optimizer_store, advisor_history
                     optimizer_store.remove_repeater(key)
                     advisor_history.remove_repeater(key)
+                    from meshcorestation.analyzer import service as analyzer_service
+                    analyzer_service.remove(key)
                     return {'ok': True}, 200
                 if body['operation'] == 'add':
                     cfg = ensure_repeater(db, key)

@@ -2,7 +2,7 @@
 (() => {
     const storageKey='meshcorestation.managed-repeaters';
     const $=id=>document.getElementById(id);
-    let known=[],managed=[],attached=false;
+    let known=[],managed=[],attached=false,pending=null;
     function persist(){
         try{localStorage.setItem(storageKey,JSON.stringify({keys:managed,selected:window.meshcorestationSelectedRepeater}));}
         catch{$('managed-repeater-message').textContent='Browser storage unavailable; the managed list is saved on the server, but the viewed repeater will not be remembered.';}
@@ -36,6 +36,11 @@
             return true;
         }catch(error){$('managed-repeater-message').textContent=error.message;return false;}
     }
+    window.meshcorestationEnsureRepeaterSelection=()=>{
+        if(known.length)return Promise.resolve(true);
+        if(!pending)pending=load().finally(()=>{pending=null;});
+        return pending;
+    };
     function attach(){
         if(attached||!$('managed-repeater'))return;attached=true;
         $('managed-repeater').onchange=()=>select($('managed-repeater').value);
@@ -50,6 +55,7 @@
                 const response=await fetch('/api/bot/voltage',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},body:JSON.stringify({operation:'remove',public_key:key})});
                 const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Could not remove repeater.');
                 try{localStorage.removeItem('meshcorestation.repeater.password.'+key.toLowerCase());}catch{}
+                document.dispatchEvent(new CustomEvent('managed-repeater-removed',{detail:key}));
                 if(!await load())throw Error('Removal was submitted, but the managed list could not be refreshed. Reload the page to verify it.');
                 if(managed.includes(key))throw Error('Removal could not be verified. Reload and try again.');
                 $('managed-repeater-message').textContent='Repeater removed and its monitoring data deleted.';

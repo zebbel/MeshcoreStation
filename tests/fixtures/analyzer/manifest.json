@@ -1,0 +1,174 @@
+{
+  "source": "Firefox HAR uploaded in MeshcoreStation project discussion",
+  "source_file": "analyzer.meshcorenetz.de_Archive [26-10-24 17-19-04].har",
+  "repeater_name": "DE_HE_HP_RPT1",
+  "repeater_public_key": "769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+  "repeater_lat_lon": [
+    49.640019,
+    8.633326
+  ],
+  "capture_date_local": "2026-10-24",
+  "api_host": "analyzer.meshcorenetz.de",
+  "capture_used": "Second HAR (all eight selected responses had HTTP 200)",
+  "methodology": "Extract original JSON response bodies. Pretty-printed without adding/removing response fields. Omitted all HTTP request/response headers, cookies, IP addresses, page history, and non-API assets. Public repeater identities, names and coordinates remain in data fixtures.",
+  "entries": [
+    {
+      "file": "responses/node_detail_24h.json",
+      "method": "GET",
+      "path": "/api/nodes/769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff/detail",
+      "query": "hours=24",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:40.402+02:00",
+      "cache_control": "public, max-age=30",
+      "body_sha256": "6a62d0c30e1c1396075ec4b5c4358da3bd48147a0f29d60aebb226562fcfe1e7",
+      "top_level_keys": [
+        "node",
+        "stat",
+        "heardBy",
+        "timeline",
+        "packetTypes",
+        "hopDist",
+        "carriedTypes",
+        "hopTrend",
+        "recentPackets",
+        "pathsThroughNode",
+        "snrTrend",
+        "relayTimeline",
+        "relayNeighbours",
+        "regionScope",
+        "rtcResets",
+        "relayRegions"
+      ],
+      "top_level_type": "dict",
+      "recorded_number_of_items": null
+    },
+    {
+      "file": "responses/graph_metrics.json",
+      "method": "GET",
+      "path": "/api/graph/metrics/769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+      "query": "",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:40.527+02:00",
+      "cache_control": "public, max-age=3600",
+      "body_sha256": "45ff6f4d6423d8436f8c7cc5619697229b59534357d9e4dfd7566982c89d0000",
+      "top_level_keys": [
+        "id",
+        "degree",
+        "betweenness",
+        "rank"
+      ],
+      "top_level_type": "dict",
+      "recorded_number_of_items": null
+    },
+    {
+      "file": "responses/clock_skew_24h.json",
+      "method": "GET",
+      "path": "/api/nodes/769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff/clock-skew",
+      "query": "hours=24",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:40.538+02:00",
+      "cache_control": "public, max-age=30",
+      "body_sha256": "7a43ad1910a494c70eb25e4d4d74fbaa3045813db1f8d01a09b4642001024a49",
+      "top_level_keys": [
+        "medianSkewSec",
+        "lastSkewSec",
+        "sampleCount",
+        "driftPerDaySec",
+        "severity",
+        "calibrated",
+        "samples",
+        "recentHashEvidence"
+      ],
+      "top_level_type": "dict",
+      "recorded_number_of_items": null
+    },
+    {
+      "file": "responses/node_neighbors.json",
+      "method": "GET",
+      "path": "/api/nodes/769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff/neighbors",
+      "query": "",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:40.563+02:00",
+      "cache_control": "public, max-age=30",
+      "body_sha256": "d233e75fa12e996f8d4ffb88522921718180995eec6226a34f9f28288f0a4262",
+      "top_level_keys": null,
+      "top_level_type": "list",
+      "recorded_number_of_items": 5
+    },
+    {
+      "file": "responses/channel_beacons_720h_empty.json",
+      "method": "GET",
+      "path": "/api/channels/beacons",
+      "query": "hours=720&node=769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:40.564+02:00",
+      "cache_control": "public, max-age=60",
+      "body_sha256": "e0101255d033e8d3261e14bef439e7b0b17bde295b59bcf90c18c311d0624d01",
+      "top_level_keys": [
+        "hours",
+        "node",
+        "beacons",
+        "truncated"
+      ],
+      "top_level_type": "dict",
+      "recorded_number_of_items": null
+    },
+    {
+      "file": "responses/channel_sensors_720h_empty.json",
+      "method": "GET",
+      "path": "/api/channels/sensors",
+      "query": "hours=720&node=769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:40.564+02:00",
+      "cache_control": "public, max-age=300",
+      "body_sha256": "d4198e59166c1824ac81006477f3ed90e062437f5a86d71084d5210006798fdc",
+      "top_level_keys": [
+        "hours",
+        "node",
+        "readings",
+        "truncated"
+      ],
+      "top_level_type": "dict",
+      "recorded_number_of_items": null
+    },
+    {
+      "file": "responses/node_reach_1d.json",
+      "method": "GET",
+      "path": "/api/nodes/769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff/reach",
+      "query": "days=1",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:48.588+02:00",
+      "cache_control": "public, max-age=30",
+      "body_sha256": "7d456253dd771b5e8690b333e03334ac554eb6843ec5d1509b2e4a02e2454fc4",
+      "top_level_keys": [
+        "neighbours",
+        "rank",
+        "totalRanked",
+        "links",
+        "twoWayCount",
+        "directObservers",
+        "neighbourList",
+        "rings",
+        "centerLat",
+        "centerLon"
+      ],
+      "top_level_type": "dict",
+      "recorded_number_of_items": null
+    },
+    {
+      "file": "responses/direct_packets_24h_empty.json",
+      "method": "GET",
+      "path": "/api/nodes/769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff/direct-packets",
+      "query": "since=24",
+      "recorded_status": 200,
+      "recorded_at": "2026-10-24T17:18:54.943+02:00",
+      "cache_control": "public, max-age=30",
+      "body_sha256": "1633902c6cbba5e7770dbed172df754a25078bb76efe1f23474edc87f1a47655",
+      "top_level_keys": [
+        "rows"
+      ],
+      "top_level_type": "dict",
+      "recorded_number_of_items": null
+    }
+  ]
+}

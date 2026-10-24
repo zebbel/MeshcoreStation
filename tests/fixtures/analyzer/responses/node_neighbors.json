@@ -1,0 +1,72 @@
+[
+  {
+    "ID": "e59a53b54200b63b747764b1386a0ce0da0fd9ccec36ab063e4ce7332fcfb660",
+    "Name": "🐝Heppenheim Nord",
+    "Count": 121,
+    "LastSeen": "2026-10-24T14:59:17Z",
+    "Role": "Repeater",
+    "DistanceKm": 1.5,
+    "Conf": "high",
+    "Provenance": "inferred-only",
+    "SNR": null,
+    "HeardAt": null,
+    "HeardSecsAgo": null,
+    "ReportedAt": null
+  },
+  {
+    "ID": "32dfcc3b637faeeb4b63c6c15b5c0e4b682ea5ba9c12920814fb17f11abd6108",
+    "Name": "Hemsbergturm",
+    "Count": 94,
+    "LastSeen": "2026-10-24T12:23:50.284395Z",
+    "Role": "Repeater",
+    "DistanceKm": 3.3,
+    "Conf": "high",
+    "Provenance": "inferred-only",
+    "SNR": null,
+    "HeardAt": null,
+    "HeardSecsAgo": null,
+    "ReportedAt": null
+  },
+  {
+    "ID": "161b48e0d9dcf4ac7698b3e98753b06608d7ededcfbb1d379dcca967675641fd",
+    "Name": "de.he.schwanheim",
+    "Count": 12,
+    "LastSeen": "2026-10-23T18:57:03.067113Z",
+    "Role": "Repeater",
+    "DistanceKm": 7.4,
+    "Conf": "medium",
+    "Provenance": "inferred-only",
+    "SNR": null,
+    "HeardAt": null,
+    "HeardSecsAgo": null,
+    "ReportedAt": null
+  },
+  {
+    "ID": "68a18c8d12e6a04ecad281a67cbbb540d4ca93ac4e7492f1350483c8df8186ad",
+    "Name": "86ad_test",
+    "Count": 3,
+    "LastSeen": "2026-10-24T12:23:50.284395Z",
+    "Role": "Repeater",
+    "DistanceKm": 10.9,
+    "Conf": "low",
+    "Provenance": "inferred-only",
+    "SNR": null,
+    "HeardAt": null,
+    "HeardSecsAgo": null,
+    "ReportedAt": null
+  },
+  {
+    "ID": "9996dd77b140b168a80c11640c3f52f37a9975ebfed2847690e43770b8ab52ef",
+    "Name": "Donnersberg-SW",
+    "Count": 3,
+    "LastSeen": "2026-10-15T13:44:07Z",
+    "Role": "Repeater",
+    "DistanceKm": 51.5,
+    "Conf": "low",
+    "Provenance": "inferred-only",
+    "SNR": null,
+    "HeardAt": null,
+    "HeardSecsAgo": null,
+    "ReportedAt": null
+  }
+]

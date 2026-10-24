@@ -79,9 +79,15 @@
         content.append(table('Most common observed routes',['Repeater sequence','Copies'],data.routes.map(r=>[r.path.map(nodeLabel).join(' → '),r.count])));
         content.append(el('p','Counts include only your selected repeater’s matched flood paths. Ambiguous target prefixes are counted separately and excluded from other totals. Short prefixes can also collide with unknown repeaters. Adjacent hops suggest a directional relationship, not a verified bidirectional link. Direct-route and trace packets are excluded because their paths are not a reliable forwarding history. No message text, raw payloads or network-wide statistics are stored.','muted'));
     }
+    function visible(){const section=document.getElementById('repeater-statistics-disclosure');return section?.open && document.getElementById('repeater-optimizer-disclosure')?.open!==false;}
     async function load(save=false){
+        if(!visible()){++requestId;return;}
+        if(busy&&save)return;
+        const id=++requestId;
+        await window.meshcorestationEnsureRepeaterSelection?.();
+        if(id!==requestId||!visible())return;
         if(window.meshcorestationSelectedRepeater===''){++requestId;dialog.querySelector('.stats-content').replaceChildren();dialog.querySelector('.stats-selected').textContent='No repeater selected';dialog.querySelector('.stats-pause').disabled=true;message('Add a repeater to view its statistics.');return;}
-        if(busy && save)return;busy=true;const id=++requestId;
+        busy=true;
         dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=true);message(save?'Saving selection…':'Loading observations…');
         try{
             const key=window.meshcorestationSelectedRepeater||'';
@@ -89,7 +95,7 @@
             const response=await fetch(url,{method:save?'POST':'GET',cache:'no-store',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},...(save?{body:JSON.stringify({public_key:window.meshcorestationSelectedRepeater||dialog.querySelector('.stats-repeater').value,enabled:!collectionEnabled})}:{}),signal:AbortSignal.timeout(60000)});
             const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Statistics request failed.');
             if(id===requestId){autoRefreshPaused=false;render(result);message('Observed by MeshcoreStation · saved metadata only · no radio requests');}
-        }catch(error){if(id!==requestId)return;autoRefreshPaused=true;message(['TimeoutError','AbortError'].includes(error.name)?'Statistics took longer than 60 seconds. Automatic refresh is paused. Try 24 hours or press Refresh to retry.':error.message+' Automatic refresh is paused; press Refresh to retry.');}finally{busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=false);}
+        }catch(error){if(id!==requestId)return;autoRefreshPaused=true;message(['TimeoutError','AbortError'].includes(error.name)?'Statistics took longer than 60 seconds. Automatic refresh is paused. Try 24 hours or press Refresh to retry.':error.message+' Automatic refresh is paused; press Refresh to retry.');}finally{if(id===requestId){busy=false;dialog.querySelectorAll('select,.stats-save,.stats-refresh,.stats-map,.stats-pause').forEach(n=>n.disabled=false);}}
     }
     function attach(){
         const section=document.getElementById('repeater-statistics-disclosure');
@@ -110,12 +116,13 @@
         dialog.querySelector('.stats-period').onchange=()=>load();
         function toggle(){
             clearInterval(timer);timer=null;
-            if(section.open){
+            if(visible()){
                 load();
-                timer=setInterval(()=>{if(section.open && !autoRefreshPaused && !document.getElementById('stats-repeater-picker')?.open)load();},30000);
+                timer=setInterval(()=>{if(visible() && !autoRefreshPaused && !document.getElementById('stats-repeater-picker')?.open)load();},30000);
             }
         }
         section.addEventListener('toggle',toggle);
+        document.getElementById('repeater-optimizer-disclosure')?.addEventListener('toggle',()=>{if(section.open)toggle();});
         if(section.open)toggle();
     }
     new MutationObserver(attach).observe(document.documentElement,{childList:true,subtree:true});

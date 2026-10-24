@@ -1,22 +1,19 @@
-# Updates, branch migration and rollback
+# V4 updates and recovery
 
-## Stable branch
-
-**MeshcoreStation 3.4.1** is the stable V3 release on **main**. The room server is
-included. `feature/v3` and `feature/room-server` have been retired and removed
-from GitHub; their commit histories are preserved in main.
+MeshcoreStation 4.0.0 uses `v4.0.0`; V3 stays on `main`. Do not merge the
+V4 branch into main without separate authorization.
 
 ## Update from the dashboard
 
 1. Open **Settings → Updates / version**.
-2. Select **main**. If needed, press **Check for updates** to refresh branch choices.
-3. Press **Check for updates** with main selected and review the revision.
-4. Press **Install update**, or **Switch to main** if running a former feature branch.
+2. Select **v4.0.0**. If needed, press **Check for updates** to refresh branch choices.
+3. Press **Check for updates** with v4.0.0 selected and review the revision.
+4. Press **Install update**, or **Switch to v4.0.0** if running a former feature branch.
 5. Wait for the dashboard to restart and reload.
 
 An old installed branch can remain in the dropdown as the current selection even
 though it no longer exists on GitHub. Checking that deleted branch will fail;
-select main instead. Branches refresh on initial page load and **Check for
+select v4.0.0 instead. Branches refresh on initial page load and **Check for
 updates**, without an extra refresh button or repeated progress-poll discovery.
 
 The updater checks the exact target and checkout cleanliness, backs up code and
@@ -29,7 +26,7 @@ Startup smoke and health checks still apply to both paths.
 
 Use the dashboard when possible. For manual migration, first stop the service and
 back up the complete data directory and `meshcorestation.env`. Record the current
-revision. With a clean checkout and no unpublished commits on the local main:
+revision. With a clean checkout and no unpublished commits on the local destination branch:
 
 ```bash
 cd ~/MeshcoreStation
@@ -37,16 +34,16 @@ git status --short
 git rev-parse HEAD
 sudo systemctl stop meshcorestation
 # Back up data/ and meshcorestation.env before continuing.
-git fetch origin main
-git switch main
+git fetch origin v4.0.0
+git switch v4.0.0
 git merge --ff-only FETCH_HEAD
-git branch --set-upstream-to=origin/main main
+git branch --set-upstream-to=origin/v4.0.0 v4.0.0
 bash install.sh
 ```
 
-If no local main exists, use `git switch -c main FETCH_HEAD` instead of
-`git switch main`. A clone restricted to a former feature branch may need
-`git remote set-branches origin main` before fetching. Choose **Install / repair**
+If no local v4.0.0 exists, use `git switch -c v4.0.0 FETCH_HEAD` instead of
+`git switch v4.0.0`. A clone restricted to a former feature branch may need
+`git remote set-branches origin v4.0.0` before fetching. Choose **Install / repair**
 in the existing installation directory. Do not discard local changes or force
 reset unpublished commits to make an update proceed.
 
@@ -57,116 +54,6 @@ hardware. The removed feature branches are not rollback targets. If recovery is
 needed, stop the service and restore a matching saved installation, configuration
 and data together. Never copy SQLite files while the station is writing them.
 
-Switching to main does not disable rooms or remove their database. To stop room
+Switching to v4.0.0 does not disable rooms or remove their database. To stop room
 traffic, disable the rooms in the room-server page. Application updates do not
 flash the companion; companion firmware updates are a separate operation.
-
-## Release version policy
-
-Every published application update must increment `meshcorestation.__version__`
-and update the current-version references in the README and guides. Queue several
-changes under one release version; do not publish changed application code with
-the same version as the previous release.
-
-### 3.4.1
-
-Fixes Known Repeaters clustering initialization before the tile layer exists.
-Large maps now use batches of up to 100 markers and retain loading progress until
-setup completes. Script and stylesheet requests are awaited, shared and retryable;
-asset timeouts, API failures and rendering failures display a message and retry
-button. No database or dependency migration is needed. Reload the dashboard after
-installing to load the updated JavaScript.
-
-### 3.4.0
-
-Command Details now lists multiple authenticated reception paths, including
-repeated receptions, with radio measurements and reception time. Selection updates
-route overlays and distance without recreating the map or fetching tiles again.
-Startup adds reception and command-binding tables without rewriting old history.
-Older entries still show their original saved path. Chart selection text is
-lighter, with its existing size retained. Reload the dashboard after installing.
-
-### 3.3.2
-
-Added the saved repeater-temperature placeholder to commands and made selected
-voltage/temperature chart values thinner at the same text size. No database
-migration or additional telemetry request is needed for this update.
-
-### 3.3.1
-
-Improved selected chart value readability without increasing the text size.
-
-### 3.3.0
-
-Repeater telemetry adds optional temperature from the existing telemetry read,
-configurable temperature LPP channels, separate charts and direct chart value
-selection. The startup migration adds nullable temperature fields to the existing
-sample table; legacy voltage rows, timestamps, templates and report settings are
-preserved. Reload the dashboard after installing. No additional radio read is
-introduced for temperature.
-
-### 3.2.0
-
-Faster initial dashboard and maps, deferred work for closed panels, cached route
-maps, per-repeater battery report templates and persistent date/clock display
-preferences. The battery settings migration preserves schedules, destinations and
-existing data. Reload the dashboard after installing to load the shared formatter
-and updated map loader.
-
-### 3.1.2
-
-Fixed Updates / version placement in Settings and reduced optimizer data-loading
-work for large packet histories. Existing observations and settings are preserved.
-
-### 3.1.1
-
-Fixed room login over flood by sending the encrypted login response as a flooded
-PATH packet with the same path-hash width as the request. Known scoped requests
-are answered within their scope; unknown scopes fall back to unscoped flood.
-Direct login behavior is unchanged. Verify real repeater paths after updating.
-
-### 3.1.0
-
-Promoted the Repeater Optimizer to main. Analyze passively observed scoped and
-unscoped traffic and review experimental flood-limit suggestions without
-automatically changing radio settings. Neighbor snapshots are manual by default;
-12h/24h polling is opt-in per repeater. Confirmed optimizer disable/reset deletes
-optimizer observations and profiles for all repeaters but preserves battery
-history and general repeater statistics. The UI includes loading feedback and
-before/after reviews of verified changes.
-
-### 3.0.8
-
-Companion controls share one collapsible section in Settings, closed by default.
-
-### 3.0.7
-
-Reduced repeater clustering distance to 30 pixels so nearby markers separate
-earlier when zooming in.
-
-### 3.0.6
-
-Added repeater marker clustering to discovery and selection maps, including
-click-to-expand, overlapping-marker selection and search-to-marker reveal.
-
-### 3.0.4
-
-Daily battery reports reuse the last successful stored reading and its original
-timestamp, without an extra telemetry request. Failed reads do not replace the
-reported value. Reports without a successful reading record an explicit failure.
-Regular scheduled and manual sampling continue unchanged.
-
-### 3.0.3
-
-Improved first-install reliability across Raspberry Pi Zero W (ARMv6) and Pi 3 B+ (32/64-bit OS): show detected Python architecture, unmask a previously masked service before installing its unit, and verify the dashboard responds after service startup. Failure now shows systemd diagnostics instead of reporting a successful installation.
-
-### 3.0.2
-
-Added an optional Remember password checkbox to repeater management login.
-Passwords are saved per repeater in this browser after successful login;
-unchecking removes the saved password.
-
-### 3.0.1
-
-Expanded repeater configuration, an authenticated remote Console tab, and a
-searchable command-picker popup with purpose explanations and editable placeholders.

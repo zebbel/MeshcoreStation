@@ -38,4 +38,6 @@ def create_app():
     register_room_routes(app.server)
     from meshcorestation.web.optimizer_api import register_optimizer_routes
     register_optimizer_routes(app.server)
+    from meshcorestation.web.analyzer_api import register_analyzer_routes
+    register_analyzer_routes(app.server)
     return app

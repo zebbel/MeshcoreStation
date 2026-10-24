@@ -47,7 +47,7 @@
             fetch('/api/repeater', {method: 'POST', keepalive: true, headers: {'Content-Type': 'application/json', 'X-Meshcore-Control': '1'}, body: JSON.stringify({action: 'logout', public_key: contact.public_key, session})}).catch(() => {});
         }
         $('repeater-console-log').textContent='';$('repeater-console-command').value='';
-        const frame = $('repeater-advisor-frame'); if (frame) frame.removeAttribute('src');
+        const frame = $('repeater-advisor-frame'); if (frame && !$('optimization-analysis-inline')) frame.removeAttribute('src');
         session = ''; inputs.forEach(input => { if (input.type === 'password') input.value = ''; });
     }
     function close() {
@@ -56,7 +56,7 @@
     }
     window.addEventListener('meshcorestation-optimizer-state',()=>{
         const frame=$('repeater-advisor-frame');
-        if(frame?.contentWindow)frame.contentWindow.postMessage({type:'meshcorestation-optimizer-refresh'},window.location.origin);
+        if(frame?.contentWindow && (!$('optimization-analysis-inline') || ($('optimization-analysis-disclosure')?.open && $('repeater-optimizer-disclosure')?.open)))frame.contentWindow.postMessage({type:'meshcorestation-optimizer-refresh'},window.location.origin);
     });
     function tab(name) {
         if (name === 'advisor') {
@@ -88,6 +88,20 @@
             <section id="repeater-config" role="tabpanel" aria-labelledby="repeater-tab-config" hidden></section>
             <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section><section id="repeater-advisor" role="tabpanel" aria-labelledby="repeater-tab-advisor" hidden><iframe id="repeater-advisor-frame" title="Repeater Optimizer" loading="lazy" referrerpolicy="same-origin"></iframe></section></div>`;
         document.body.append(dialog);
+        const inline=$('optimization-analysis-inline');
+        if(inline){
+            const existing=inline.querySelector('iframe');
+            const generated=dialog.querySelector('#repeater-advisor-frame');
+            if(existing){generated.remove();}else{generated.title='Optimization Analysis';inline.append(generated);}
+            const back=button('Return to Optimization Analysis',()=>{
+                if(busy||!admin||!session)return;
+                if(contact.public_key!==window.meshcorestationSelectedRepeater){message('Select this repeater in Repeater Management before opening analysis.',true);return;}
+                if(dirty()&&!window.confirm('Discard unsaved repeater edits?'))return;
+                dialog.close();$('repeater-optimizer-disclosure').open=true;$('optimization-analysis-disclosure').open=true;
+                $('repeater-advisor-frame').contentWindow.postMessage({type:'meshcorestation-optimizer-context',public_key:contact.public_key,name:contact.name},window.location.origin);
+            });
+            back.id='analysis-return';dialog.querySelector('.repeater-fixed').append(back);
+        }
         $('repeater-close').addEventListener('click', close);
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
         $('repeater-refresh').addEventListener('click', () => run(readStatus));
@@ -95,7 +109,7 @@
         for (const name of ['status', 'config', 'console', 'advisor']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
         dialog.querySelector('[role="tablist"]').addEventListener('keydown', event => {
             if (busy || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-            event.preventDefault(); const tabs=admin?['status','config','console','advisor']:['status','config','console'];
+            event.preventDefault(); const tabs=admin&&!$('optimization-analysis-inline')?['status','config','console','advisor']:['status','config','console'];
             tab(event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(tabs.indexOf(selectedTab)+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length]);
             $('repeater-tab-' + selectedTab).focus();
         });
@@ -139,7 +153,7 @@
                 const remembered = savePassword($('repeater-remember-password').checked ? password : '');
                 session = result.session; admin = result.admin; schema = result.fields;
                 values.clear(); inputs.clear(); loaded.clear(); buildConfig(); buildExtras();
-                $('repeater-advisor-frame').removeAttribute('src');
+                if(!$('optimization-analysis-inline'))$('repeater-advisor-frame').removeAttribute('src');
                 $('repeater-name').textContent = contact.name || '(unnamed repeater)';
                 identity(result.contact); $('repeater-reconnect').hidden = true;
                 $('repeater-status-cards').replaceChildren(); $('repeater-last-response').textContent = 'Not yet read';
@@ -227,7 +241,7 @@
         const hops = info.out_path_len;
         $('repeater-identity').textContent = contact.public_key.slice(0, 12) + '… · ' + (hops === 0 ? 'Direct' : hops > 0 ? hops + ' hops' : 'Flood route') + (admin ? '' : ' · Guest access');
         $('repeater-identity').title = contact.public_key;
-        const advisorTab = $('repeater-tab-advisor'); if (advisorTab) advisorTab.hidden = !admin;
+        const advisorTab = $('repeater-tab-advisor'); if (advisorTab) advisorTab.hidden = !admin || !!$('optimization-analysis-inline');
     }
 
     // Same-origin embedded advisor; credentials and radio session stay in management.
@@ -239,19 +253,23 @@
               'meshcorestation-optimizer-neighbors','meshcorestation-optimizer-ready',
               'meshcorestation-optimizer-profile','meshcorestation-optimizer-storage',
               'meshcorestation-optimizer-clear-history'].includes(event.data?.type)) return;
+        const inline=!!$('optimization-analysis-inline');
+        const usable=()=>dialog?.open || (inline && $('optimization-analysis-disclosure')?.open && $('repeater-optimizer-disclosure')?.open);
+        if(event.data.type==='meshcorestation-optimizer-ready'&&inline)return;
         if(event.data.type==='meshcorestation-optimizer-ready'){
             if(dialog.open && admin && session)
                 frame.contentWindow.postMessage({type:'meshcorestation-optimizer-context',public_key:contact.public_key,name:contact.name},window.location.origin);
             return;
         }
         if(event.data.type==='meshcorestation-advisor-return'){
-            if(dialog.open){tab('config');$('repeater-tab-config').focus();}
+            if(dialog?.open){tab('config');$('repeater-tab-config').focus();}
             return;
         }
         const target=frame.contentWindow,payload=event.data;
-        const send=data=>{if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-values',request_id:payload.request_id,...data},window.location.origin);};
+        const send=data=>{if(usable()&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-values',request_id:payload.request_id,...data},window.location.origin);};
+        if(inline && (payload.public_key!==window.meshcorestationSelectedRepeater || payload.public_key!==contact?.public_key)){send({error:'Connect as administrator for the selected repeater, then return to Optimization Analysis.'});return;}
         if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
-        const progress=text=>{if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
+        const progress=text=>{if(usable()&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
         progress('Management connected. Checking administrator session…');
         const options=['meshcorestation-optimizer-profile','meshcorestation-optimizer-storage','meshcorestation-optimizer-clear-history'].includes(payload.type);
         if(options){
@@ -320,7 +338,7 @@
                     for(const field of advisorFields) {
                         progress('Reading '+field+' ('+(advisorFields.indexOf(field)+1)+'/'+advisorFields.length+')… Waiting for repeater reply.');
                         try {current[field]=(await request({action:'read',field,optimizer:true})).value;
-                            if(dialog.open&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text:'Received '+field+'.',field,value:current[field]},window.location.origin);}
+                            if(usable()&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text:'Received '+field+'.',field,value:current[field]},window.location.origin);}
                         catch(error) {errors[field]=error.message;if(!session || /timed out|two minutes|Administrator/i.test(error.message))break;}
                     }
                 }
@@ -335,10 +353,16 @@
         $('repeater-remember-password').checked = $('repeater-password').value !== ''; $('repeater-password').type = 'password'; $('repeater-show-password').textContent = 'Show';
         controls(); loginDialog.showModal(); $('repeater-password').focus();
     }
+    document.addEventListener('analysis-connect',event=>window.meshcorestationManageRepeater(event.detail));
+    document.addEventListener('analysis-disconnect',()=>{if(dialog&&!busy)forget();});
+    document.addEventListener('managed-repeater-selected',()=>{
+        if(dialog&&contact?.public_key!==window.meshcorestationSelectedRepeater){forget();if(dialog.open)dialog.close();if(loginDialog.open)loginDialog.close();}
+    });
     window.meshcorestationManageRepeater = selected => {
         if (busy || selected.type !== 2) return;
         if (!dialog) create();
         if (dialog.open || loginDialog.open) return;
+        if(session)forget();
         contact = {...selected}; session = ''; admin = false; openLogin();
     };
     const duration = value => { if (!Number.isFinite(value)) return 'Not available'; const seconds = Math.max(0, Math.floor(value)); return `${Math.floor(seconds / 86400)}d ${Math.floor(seconds / 3600) % 24}h ${Math.floor(seconds / 60) % 60}m`; };

@@ -1,166 +1,112 @@
-# MeshcoreStation V3
+# MeshcoreStation 4.0.0
 
-MeshcoreStation connects a USB MeshCore companion to a Raspberry Pi and serves a
-web dashboard, configurable command bot, repeater monitoring and local room
-servers. The radio stays in the companion; the station runs the application.
+MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
+local network analysis, and a room server in one Raspberry Pi dashboard.
 
-**Stable version: 3.4.1. Branch: `main`.** V3 includes the room server and all
-previous V3 improvements. The former feature branches have been retired.
+**V4 development/release branch: `v4.0.0`. V3 remains on `main`.**
+V4 preserves existing station and room databases. The external Analyzer feature
+is **experimental and disabled by default**. Offline fixture tests verify formats,
+not live access, service permission, or radio performance.
 
-## Changes in 3.4.1
+## Installation and upgrades
 
-- Fix the blank Known Repeaters map: set a finite zoom limit before clustering
-  starts, even when background tiles have not been attached yet.
-- Load large maps in batches of up to 100 markers, yielding between batches.
-  Keep progress visible until initialization finishes and handle dialog resizing.
-- Wait for map styles and scripts, report asset/API/rendering failures with a
-  retry button, and stop pending work when the map closes. Keep Command Details
-  route switching, clustering, popups and repeater actions intact.
-
-## Changes in 3.4.0
-
-- Record distinct authenticated command reception paths, including duplicate
-  packet receptions, with RSSI, SNR and reception times. Execute and reply once.
-- Select reception paths in Command Details; update route lines, repeater
-  markers, arrows and distance while retaining the map, tiles and endpoints.
-  Unknown, incomplete and ambiguous paths remain explicitly marked.
-- Preserve legacy command history through an additive schema migration.
-- Make selected voltage/temperature chart values lighter at the same 18px size.
-
-## Changes in 3.3.2
-
-- Add `{repeater_temperature}` to command replies, insertion buttons and preview.
-  It uses the last successful saved temperature for the default (first managed)
-  repeater and its configured temperature LPP channel, without a radio request.
-- Use thinner, normal-weight selected chart values while keeping the 18px size.
-
-## Changes in 3.3.1
-
-- Improve tapped/clicked chart values with a thinner outline and stronger font
-  weight while retaining the original 18px text size. Keep labels inside the chart.
-
-## Changes in 3.3.0
-
-- Repeater Battery is now **Repeater telemetry**. Voltage and optional temperature
-  in °C are saved together from one telemetry response; each has an LPP channel
-  setting. Missing temperature does not interrupt battery monitoring or reports.
-- Separate voltage and temperature charts show 24-hour, 7-day and 30-day history.
-  Click or tap either chart to highlight the nearest recorded measurement and
-  show just its value inside the chart, such as `3.92 V` or `24.6 °C`.
-- Battery report templates optionally support `{repeater_temperature}` (without
-  a unit). Existing templates, schedules, destinations and voltage history are
-  preserved by an additive database migration.
-
-## Changes in 3.2.0
-
-- Show bot status, known repeater count and the latest command in the initial
-  dashboard. Closed history, room and repeater panels defer work; hidden tabs
-  pause dashboard refreshes. Map assets load when a map is opened.
-- Show Command Details route information before the map engine loads. Route maps
-  load Leaflet without clustering, draw overlays before tiles, and reuse up to
-  32 recently opened map results for 30 seconds.
-- Configure a separate battery report message template for each repeater with
-  insertion buttons, validation and live preview. Existing text remains the
-  default; schedules, destinations and use of the last successful reading stay
-  unchanged. Longer reports use bounded radio message parts.
-- Save application-wide date and clock display preferences in Settings. Defaults
-  are DD.MM.YYYY and 24-hour time; ISO/US dates and 12-hour time are available.
-  Report timezones and schedules remain separate from display preferences.
-
-## Changes in 3.1.2
-
-- Keep Updates / version inside the scrollable Settings content, removing the large gap.
-- Speed up optimizer data loading by aggregating packets in SQLite and checking
-  repeater hash collisions once per hash width instead of once per packet.
-
-## Changes in 3.1.1
-
-- Fix room login over multi-hop floods: return the encrypted login result via a
-  flooded PATH packet rather than a direct packet sent over the guessed reverse path.
-- Use the incoming flood's path-hash width and matching saved scope key for replies;
-  keep existing direct login behavior. Add protocol regression tests.
-
-## Changes in 3.1.0
-
-- Introduce the Repeater Optimizer with passive flood-traffic analysis, per-repeater
-  roles and experimental scoped/unscoped hop-limit suggestions.
-- Add manual neighbor snapshots, optional 12h/24h neighbor polling, and
-  before/after reports for explicitly approved, verified flood-setting changes.
-- Add an independent optimizer enable switch, confirmed storage reset, loading
-  feedback, and bounded retention with disk-space safeguards. Disabling or
-  clearing the optimizer removes its data for all repeaters, but preserves battery
-  history and general repeater statistics.
-- Flood settings are never applied automatically; review reachability and keep
-  backups before upgrading.
-
-## Changes in 3.0.8
-
-- Group companion controls in one collapsible Companion settings section,
-  closed by default. Station updates remain directly accessible in Settings.
-
-## Changes in 3.0.7
-
-- Reduced repeater grouping distance from 55 to 30 pixels so markers stay
-  separate more often and groups split sooner when zooming in.
-
-## Changes in 3.0.6
-
-- Nearby repeaters form numbered map groups that split when zooming in.
-- Click a group to expand it; overlapping repeaters spread apart for selection.
-- Works in the known-repeaters map and repeater picker, including search.
-
-## Changes in 3.0.5
-
-- Collapsible Room server and Repeater management sections on the dashboard.
-- Multiple independently configured repeaters, battery monitoring and passive
-  statistics, with confirmed removal of associated monitoring history.
-- Permanent deletion of disabled, non-bot rooms after confirmation. Rooms used
-  as battery-report destinations must be reassigned before deletion.
-- First startup migrates existing single-repeater monitoring settings. **Back up
-  the station database before upgrading**; rolling back requires that backup
-  as well as the older code.
-
-## Choose your workflow
-
-- [Installation and operation](docs/operations.md): setup, settings, backups and troubleshooting.
-- [Using the station](docs/user-guide.md): bot commands, rooms, maps and battery reports.
-- [V3 release notes and validation](docs/v3-review.md): what changed, validation and rollout.
-- [Architecture and development](docs/architecture.md): ownership, data flow and tests.
-- [Version switching](docs/web-version-switching.md): updating on main and moving from retired branches.
-- [Companion firmware](docs/companion-firmware-updates.md) and [OLED pages](docs/companion-oled.md).
-- [Room protocol and storage](docs/room-server-development.md).
-
-## Main capabilities
-
-- Select a private companion channel or a local room as the bot conversation.
-- Configure command triggers, actions, help text and reply templates in the dashboard.
-- View command history, packet measurements, maps and outgoing reply observations.
-- Monitor repeater voltage and send scheduled reports to the bot conversation,
-  another private channel or an enabled local room.
-- Host password-protected rooms with independent identities and automatic enrollment.
-- Design OLED pages when a supported custom companion reports the required capabilities.
-- Check and install application or device-compatible companion updates from the dashboard.
-
-## Requirements
-
-Raspberry Pi OS / Debian with systemd, Python 3.12+, and a USB serial MeshCore
-companion. Rooms need the custom firmware's raw RX/TX support. OLED support is
-capability-gated. Firmware assets must match the connected device.
-
-For a new installation:
+Use Raspberry Pi OS / Debian with systemd and Python 3.12 or newer. Run the
+installer as the normal account that owns the checkout:
 
 ```bash
-git clone --branch main https://github.com/zebbel/MeshcoreStation.git
+git clone --branch v4.0.0 https://github.com/zebbel/MeshcoreStation.git
 cd MeshcoreStation
 bash install.sh
 ```
 
-Use a separate Pi for a parallel running installation. Two processes must not own
-the same USB companion or write the same live station database. For an existing
-installation, follow the [version switching guide](docs/web-version-switching.md).
+Choose Install / repair, select the web port, then open the Pi's address in a
+browser. Under Settings, open Companion settings and choose the serial device.
+Configure the bot's private channel or choose a Room Server room as bot channel.
 
-No new Python runtime dependencies are introduced by this V3 refactor. Existing
-station and room databases remain in place. Keep a stopped-service backup before
-upgrading, and retain it until the station is working correctly on your hardware.
+For an existing V3 installation, first make a stopped-service backup of the
+complete data directory and service environment. In **Settings → Updates / version**,
+select **v4.0.0**, check the target and install. Updates follow the selected branch;
+they do not merge V4 into main or flash the companion. The updater verifies the
+revision, backs up code/data and restores them if startup fails.
 
-See [Repeater management](docs/repeater-management.md) for supported configuration controls and the remote Console tab. See the [Repeater Optimizer guide](docs/README-repeater-optimization.de.md) for the optimizer's evidence limits and storage behavior.
+See [operations](docs/operations.md) and [branch switching](docs/web-version-switching.md)
+for manual upgrades, dependency repair and recovery.
+
+## Dashboard
+
+Bot Status and Known Repeaters stay at the top. The four initially collapsed
+sections below them are:
+
+1. **Command History** — saved commands, replies and all identifiable reception
+   paths. Command Details switches route overlays without rebuilding the map.
+2. **Repeater Management** — shared repeater selector, add/remove controls,
+   remote management and telemetry with voltage and temperature charts.
+3. **Repeater Optimizer** — three independent, initially collapsed subsections:
+   Repeater Statistics, Optimization Analysis and Repeater Network Monitoring.
+4. **Room Server** — room identities, membership, messages and bot integration.
+
+Collapsed panels defer their data loading. Existing radio monitoring schedules
+are independent of panel visibility. Known Repeaters maps retain clustering,
+chunked loading, searchable selection, popups and error/retry feedback.
+
+## Monitoring and analysis
+
+All optimizer subsections follow the repeater selected in Repeater Management.
+Statistics summarize metadata heard locally. Optimization Analysis retains
+passive analysis, roles, neighbor snapshots, hop-limit suggestions and comparisons.
+Open its Connect as administrator button for protected actions; after connecting,
+use **Return to Optimization Analysis** to retain that session. Disconnect when
+finished. Changes require explicit confirmation and readback verification. Nothing
+is applied automatically. Existing opt-in neighbor polling remains separate from
+external monitoring.
+
+Network Monitoring displays captured-format relay windows, hourly history,
+inferred neighbors, directional reachability, graph metrics, path patterns,
+advertisement history and a map where coordinates exist. It makes no radio requests
+and requires no repeater password. **It makes no external requests unless an
+operator explicitly enables authorized access.** HTTP 403 / possible Cloudflare
+1010 is reported as unavailable, never as zero traffic. There is no bypass,
+browser impersonation, cookie reuse or continuous polling.
+
+Snapshots are fetched only on opening the subsection or pressing Refresh Now,
+cached for five minutes in a separate local database, and retained after failures.
+Read [external monitoring](docs/network-monitoring.md) before enabling anything.
+Captured fixture data is used only in tests, never as production fallback data.
+
+## Existing features and settings
+
+The command editor supports validated placeholders and preview, including
+`{repeater_temperature:.1f}` from the default managed repeater's stored reading.
+Per-repeater battery reports retain templates, destinations and schedules and use
+the last successful reading. Voltage and optional temperature share one telemetry
+request and have separate interactive 24-hour, 7-day and 30-day charts.
+
+Settings contain companion serial/radio/network/firmware/OLED controls, optimizer
+enablement and retention, date display preferences, scopes and station updates.
+German `DD.MM.YYYY` and 24-hour display are defaults; ISO, US and 12-hour formats
+are available. Display preferences do not change timezone or report schedules.
+
+## Documentation and development
+
+- [User guide](docs/user-guide.md)
+- [Repeater management and protected actions](docs/repeater-management.md)
+- [External monitoring: access, evidence and caching](docs/network-monitoring.md)
+- [Installation, backups and recovery](docs/operations.md)
+- [Architecture and tests](docs/architecture.md)
+- [V4 release notes and validation](docs/v4-release.md)
+- [Room protocol and development](docs/room-server-development.md)
+- [Companion firmware](docs/companion-firmware-updates.md) and [OLED](docs/companion-oled.md)
+
+Run offline regression tests without a radio or live Analyzer access:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt pytest
+.venv/bin/python -m pytest -q
+npm install --no-save --package-lock=false jsdom
+for file in tests/*.cjs; do node "$file" || exit 1; done
+.venv/bin/python -m scripts.check_install
+```
+
+See the fixture README for capture provenance and limitations. Successful tests
+do not establish live API integration or physical-device compatibility.

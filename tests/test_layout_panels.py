@@ -28,15 +28,20 @@ def test_latest_command_and_button_remain_in_closed_summary():
     assert room_iframe.src=='about:blank'
     assert room_iframe.to_plotly_json()['props']['data-src']=='/rooms?embedded=1'
     assert room_iframe.style['height']=='160px'
-    assert ids.index('room-server-disclosure') < ids.index('repeater-management-disclosure')
+    order=['command-history-disclosure','repeater-management-disclosure','repeater-optimizer-disclosure','room-server-disclosure']
+    assert [ids.index(i) for i in order]==sorted(ids.index(i) for i in order)
 
 
-def test_repeater_section_groups_selection_battery_and_statistics():
+def test_repeater_management_telemetry_and_independent_optimizer_subsections():
     nodes=list(walk(build_layout()))
     management=next(n for n in nodes if getattr(n,'id',None)=='repeater-management-disclosure')
     ids=[getattr(n,'id',None) for n in walk(management)]
     assert not getattr(management, 'open', False)
-    assert ids.index('managed-repeater') < ids.index('battery-overview') < ids.index('repeater-statistics-inline')
+    assert ids.index('managed-repeater') < ids.index('battery-overview')
+    assert 'repeater-statistics-inline' not in ids
+    optimizer=next(n for n in nodes if getattr(n,'id',None)=='repeater-optimizer-disclosure')
+    children=[n.id for n in optimizer.children if isinstance(n,html.Details)]
+    assert children==['repeater-statistics-disclosure','optimization-analysis-disclosure','repeater-network-disclosure']
     assert {'managed-repeater-add','managed-repeater-open','open-voltage'} <= set(ids)
     # The dropdown takes its own full-width row; actions share the next row.
     controls=next(n for n in walk(management) if getattr(n,'className',None)=='managed-repeater-controls')

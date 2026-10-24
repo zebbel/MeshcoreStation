@@ -1,0 +1,29 @@
+{
+  "medianSkewSec": null,
+  "lastSkewSec": null,
+  "sampleCount": 0,
+  "driftPerDaySec": 0,
+  "severity": "",
+  "calibrated": true,
+  "samples": [],
+  "recentHashEvidence": [
+    {
+      "hash": "3bdc090c3a8f2069",
+      "correctedSkewSec": 76823105,
+      "observers": 7,
+      "heardAt": "2026-10-23T14:37:49Z"
+    },
+    {
+      "hash": "3c1a48057d485729",
+      "correctedSkewSec": 35,
+      "observers": 9,
+      "heardAt": "2026-10-20T14:51:54.065Z"
+    },
+    {
+      "hash": "10fbf5c29bbb9d08",
+      "correctedSkewSec": 31.5,
+      "observers": 23,
+      "heardAt": "2026-10-15T13:35:49.609074Z"
+    }
+  ]
+}

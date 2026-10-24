@@ -312,6 +312,14 @@ $('clear-history').onclick=()=>{
 window.addEventListener('message',async event=>{
  if(event.origin!==origin||event.source!==manager)return;
  const data=event.data||{};
+ if(data.type==='meshcorestation-optimizer-pause'){
+   ++loadSerial;loader?.abort();return;
+ }
+ if(data.type==='meshcorestation-optimizer-context'&&!data.public_key){
+   ++loadSerial;loader?.abort();key='';current={};readAt=0;latest=null;
+   document.querySelectorAll('.result,.finding').forEach(n=>n.remove());
+   notice('Select a repeater in Repeater Management.');return;
+ }
  if(data.type==='meshcorestation-optimizer-refresh'){
    // Local HTTP/database refresh when switching back from Status;
    // never initiate a LoRa request.
@@ -319,7 +327,7 @@ window.addEventListener('message',async event=>{
    return;
  }
  if(data.type==='meshcorestation-optimizer-context'){
-  if(key&&key!==data.public_key){current={};readAt=0;}
+  if(key&&key!==data.public_key){current={};readAt=0;latest=null;}
   key=data.public_key;name=data.name||'Repeater';
   $('identity').textContent=name+' · '+key.slice(0,12)+'…';
   await refresh(true);return;

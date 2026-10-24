@@ -1,80 +1,45 @@
-# V3 architecture
+# V4 architecture and regression workflow
 
-## Ownership
+The bot/radio runtime, bridge, SQLite storage and Flask/Dash dashboard remain one
+application. Radio operations flow through the existing authenticated management
+bridge; the Analyzer integration never imports the radio runtime or dispatches a
+bridge command.
 
-`Runtime` owns the radio session and starts/stops companion control, voltage,
-OLED and room workers. Reconnect closes the old workers before reopening serial.
-Firmware updates pause the session before esptool takes ownership of USB.
+Dashboard layout is defined in `web/layout.py`. Native details disclosures keep
+collapsed panels light. Managed repeater selection is shared by JavaScript events.
+Statistics live in their own optimizer subsection; passive Optimization Analysis
+uses the existing optimizer document and authenticated parent message bridge.
+Protected operations retain admin checks, manual confirmation, compare-before-write
+and readback verification. The external subsection is independent of admin login.
 
-`Companion` owns the serial connection and serialized command API. The control
-lock coordinates bot commands and dashboard mutations; the reply lock protects
-scope changes paired with channel sends. These locks serve different purposes.
+`analyzer.py` implements fixed URLs, key validation, transport limits, response
+validation, persistent snapshots, conditional requests, a five-minute cache,
+per-process single-flight protection and failure cooldowns. `web/analyzer_api.py`
+exposes only local-dashboard reads behind the existing same-origin control policy.
+`network_monitoring.js` handles cache-first rendering, manual refresh, cancellation,
+selection races, evidence labeling, tables/charts and lazy maps. No timer or worker
+polls the Analyzer. `optimization_analysis.js` loads its iframe only when open.
 
-The Flask/Dash server serves the UI in its own thread. `bridge` submits radio
-operations to the event loop. HTTP code never opens a second USB connection.
+Storage remains backward compatible. The new Analyzer cache is a separate SQLite
+file with idempotent schema creation. Existing V3 migrations remain covered by
+regressions for command paths, room history, telemetry and report settings. Snapshots
+are replaced atomically, avoiding double-counting rolling data. Failures never
+replace a successful snapshot with empty values.
 
-## Commands and delivery
+## Verification
 
-The command catalog lives in `command_store`. `Bot.match_command` selects a
-configured trigger, `commands.actions` performs the action, `commands.context`
-collects only requested values, and `commands.templates` renders the answer.
-There is no second hard-coded help/ping/status/position engine.
+Install `requirements.txt` plus pytest in a clean Python 3.12 environment and jsdom
+for Node. Run `python -m pytest -q`, then every `tests/*.cjs`, and
+`python -m scripts.check_install`. CI runs the full suite on `v4.0.0` and `main`.
+The offline installation smoke check validates imports, fresh database creation,
+registered routes and HTTP startup; it does not simulate apt/systemd or a radio.
 
-`commands.delivery.ReplyDelivery` handles UTF-8 splitting, spacing and accepted
-parts for both transports. Channel acceptance means submission to the companion;
-room acceptance means insertion in local room storage. Neither confirms receipt
-by every peer. Partial, failed and cancelled sends preserve only accepted text.
-Both handlers finalize the shared command history.
+Tests retain the existing protocol, permissions, telemetry, reporting, routes,
+700/703/1,000/2,000 marker and migration regressions. V4 adds real captured Analyzer
+formats, null/empty data, HTTP/timeout/malformed faults, cache/restart/conditional
+reads, single-flight, disabled access and cross-repeater race coverage. UI tests
+exercise the actual JavaScript under jsdom; they do not verify rendered Chromium
+or physical mobile devices. Do not describe those as hardware/browser validation.
 
-Room packets are authenticated by `rooms.server.RoomEndpoint`. The radio worker
-handles login, acknowledgments, synchronization and retries independently from
-slow bot commands. Recognized commands enter a FIFO of 32 waiting items; a single
-command consumer uses the companion control lock. It rechecks room enablement,
-password revision, sender permission and selected bot room before execution.
-Overload drops execution, retains the original room post, and increments the
-visible dropped-command count. Shutdown cancels work and drains the queue.
-This is an in-memory queue, not a durable job system: restart does not replay it.
-
-## Persistence and HTTP
-
-`storage/database.py` owns the existing station schema. `rooms/service.py` owns
-`rooms.db`. Its service object is connection-free; operations open and close
-SQLite connections locally, so the HTTP thread never shares an event-loop
-connection. The room API initializes a service once per configured database path.
-A panel snapshot reads all rooms on one connection inside a read transaction.
-
-`web/http.py` is the single local-host/origin/control-header policy. These checks
-are network/browser protections, not account authentication. Operate the dashboard
-on a trusted network. Uncached JSON helpers preserve local API error shapes.
-`geometry.py` supplies the shared haversine distance used by bot and maps.
-
-## Development
-
-Install runtime requirements into a virtual environment and install pytest for
-Python tests. The JavaScript tests use Node.js and jsdom in a separate test setup.
-
-```bash
-python -m pytest -q tests
-node tests/test_rooms_ui.cjs
-node tests/test_updates_ui.cjs
-python -m scripts.check_install
-```
-
-Tests use fake radios and temporary databases. Add tests for lifecycle, migration,
-message handling and authorization changes. Hardware tests remain necessary for
-Android interoperability, radio timings, firmware flashing and Pi Zero resource use.
-Never test flashing or service installation against an unrelated host device.
-
-## Dependency-change contract
-
-`requirements.txt` is the updater's signal for new modules or changed versions.
-Every change that adds an external import must declare the corresponding runtime
-package there. The updater compares this file at the installed and target commits,
-including branch switches. Identical files skip package checks, downloads,
-installation and virtual-environment backup. Changed files stage binary wheels
-before stopping the station, back up the virtual environment, install and validate.
-The application smoke test and dashboard health check run on both paths.
-
-This fast path does not repair an environment modified outside the updater. Use
-Install / repair for broken dependencies. Do not introduce nested requirements or
-external dependency manifests without extending the comparison to cover them.
+Do not delete old tests solely to get a pass. Update assertions when V4 intentionally
+changes layout, retaining their behavior coverage. Test fixtures remain test-only.

@@ -1,0 +1,32 @@
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
+const manifest=JSON.parse(fs.readFileSync('tests/fixtures/analyzer/manifest.json'));
+const key=manifest.repeater_public_key,other='ab'.repeat(32);
+const names={detail:'node_detail_24h.json',neighbors:'node_neighbors.json',reach:'node_reach_1d.json',metrics:'graph_metrics.json',clock:'clock_skew_24h.json',direct:'direct_packets_24h_empty.json',beacons:'channel_beacons_720h_empty.json',sensors:'channel_sensors_720h_empty.json'};
+const data=Object.fromEntries(Object.entries(names).map(([k,v])=>[k,JSON.parse(fs.readFileSync('tests/fixtures/analyzer/responses/'+v))]));
+const dom=new JSDOM('<body><details id="repeater-optimizer-disclosure"><summary>Optimizer</summary><details id="repeater-network-disclosure"><summary>Network</summary><button id="network-refresh">Refresh</button><p id="network-status"></p><div id="network-content"></div></details></details></body>',{url:'http://localhost',runScripts:'outside-only'}),w=dom.window,$=id=>w.document.getElementById(id);
+w.AbortController=AbortController;w.meshcorestationSelectedRepeater=key;w.meshcorestationFormatDate=v=>'DATE:'+v;
+w.setInterval=()=>{throw Error('No background polling permitted')};
+const maps=[];w.meshcorestationLoadMapLibrary=async o=>{assert.equal(o.clustering,false)};
+w.L={map:(host,options)=>{assert.equal(options.maxZoom,19);const m={removed:false,setView(){return this},fitBounds(){return this},remove(){this.removed=true}};maps.push(m);return m;},marker:()=>({addTo(){return this},bindPopup(){return this}}),polyline:()=>({addTo(){return this}}),tileLayer:()=>({on(){return this},addTo(){return this}})};
+let calls=[],state='disabled',deferred=null;
+function result(k=key){return {ok:true,public_key:k,experimental:true,live_verified:false,state,error:state==='blocked'?'External monitoring unavailable: HTTP 403 / Cloudflare 1010':state==='disabled'?'Authorized live access unconfirmed':null,data:state==='disabled'?null:data,fetched_at:1000,stale:state==='stale'||state==='blocked'};}
+w.fetch=async(url,options)=>{calls.push(url);if(deferred){const fn=deferred;deferred=null;return fn(url);}const k=new URL(url,'http://localhost').searchParams.get('public_key');return {ok:true,json:async()=>result(k)};};
+const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r));};
+const toggle=(id,open)=>{$(id).open=open;$(id).dispatchEvent(new w.Event('toggle'));};
+const select=k=>{w.meshcorestationSelectedRepeater=k;w.document.dispatchEvent(new w.CustomEvent('managed-repeater-selected',{detail:k}));};
+(async()=>{
+ w.eval(fs.readFileSync('meshcorestation/web/assets/network_monitoring.js','utf8'));await settle();assert.equal(calls.length,0);
+ toggle('repeater-optimizer-disclosure',true);await settle();assert.equal(calls.length,0);
+ toggle('repeater-network-disclosure',true);await settle();assert(calls.every(x=>x.includes('cache_only=1')));assert($('network-status').textContent.includes('unconfirmed'));assert.equal($('network-content').textContent,'');
+ state='stale';$('network-refresh').click();await settle();assert(calls.at(-1).includes('refresh=1'));
+ assert($('network-content').textContent.includes('107'));assert($('network-content').textContent.includes('inferred-only'));
+ assert($('network-content').textContent.includes('Unknown'));assert($('network-status').textContent.includes('Stale'));assert(maps.length);
+ state='blocked';$('network-refresh').click();await settle();assert($('network-status').textContent.includes('403'));assert($('network-content').textContent.includes('107'));
+ assert.equal(maps.filter(m=>!m.removed).length,1,'only one active map after redraws');
+ let resolve;deferred=url=>new Promise(r=>{resolve=()=>r({ok:true,json:async()=>result(key)})});
+ $('network-refresh').click();await settle();assert(resolve);
+ state='disabled';select(other);await settle();assert.equal($('network-content').textContent,'');resolve();await settle();assert.equal($('network-content').textContent,'','old key never renders under new key');
+ toggle('repeater-optimizer-disclosure',false);await settle();const count=calls.length;select(key);await settle();assert.equal(calls.length,count,'no selection request under closed parent');
+ toggle('repeater-network-disclosure',false);toggle('repeater-optimizer-disclosure',true);await settle();assert.equal(calls.length,count);
+ dom.window.close();console.log('Network monitoring fixtures, disabled/blocked/stale states, maps, on-demand loading and stale-response isolation passed.');
+})().catch(e=>{console.error(e);process.exit(1)});
