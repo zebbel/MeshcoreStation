@@ -20,9 +20,8 @@
         const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('class','stats-chart performance-chart');svg.setAttribute('viewBox',`0 0 ${width} 250`);svg.setAttribute('role','group');svg.setAttribute('aria-label',title);
         const add=(tag,attrs,text)=>{const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!=null)e.textContent=text;svg.append(e);return e;};
         const integerAxis=series.every(s=>['neighbors','two_way','pairs','sole_pairs','hourly_relays'].includes(s[0]));
-        const begin=view.start,end=view.end,scale=Math.max(1,...rows.flatMap(p=>series.map(s=>p[s[0]]??0))),x=t=>56+plot*(t-begin)/(end-begin),y=v=>190-160*v/scale;
+        const begin=view.start,end=view.end,maximum=Math.max(1,...rows.flatMap(p=>series.map(s=>p[s[0]]??0))),ticks=integerAxis?Math.min(Math.ceil(maximum),width<600?2:4):(width<600?2:4),scale=integerAxis?Math.ceil(maximum/ticks)*ticks:maximum,x=t=>56+plot*(t-begin)/(end-begin),y=v=>190-160*v/scale;
         add('path',{d:`M56 25V190H${width-20}`,fill:'none',stroke:'var(--border)'});
-        const ticks=integerAxis?Math.min(Math.ceil(scale),width<600?2:4):(width<600?2:4);
         for(let i=0;i<=ticks;i++){
             const value=integerAxis?Math.round(scale*i/ticks):scale*i/ticks;
             add('path',{d:`M56 ${y(value)}H${width-20}`,stroke:'var(--border)','stroke-dasharray':'2 5',fill:'none',opacity:.45});
@@ -31,7 +30,7 @@
         const dates=width<600?2:4;for(let i=0;i<=dates;i++){const at=begin+(end-begin)*i/dates;const label=new Intl.DateTimeFormat('en-GB',{timeZone:window.meshcorestationDisplaySettings?.timezone||'Europe/Berlin',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(at*1000));add('text',{x:x(at),y:222,'text-anchor':i===0?'start':i===dates?'end':'middle'},label);}
         for(const [field,label,color] of series){let path='',active=false;
             for(const p of rows){const v=p[field];if(v==null){active=false;continue;}const stamp=p.stamp??p.at,at=Math.max(begin,Math.min(end,stamp));path+=(active?'L':'M')+x(at)+' '+y(v);active=true;
-                const dot=add('circle',{cx:x(at),cy:y(v),r:rows.length>48?2:3,fill:color});const tip=document.createElementNS(ns,'title');tip.textContent=`${date(stamp)} · ${label}: ${fmt(v)}`;
+                const dot=add('circle',{cx:x(at),cy:y(v),r:rows.length>48?2:3,fill:color,'data-series':field,'data-value':v,'data-at':stamp});const tip=document.createElementNS(ns,'title');tip.textContent=`${date(stamp)} · ${label}: ${fmt(v)}`;
                 if(field.endsWith('_index'))tip.textContent+=` · Companion raw copies: repeater ${fmt(p.copies)}, mesh ${fmt(p.network)}`;dot.append(tip);
             }
             add('path',{d:path,fill:'none',stroke:color,'stroke-width':2.5,class:'performance-data-line','data-series':field});
@@ -90,7 +89,7 @@
     const fieldLabels={hourly_relays:'Mean hourly relay events',copies:'Mean repeater path copies per bucket',network:'Mean observed mesh copies per bucket',neighbors:'Mean observed neighbors',two_way:'Mean bidirectional relationships',pairs:'Mean communication pairs',sole_pairs:'Mean sole-observed pairs'};
     function assessment(view,id,title){
         const section=node('section',null,'stats-section performance-assessment');section.id=id;section.append(node('h3',title),node('p',view.overall,'performance-assessment-summary'),node('p',view.interpretation,'muted'));
-        for(const [domain,a] of Object.entries(view.assessment)){
+        for(const [domain,a] of Object.keys(series).map(k=>[k,view.assessment[k]])){
             const item=node('article',null,'performance-assessment-item');item.append(node('h4',domainTitles[domain]),node('strong',a.status));
             for(const [field,change] of Object.entries(a.changes)){item.append(node('p',`${fieldLabels[field]}: ${fmt(change.before)} → ${fmt(change.after)} (${change.percent==null?'percentage unavailable':(change.percent>0?'+':'')+fmt(change.percent)+'%'}).`));}
             item.append(node('p',a.explanation,'muted'),node('p',`Historical coverage, earlier / later: ${a.coverage.available.map((n,i)=>fmt(n)+'/'+fmt(a.coverage.expected[i])).join(' / ')} observed intervals.`,'muted'));section.append(item);
@@ -109,8 +108,8 @@
     function technical(data){
         const l=data.local,a=data.analyzer,s=data.summary||{},d=s.details||{},v=data.dashboard,technical=disclosure('Detailed Statistics','performance-details');
         technical.append(node('p','Swipe or scroll horizontally to see all technical values.','muted performance-scroll-hint'),table(['Source','Measurement','Observed value'],[
-            ['Companion','Path packet copies',fmt(l.copies)],['Companion','Distinct packet IDs',fmt(l.unique)],['Companion','Route patterns',fmt(l.routes)],['Companion','All received network packets (separate context)',fmt(l.network)],['Companion','Ambiguous paths excluded',fmt(l.ambiguous)],
-            ['Analyzer','Rolling 1h / 24h relay counts',fmt(a?.relay_1h)+' / '+fmt(a?.relay_24h)],['Analyzer','Neighboring repeaters / bidirectional observations',fmt(a?.neighbors)+' / '+fmt(a?.two_way)],['Analyzer','Communication pairs (rolling 24h)',fmt(d.pairs)],['Analyzer','Sole-observed pairs (rolling 24h)',fmt(v.cards.sole_pairs)],['Analyzer','Returned route patterns (may be truncated)',fmt(d.routes)],['Analyzer graph','Degree / betweenness / rank',fmt(a?.degree)+' / '+(d.betweenness==null?'Not available':Number(d.betweenness).toLocaleString('en-US',{maximumSignificantDigits:6}))+' / '+fmt(d.graph_rank)],['Optimization Analysis','Neighbor reception records',fmt(data.optimizer_neighbors?.observed)]
+            ['Companion','Path packet copies',fmt(l.copies)],['Companion','Distinct packet IDs',fmt(l.unique)],['Companion','Route patterns',fmt(l.routes)],['Companion','All received network packets (separate context)',fmt(l.network)],['Companion','Ambiguous paths excluded',fmt(l.ambiguous)],['Companion','First / latest observations in selected history',date(l.first)+' / '+date(l.last)],['Analyzer history','Available / expected complete hourly buckets',fmt(s.hourly_observed)+' / '+fmt(s.hourly_expected)],['Analyzer history','First / latest saved complete hour',date(s.first_hour)+' / '+date(s.last_hour)],
+            ['Analyzer','Rolling 1h / 24h relay counts',fmt(a?.relay_1h)+' / '+fmt(a?.relay_24h)],['Analyzer','Neighboring repeaters / bidirectional observations',fmt(a?.neighbors)+' / '+fmt(a?.two_way)],['Analyzer','Communication pairs (rolling 24h)',fmt(d.pairs)],['Analyzer','Sole-observed pairs (rolling 24h)',fmt(v.cards.sole_pairs)],['Analyzer','Returned route patterns (may be truncated)',fmt(d.routes)],['Analyzer graph','Degree / betweenness / rank',fmt(a?.degree)+' / '+(d.betweenness==null?'Not available':Number(d.betweenness).toLocaleString('en-US',{maximumSignificantDigits:6}))+' / '+fmt(d.graph_rank)],['Optimization Analysis','Neighbor reception records',fmt(data.optimizer_neighbors?.observed)],['Optimization Analysis','Neighbor records timestamp',date(data.optimizer_neighbors?.at)]
         ]));
         technical.append(node('p','Statistics source: '+l.source+'. The indexed chart independently uses only comparable Companion network observations.','muted'));
         const schedule=s.collection;technical.append(node('p',schedule?`Automatic collection: ${schedule.error||schedule.state||'Scheduled'}. Last success: ${date(schedule.success_at)}. Next attempt: ${date(schedule.next_at)}.`:'Analyzer collection runs every 12 hours while the station service runs.','muted'));

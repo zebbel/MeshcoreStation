@@ -11,16 +11,20 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  assert.equal(requests.filter(r=>r.url.includes('/api/repeater-performance')).length,0,'closed performance never loads');
  await page.locator('#repeater-optimizer-disclosure > summary').click();
  const order=await page.locator('#repeater-optimizer-disclosure > details').evaluateAll(nodes=>nodes.map(n=>n.id));assert.equal(order[0],'repeater-performance-disclosure');
- await page.locator('#repeater-performance-disclosure > summary').click();await page.getByText('Saved observations loaded.',{exact:false}).first().waitFor();
+ const initialResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/repeater-performance'&&r.request().method()==='GET');
+ await page.locator('#repeater-performance-disclosure > summary').click();const stored=await (await initialResponse).json();await page.getByText('Saved observations loaded.',{exact:false}).first().waitFor();
  assert.equal(await page.locator('#performance-selected').innerText(),'DE_HE_HP_RPT1');assert.equal(await page.locator('#performance-content .stats-metric').count(),4);
  const section=page.locator('#repeater-performance-disclosure');
  const exactOrder=['performance-contribution','performance-forwarding','performance-relative','performance-connectivity','performance-routing','performance-assessment','performance-changes','performance-details'];
  assert.deepEqual(await page.locator('#performance-content').evaluate(n=>[...n.children].filter(n=>n.tagName==='SECTION'||n.tagName==='DETAILS').map(n=>n.id)),exactOrder);
  assert.equal(await page.locator('#performance-details').getAttribute('open'),null);
- const stored=await page.request.get('http://127.0.0.1:8050/api/repeater-performance?public_key='+key,{headers:{'X-Meshcore-Control':'1'}}).then(r=>r.json());
  const cards=section.locator('.stats-metric');
  assert.deepEqual(await cards.locator('strong').allTextContents(),['107','4 / 14','31','2']);
- assert.equal(stored.dashboard.cards.sole_pairs,2);assert.equal(stored.dashboard.cards.pairs,31);
+ assert.equal(stored.dashboard.cards.sole_pairs,2);
+ assert.deepEqual(await page.locator('#performance-assessment article h4').allTextContents(),['Forwarding Activity','Repeater vs. Mesh Activity','Network Connectivity','Routing Contribution']);
+ for(const [domain,fields,rows] of [['forwarding',['hourly_relays'],stored.dashboard.forwarding],['relative',['repeater_index','mesh_index'],stored.dashboard.companion.timeline],['connectivity',['neighbors','two_way'],stored.dashboard.snapshots],['routing',['pairs','sole_pairs'],stored.dashboard.snapshots]]){
+   for(const field of fields){const actual=await page.locator(`#performance-${domain} circle[data-series="${field}"]`).evaluateAll(nodes=>nodes.map(n=>({value:Number(n.dataset.value),at:Number(n.dataset.at)})));assert.deepEqual(actual,rows.filter(r=>r[field]!=null).map(r=>({value:r[field],at:r.stamp??r.at})),domain+' chart values and timestamps match actual stored response');}
+ }assert.equal(stored.dashboard.cards.pairs,31);
  assert((await section.innerText()).includes('28.57%'));
  await page.locator('.performance-overview').screenshot({path:`${output}/performance-overview-${token}.png`});
  assert.equal(await section.locator('svg.performance-chart:visible').count(),4);

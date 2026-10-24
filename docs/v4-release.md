@@ -37,3 +37,10 @@ ambiguous hashes, missing/partial/zero baselines, retention warnings, exact mark
 boundaries, journal persistence, repeater switching and the existing 60-hour
 collection simulation. Complete Python/JavaScript and real Chromium desktop/mobile
 light/dark regression checks and screenshot inspection gate publication.
+
+Validated: 531 Python tests and all 36 JavaScript suites passed. Real Chromium
+verified the complete eight-part layout on desktop (1280px) and mobile (390px),
+light/dark themes, numerical card values, four visible line charts, real SVG gaps
+and markers, normalization, integer axes, period switching, responsive sizing,
+journal CRUD/reload and before/after comparisons. Existing map/iframe regressions
+passed and screenshots were inspected.
