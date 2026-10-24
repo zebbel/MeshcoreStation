@@ -3,7 +3,7 @@
     let attached=false, controller=null, generation=0, current='', map=null, pendingKey=null, mapRender=0, mapObserver=null, resizeHandler=null, resizeFrame=null, mapIdentityHandler=null;
     const cache=new Map(),$=id=>document.getElementById(id);
     const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;};
-    const date=v=>v==null?'Unknown':window.meshcorestationFormatDate(v,'Europe/Berlin');
+    const date=v=>v==null?'Unknown':window.meshcorestationFormatDate(typeof v==='string'&&/^\d{4}-/.test(v)?new Date(v):v,'Europe/Berlin');
     const val=v=>v==null?'Unknown':String(v);
     const visible=()=>$('repeater-network-disclosure')?.open && $('repeater-optimizer-disclosure')?.open!==false;
     const names=()=>window.MeshcoreStationRepeaterNames;
@@ -64,7 +64,7 @@
                     L.polyline([points[0],pos],{...common,color:'var(--accent)',weight:3,className:'network-relationship'}).addTo(map);
                 }
             }
-            if(points.length>1)map.fitBounds(points,{padding:[20,20],maxZoom:13});
+            if(points.length>1)map.fitBounds(points,{padding:[20,20],maxZoom:13,animate:false});
             mapIdentityHandler=()=>{for(const m of markers)m.layer.getElement?.()?.setAttribute('title',names().label(m.key));};
             document.addEventListener('repeater-names-updated',mapIdentityHandler);
             const activeMap=map;

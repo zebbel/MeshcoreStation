@@ -21,13 +21,14 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
 const toggle=(id,open)=>{$(id).open=open;$(id).dispatchEvent(new w.Event('toggle'));};
 const select=k=>{w.meshcorestationSelectedRepeater=k;w.document.dispatchEvent(new w.CustomEvent('managed-repeater-selected',{detail:k}));};
 (async()=>{
+ w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
  w.eval(fs.readFileSync('meshcorestation/web/assets/ab_repeater_names.js','utf8'));
  w.eval(fs.readFileSync('meshcorestation/web/assets/network_monitoring.js','utf8'));await settle();assert.equal(calls.length,0);
  toggle('repeater-optimizer-disclosure',true);await settle();assert.equal(calls.length,0);
  toggle('repeater-network-disclosure',true);await settle();assert(calls[0].includes('cache_only=1'));assert(calls.some(x=>!x.includes('cache_only=1')),'stale data automatically fetched with no activation flag');assert($('network-content').textContent.includes('107'));
  state='available';toggle('repeater-network-disclosure',false);await settle();const fresh=calls.length;toggle('repeater-network-disclosure',true);await settle();assert(calls.slice(fresh).every(x=>x.includes('cache_only=1')),'fresh cache reused');
  state='stale';$('network-refresh').click();await settle();assert(calls.at(-1).includes('refresh=1'));
- assert($('network-content').textContent.includes('107'));assert($('network-content').textContent.includes('inferred-only'));assert($('network-content').textContent.includes('Hemsbergturm'));assert(!$('network-content').textContent.includes(key));assert($('network-content').querySelector('[title="'+key+'"]'));
+ assert($('network-content').textContent.includes('107'));assert($('network-content').textContent.includes('inferred-only'));assert($('network-content').textContent.includes('Hemsbergturm'));assert($('network-content').textContent.includes('24.10.2026'));assert(!$('network-content').textContent.includes(key));assert($('network-content').querySelector('[title="'+key+'"]'));
  assert($('network-content').textContent.includes('Unknown'));assert($('network-status').textContent.includes('Stale'));assert(maps.length);
  state='blocked';$('network-refresh').click();await settle();assert($('network-status').textContent.includes('403'));assert($('network-content').textContent.includes('107'));
  assert($('network-content').querySelector('.stats-section .stats-table-scroll'));assert($('network-content').querySelector('.stats-metric'));

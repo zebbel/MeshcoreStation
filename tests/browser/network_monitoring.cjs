@@ -54,12 +54,14 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
     assert(geometry.every(p=>p.length>1&&p.bounds>0&&p.stroke!=='none'&&p.dashes!=='none'&&p.svgHeight>p.mapHeight*.9&&p.maxHeight==='none'),'visible SVG geometry escapes chart sizing rules');
     const before=await lines.first().getAttribute('d');await page.locator('.network-map .leaflet-control-zoom-in').click();
     await page.waitForFunction(d=>document.querySelector('.network-map path.network-relationship')?.getAttribute('d')!==d,before);
+    await page.waitForFunction(()=>!document.querySelector('.network-map').classList.contains('leaflet-zoom-anim'));
     const canvas=await page.locator('.network-map').boundingBox();await page.mouse.move(canvas.x+canvas.width*.6,canvas.y+canvas.height*.5);await page.mouse.down();await page.mouse.move(canvas.x+canvas.width*.6+40,canvas.y+canvas.height*.5+20,{steps:8});await page.mouse.up();
     await section.screenshot({path:`${output}/relationships-${token}.png`});
     for(const id of ['optimization-analysis-disclosure','repeater-network-disclosure']){
      const padding=await page.locator('#'+id+' > .optimizer-section-body').evaluate(n=>({left:getComputedStyle(n).paddingLeft,right:getComputedStyle(n).paddingRight}));assert.deepEqual(padding,gutter);
     }
     assert(await page.locator('.network-route').first().innerText().then(t=>t.includes('DE_HE_HP_RPT1')&&t.includes('🐝Heppenheim Nord')&&t.includes('Hemsbergturm')));
+    assert(!await page.locator('.network-route').first().locator('..').locator('..').innerText().then(t=>t.includes('Not recorded')),'captured path timestamps remain readable');
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no dashboard horizontal overflow');
     await page.locator('#repeater-network-disclosure > summary').click();await page.locator('#repeater-network-disclosure > summary').click();await lines.first().waitFor();assert.equal(await page.locator('.network-map.leaflet-container').count(),1);
     await page.setViewportSize({width:viewport.width===390?430:1180,height:viewport.height});await section.scrollIntoViewIfNeeded();assert.equal(await lines.count(),expectedLines);
