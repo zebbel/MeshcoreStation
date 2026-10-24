@@ -191,3 +191,64 @@ def test_retention_caps_all_measurement_tables_but_not_journal(stores,monkeypatc
         for table in ('measurements','measurement_details','hourly_relays'):
             assert db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]==2
     assert len(p.markers(KEY))==1
+
+
+def test_busy_client_defers_without_losing_the_twelve_hour_collection(stores):
+    clock=[NOW];calls=[];service=client(stores,clock,calls)
+    worker=AnalyzerCollector(service,lambda:[KEY],lambda:clock[0])
+    service.lock.acquire()
+    try:
+        assert worker.tick()
+        assert p.collection_status(KEY)['next_at']==NOW+SPACING
+        assert not calls
+    finally:
+        service.lock.release()
+    clock[0]+=SPACING
+    assert worker.tick() and len(calls)==8
+    assert p.collection_status(KEY)['success_at']==clock[0]
+
+
+def test_offset_hour_dedup_and_non_aligned_change_windows(stores):
+    from datetime import timedelta
+    at=NOW-86400
+    p.record_analyzer(KEY,at,data_at(at,count=2))
+    p.record_analyzer(KEY,NOW,data_at(NOW,count=4))
+    correction=data_at(NOW,count=6)
+    for row in correction['detail']['relayTimeline']:
+        row['bucket']=datetime.fromisoformat(row['bucket']).astimezone(timezone(timedelta(hours=2))).isoformat()
+    p.record_analyzer(KEY,NOW+1,correction)
+    assert len(p.hourly(KEY,NOW-86400,NOW))==24
+    assert all(r['count']==6 for r in p.hourly(KEY,NOW-86400,NOW))
+    result=p.comparison(KEY,{'id':1,'at':at+300},1,NOW+300,[])
+    assert result['windows']['before']['expected_hourly_samples']==23
+    assert result['windows']['after']['expected_hourly_samples']==23
+    assert result['differences']['analyzer_hourly_relays_mean']['percent']==200
+
+
+def test_reach_snapshot_at_change_belongs_only_to_after(stores):
+    p.record_analyzer(KEY,NOW,data_at(NOW))
+    result=p.comparison(KEY,{'id':1,'at':NOW},1,NOW+86400,[])
+    assert result['windows']['before']['values']['analyzer_neighbors_mean'] is None
+    assert result['windows']['before']['analyzer_snapshot_samples']==0
+    assert result['windows']['after']['values']['analyzer_neighbors_mean'] is not None
+    assert result['windows']['after']['analyzer_snapshot_samples']==1
+
+
+def test_only_managed_valid_keys_are_collected(stores,monkeypatch):
+    import meshcorestation.analyzer_collector as module
+    path=stores/'station.db'
+    with sqlite3.connect(path) as db:
+        db.execute('CREATE TABLE voltage_config (id INTEGER, public_key TEXT, managed INTEGER)')
+        db.executemany('INSERT INTO voltage_config VALUES(?,?,?)',[(1,KEY.upper(),1),(2,OTHER,0),(3,'',1),(4,'invalid legacy ID',1)])
+    monkeypatch.setattr(module,'DB_PATH',path)
+    assert module.managed_keys()==[KEY]
+
+
+def test_block_pauses_other_managed_repeaters_and_survives_worker_restart(stores):
+    clock=[NOW];calls=[];service=client(stores,clock,calls,[403])
+    worker=AnalyzerCollector(service,lambda:[KEY,OTHER],lambda:clock[0])
+    assert worker.tick() and len(calls)==1
+    clock[0]+=SPACING
+    restarted=AnalyzerCollector(client(stores,clock,calls,[403]),lambda:[KEY,OTHER],lambda:clock[0])
+    assert not restarted.tick() and len(calls)==1
+    assert p.collection_status(OTHER)['attempted_at'] is None

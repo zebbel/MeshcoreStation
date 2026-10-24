@@ -28,6 +28,10 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  assert((await section.innerText()).includes('Verified flood.max'));
  assert.equal(requests.filter(r=>r.url.includes('/api/repeater-network')).length,0,'performance does not fetch Analyzer data');
  await section.screenshot({path:`${output}/performance-${token}.png`});
+ await page.locator('#performance-details > summary').click();
+ assert((await page.locator('#performance-details').innerText()).includes('Degree / betweenness / rank'));
+ await page.locator('#performance-details').screenshot({path:`${output}/performance-details-${token}.png`});
+ await page.locator('#performance-details > summary').click();
  await section.locator('.performance-change-line').last().click();await page.locator('#performance-comparison').waitFor();
  assert((await page.locator('#performance-comparison').innerText()).includes('Correlation does not prove'));
  assert((await page.locator('#performance-comparison').innerText()).includes('overlap'));

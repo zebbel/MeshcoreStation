@@ -38,3 +38,9 @@ collection across 60 hours with process restarts, overlapping hourly history,
 retention, errors/cooldowns and crash leases; real Chromium desktop/mobile in both
 themes, charts/gaps/marker geometry, local journal CRUD/reload, comparisons, resizing,
 shared selection and existing map/iframe regressions. See release report for counts.
+
+Validated: 514 Python tests and all 36 JavaScript suites passed. Real Chromium
+checks cover desktop (1280px) and mobile (390px), light/dark themes, rendered gaps
+and integer neighbor axes, overview/detail disclosures, persistent journal CRUD,
+marker comparisons, resizing and shared-repeater switching. Existing network-map
+and Optimization Analysis iframe regressions passed; screenshots were inspected.

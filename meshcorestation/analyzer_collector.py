@@ -20,7 +20,11 @@ LEASE = 1800
 def managed_keys():
     # The main process initializes this database before starting the collector.
     with closing(sqlite3.connect(f'file:{DB_PATH}?mode=ro', uri=True, timeout=5)) as db:
-        return [public_key(r[0]) for r in db.execute("SELECT public_key FROM voltage_config WHERE managed=1 AND public_key!='' ORDER BY id")]
+        keys=[]
+        for row in db.execute("SELECT public_key FROM voltage_config WHERE managed=1 AND public_key!='' ORDER BY id"):
+            try: keys.append(public_key(row[0]))
+            except ValueError: logging.getLogger(__name__).warning('Skipping invalid managed repeater identifier')
+        return keys
 
 
 class AnalyzerCollector:
@@ -70,7 +74,7 @@ class AnalyzerCollector:
             if not state['deleted'] and key in set(self.keys()):
                 db.execute('''UPDATE collection_schedule SET next_at=?,state=?,error=?,
                     success_at=CASE WHEN ? THEN ? ELSE success_at END WHERE public_key=?''',
-                    (finished+INTERVAL,result.get('state','unavailable'),error,success,result.get('fetched_at'),key))
+                    (finished+(SPACING if result.get('state')=='busy' else INTERVAL),result.get('state','unavailable'),error,success,result.get('fetched_at'),key))
             if result.get('state') in ('blocked','rate_limited'):
                 # A provider restriction pauses the whole queue, including across
                 # restarts. No immediate retry or fan-out to other managed keys.

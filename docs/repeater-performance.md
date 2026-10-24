@@ -23,6 +23,8 @@ next run 12 hours after finishing. A crashed in-progress claim expires after 30
 minutes. HTTP 403 or 429 pauses the entire scheduled queue for at least 12 hours,
 including across restarts. Longer provider Retry-After values are respected.
 Other failures preserve successful data and wait until the next scheduled run.
+If a dashboard refresh is already using the client, collection defers one minute
+without starting another external request.
 No request attempts to bypass provider restrictions or impersonate a browser.
 
 Collection requires the station service, internet connectivity and permitted
@@ -101,7 +103,9 @@ the journal provides the same action. Choose equal 24-hour, 3-day or 7-day windo
 (7 days default). Elapsed durations remain equal across daylight-saving changes.
 
 Companion packet/route counts use exact window boundaries. Analyzer relay means
-prefer original fully contained hourly buckets, deduplicated by timestamp. Older
+prefer original fully contained hourly buckets, deduplicated by timestamp. Hours
+straddling a window boundary are excluded from values and expected bucket counts;
+reach snapshots use the same half-open before/after boundaries as Companion data. Older
 archives lacking those buckets can use fully contained non-overlapping rolling
 1h samples, spaced at least an hour apart; that source is identified. Rolling
 24h counts are never added or used as period totals. Percent changes for hourly

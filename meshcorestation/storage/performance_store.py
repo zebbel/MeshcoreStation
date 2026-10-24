@@ -336,8 +336,11 @@ def comparison(key, marker, days, now, all_markers):
             if row['at']-3600 >= start and (not samples or row['at']-samples[-1]['at'] >= 3600):
                 samples.append(row)
         hours=hourly(key,start,min(stop,now))
+        expected=max(0,int(math.floor(stop/3600)-math.ceil(start/3600)))
+        reach_hours={int(r['at']//3600):r for r in measurements(key,start,min(stop,now))}
         def mean(field):
-            values = [r[field] for r in samples if r[field] is not None]
+            source=samples if field=='relay_1h' else reach_hours.values()
+            values = [r[field] for r in source if r[field] is not None]
             return sum(values)/len(values) if values else None
         with database() as db:
             detail_rows=[dict(r) for r in db.execute('SELECT * FROM measurement_details WHERE public_key=? AND at>=? AND at<? ORDER BY at',(key,start,min(stop,now)))]
@@ -353,7 +356,7 @@ def comparison(key, marker, days, now, all_markers):
                       'analyzer_pairs_mean':detail_mean('pairs'),'analyzer_routes_mean':detail_mean('routes'),
                       'optimizer_neighbors_mean':sum(neighbor_readings.values())/len(neighbor_readings) if neighbor_readings else None},
             'optimizer_samples':len(neighbor_readings),
-            'analyzer_samples':len(hours) if hours else len(samples),'analyzer_source':'Original hourly buckets' if hours else 'Legacy rolling 1h samples','expected_hourly_samples':int(width//3600),
+            'analyzer_samples':len(hours) if hours else len(samples),'analyzer_source':'Original hourly buckets' if hours else 'Legacy rolling 1h samples','expected_hourly_samples':expected,'analyzer_snapshot_samples':len(reach_hours),
             'companion_source':p.get('source','No saved Companion observations'),
             'companion_buckets_with_packets':sum(b['copies'] is not None for b in p['bins']),
             'first_companion':p['first'],'last_companion':p['last']}
@@ -363,8 +366,8 @@ def comparison(key, marker, days, now, all_markers):
             result['warnings'].append(p['error'])
         if p['first'] is None or p['first']>start+3600 or p['last']<min(stop,now)-3600:
             result['warnings'].append(f'{name.title()} Companion observations do not span the full window.')
-        if (len(hours) if hours else len(samples))<int(width//3600):
-            result['warnings'].append(f'{name.title()} analyzer coverage is incomplete ({len(hours) if hours else len(samples)}/{int(width//3600)} non-overlapping hourly samples).')
+        if (len(hours) if hours else len(samples))<expected:
+            result['warnings'].append(f'{name.title()} analyzer coverage is incomplete ({len(hours) if hours else len(samples)}/{expected} complete hourly samples).')
         if p.get('trimmed_at') and p['trimmed_at']>=start:
             result['warnings'].append(f'{name.title()} Companion history may have been trimmed.')
     before,after = (result['windows'][n]['values'] for n in ('before','after'))
@@ -383,7 +386,7 @@ def comparison(key, marker, days, now, all_markers):
         result['warnings'].append('The Companion source differs between windows; differences may reflect collection scope rather than performance.')
     result['warnings'].append('Companion uptime and reception completeness were not historically recorded. Missing records are not proof of zero activity. Percentages are unavailable for missing or zero baselines.')
     result['overlapping_markers'] = overlap
-    for field,label in (() if collecting else (('companion_packets','Companion path packet count'),('analyzer_hourly_relays_mean','mean analyzer rolling 1h relay count'))):
+    for field,label in (() if collecting else (('companion_packets','Companion path packet count'),('analyzer_hourly_relays_mean','mean Analyzer hourly relay count'))):
         change=result['differences'][field]
         if change['before'] is None or change['after'] is None:
             continue
