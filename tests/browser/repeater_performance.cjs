@@ -16,7 +16,7 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  const section=page.locator('#repeater-performance-disclosure');
  assert.equal(await section.locator('svg.performance-chart').count(),3);assert(await section.locator('.performance-change-line').count()>=3);
  assert(await section.locator('svg.performance-chart circle').count()>0);
- const geometry=await section.locator('.performance-change-line').evaluateAll(nodes=>nodes.map(n=>({length:n.getTotalLength(),width:n.getBBox().width,height:n.getBBox().height,stroke:getComputedStyle(n).stroke})));assert(geometry.every(n=>n.length>100&&n.height>100&&n.stroke!=='none'));
+ const geometry=await section.locator('.performance-marker-line').evaluateAll(nodes=>nodes.map(n=>({length:n.getTotalLength(),width:n.getBBox().width,height:n.getBBox().height,stroke:getComputedStyle(n).stroke})));assert(geometry.every(n=>n.length>100&&n.height>100&&n.stroke!=='none'));
  assert((await section.innerText()).includes('Verified flood.max'));
  assert.equal(requests.filter(r=>r.url.includes('/api/repeater-network')).length,0,'performance does not fetch Analyzer data');
  await section.screenshot({path:`${output}/performance-${token}.png`});

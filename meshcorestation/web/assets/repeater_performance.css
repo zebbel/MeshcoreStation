@@ -6,7 +6,7 @@
 .performance-form textarea, .performance-form input { width:100%; background:var(--panel); }
 #performance-content .performance-chart { width:100%; height:auto; }
 .performance-chart text { font-size:11px; }
-.performance-change-line { cursor:pointer; }
+.performance-change-line { cursor:pointer; pointer-events:all; }
 .performance-change-line:focus { outline:2px solid var(--accent); }
 #performance-comparison select { max-width:100%; background:var(--panel); }
 #performance-content .stats-table-scroll table { min-width:36rem; }

@@ -243,10 +243,12 @@ def comparison(key, marker, days, now, all_markers):
         if p.get('trimmed_at') and p['trimmed_at']>=start:
             result['warnings'].append(f'{name.title()} Companion history may have been trimmed.')
     before,after = (result['windows'][n]['values'] for n in ('before','after'))
+    collecting=any(w['end']>now for w in result['windows'].values())
     for field,b in before.items():
         a = after[field]
         result['differences'][field] = {'before':b,'after':a,'absolute':a-b if a is not None and b is not None else None,
-            'percent':100*(a-b)/b if a is not None and b is not None and b!=0 else None}
+            'percent':100*(a-b)/b if not collecting and a is not None and b is not None and b!=0 else None,
+            'reason':'Window still collecting' if collecting else 'Missing observations' if a is None or b is None else 'Zero baseline' if b==0 else None}
     overlap = [m['id'] for m in all_markers if m['id']!=marker['id'] and marker['at']-width<=m['at']<marker['at']+width]
     if overlap:
         result['warnings'].append(f'{len(overlap)} other logged changes overlap these windows.')
@@ -254,7 +256,7 @@ def comparison(key, marker, days, now, all_markers):
         result['warnings'].append('The Companion source differs between windows; differences may reflect collection scope rather than performance.')
     result['warnings'].append('Companion uptime and reception completeness were not historically recorded. Missing records are not proof of zero activity. Percentages are unavailable for missing or zero baselines.')
     result['overlapping_markers'] = overlap
-    for field,label in (('companion_packets','Companion path packet count'),('analyzer_hourly_relays_mean','mean analyzer rolling 1h relay count')):
+    for field,label in (() if collecting else (('companion_packets','Companion path packet count'),('analyzer_hourly_relays_mean','mean analyzer rolling 1h relay count'))):
         change=result['differences'][field]
         if change['before'] is None or change['after'] is None:
             continue
@@ -267,7 +269,7 @@ def comparison(key, marker, days, now, all_markers):
         result['interpretation']=text+' Coverage is incomplete or uncertain; this is an activity difference, not a delivery-success rate. '+result['interpretation']
         break
     else:
-        result['interpretation']='Insufficient paired observations for an activity comparison. '+result['interpretation']
+        result['interpretation']=('The equal after-window is still collecting; full-window percentage comparisons are not yet available. ' if collecting else 'Insufficient paired observations for an activity comparison. ')+result['interpretation']
     return result
 
 

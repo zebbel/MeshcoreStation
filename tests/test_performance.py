@@ -141,6 +141,9 @@ def test_exact_comparison_windows_nonoverlap_zero_and_missing_baselines(stores):
     empty=p.comparison(OTHER,marker,7,NOW,[])
     assert empty['differences']['companion_packets']['percent'] is None
     assert any('still being collected' in w for w in empty['warnings'])
+    partial=p.comparison(KEY,marker,7,NOW,[])
+    assert partial['differences']['companion_packets']['percent'] is None
+    assert partial['differences']['companion_packets']['reason']=='Window still collecting'
     # Measured zero baseline cannot produce an infinite percentage.
     packet(at-10,key=OTHER)
     with sqlite3.connect(passive_stats.STATS_PATH) as db:db.execute('DELETE FROM network_observations WHERE route=?',(KEY[:2],))

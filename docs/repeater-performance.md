@@ -73,7 +73,7 @@ if the journal is important. Repeater removal's confirmation includes this data.
 Select 24 hours, 3 days or 7 days before and after a marker (7 days by default).
 Windows have the same elapsed duration and meet at the marker. Future portions of
 an after-window remain incomplete; measured values are not extrapolated. Tables
-show measured values, absolute differences and percentage differences. Missing
+show measured values, absolute differences and percentage differences. Percentages also wait until both requested windows have elapsed. Missing
 values and zero baselines have no percentage; they do not imply a zero change.
 
 Companion packet/route counts use exact window boundaries. Analyzer comparisons
