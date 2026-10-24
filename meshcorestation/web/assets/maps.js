@@ -36,7 +36,7 @@
     }
     function describe(node) {
         const box = document.createElement('div');
-        box.append(text('strong', node.label), text('p', node.role === 'repeater' && node.order ? `Repeater hop ${node.order}` : node.role));
+        box.append(node.role==='repeater'&&window.MeshcoreStationRepeaterNames?window.MeshcoreStationRepeaterNames.element(node.public_key||node.key||node.label,'strong'):text('strong', node.label), text('p', node.role === 'repeater' && node.order ? `Repeater hop ${node.order}` : node.role));
         box.append(text('p', node.position.map(n => n.toFixed(6)).join(', ')));
         if (node.public_key) box.append(text('p', node.public_key, 'map-key'));
         if (node.updated_at) box.append(text('p', `Saved / last seen: ${window.meshcorestationFormatDate(node.updated_at)}`));
@@ -77,6 +77,7 @@
             // Attach a rejection handler immediately while route data is fetched.
             const ready=library.then(()=>null,error=>error);
             const payload = await mapData(url, controller.signal);
+            window.MeshcoreStationRepeaterNames?.ingest(payload.nodes.filter(n=>n.role==='repeater'));
             const alternatives = payload.reception_paths || [payload];
             let data = alternatives[0], redraw = null;
             const selector = summary && document.getElementById('route-paths');
@@ -161,7 +162,7 @@
             function markerFor(node) {
                 const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
                 const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
-                return L.marker(node.position, { icon, title: `${node.role}: ${node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).bindPopup(() => describe(node));
+                return L.marker(node.position, { icon, title: `${node.role}: ${node.role==='repeater'&&window.MeshcoreStationRepeaterNames?window.MeshcoreStationRepeaterNames.label(node.public_key||node.key||node.label):node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).bindPopup(() => describe(node));
             }
             redraw = draw;
             draw();

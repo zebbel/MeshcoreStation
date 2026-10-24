@@ -7,8 +7,8 @@
 .stats-metric p { margin: 0 0 8px; }
 .stats-metric strong { font-size: 27px; }
 .stats-section { margin: 24px 0; }
-.stats-section svg { display: block; width: 100%; min-height: 170px; }
-.stats-section svg text { fill: var(--text); font: 12px system-ui; }
+.stats-section svg.stats-chart { display: block; width: 100%; min-height: 170px; }
+.stats-section svg.stats-chart text { fill: var(--text); font: 12px system-ui; }
 .stats-table-scroll { overflow-x: auto; }
 .stats-section td { overflow-wrap: anywhere; white-space: normal; }
 .stats-section table { width: 100%; }
@@ -44,4 +44,4 @@
 .stats-message[data-state="unavailable"],.stats-message[data-state="invalid"] {
  border-left:3px solid var(--red); padding-left:12px; color:var(--text);
 }
-.stats-section svg { color:var(--accent); }
+.stats-section svg.stats-chart { color:var(--accent); }

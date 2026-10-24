@@ -63,3 +63,11 @@ def test_every_dashboard_disclosure_starts_collapsed():
     sections={getattr(item, 'id', None) for item in nodes if isinstance(item, html.Details)}
     assert {'room-server-disclosure', 'repeater-management-disclosure',
             'repeater-statistics-disclosure', 'command-history-disclosure'} <= sections
+
+
+def test_optimizer_subsections_use_one_shared_gutter_without_double_padding():
+    nodes=list(walk(build_layout()))
+    for key in ('repeater-statistics-disclosure','optimization-analysis-disclosure','repeater-network-disclosure'):
+        section=next(n for n in nodes if getattr(n,'id',None)==key)
+        assert len(section.children)==2
+        assert section.children[1].className=='optimizer-section-body'

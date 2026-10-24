@@ -78,3 +78,23 @@ inside their own wrapper only when needed. Historical charts and maps resize
 with the available width. The selected repeater and snapshot provenance stay
 visible. Optimization Analysis resizes its same-origin iframe to its content;
 the main dashboard supplies the single page scrollbar and shared theme colors.
+
+## Names and relationship maps
+
+The display directory reuses known/managed records already returned by existing
+requests, Analyzer node/neighbor/relay names, and in-memory cached information.
+There are no individual name-lookup requests. Full keys are matched exactly.
+Unknown identities use `Unknown Repeater (769b90b4…)`; short prefixes stay marked
+unresolved, even when they match one currently known repeater. Duplicate names
+receive a shortened key suffix long enough to distinguish them. Tooltips preserve
+full keys or the original unresolved prefix. Internal IDs and route order do not
+change when names change.
+
+Observable Relationships uses CSS divIcon markers: S identifies the selected
+repeater; R identifies a neighbor. Dashed lines require both coordinates and
+Analyzer directional evidence (weHear, theyHear or twoWay). They represent inferred
+relationships, never verified direct RF connections. Missing-coordinate entries
+remain in tables; they are not assigned invented positions. Chart sizing applies
+only to explicitly marked chart SVGs. Map size observers invalidate the map after
+layout changes, and reopening/switching cleans up old instances. Tile failures
+leave valid markers and relationship overlays visible with a status message.

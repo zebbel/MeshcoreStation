@@ -1,4 +1,6 @@
 /* Network-only geometry; all visual components use shared statistics styles. */
 #network-content { overflow-wrap:anywhere; min-width:0; }
-#network-content svg { height:auto; max-height:210px; }
+#network-content svg.stats-chart { height:auto; max-height:210px; }
 #network-content .network-map { height:clamp(260px, 45vw, 420px); }
+
+.network-route { display:block; overflow-wrap:anywhere; line-height:1.7; }

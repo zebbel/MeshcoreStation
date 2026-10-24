@@ -69,7 +69,7 @@
     }
 
     function render(result) {
-        snapshot = result;
+        snapshot = result;window.MeshcoreStationRepeaterNames?.ingest(result.contacts.filter(c=>c.type===2));
         byId('contacts-identity').textContent = `Connected companion: ${result.public_key}`;
         byId('contacts-count').textContent = `${result.contacts.length} contacts`;
         const list = byId('contacts-list'); list.replaceChildren();
@@ -79,8 +79,8 @@
             const details = document.createElement('small'), button = document.createElement('button');
             const [symbol, label] = types[contact.type] || ['◆', `Type ${contact.type}`];
             icon.className = 'contact-icon'; icon.textContent = symbol; icon.setAttribute('aria-hidden', 'true');
-            name.textContent = contact.name || '(unnamed)';
-            details.textContent = `${label} · ${contact.public_key.slice(0, 12)}…`;
+            if(contact.type===2&&window.MeshcoreStationRepeaterNames){name.dataset.repeaterKey=contact.public_key;name.textContent=window.MeshcoreStationRepeaterNames.label(contact.public_key);name.title=contact.public_key;}else name.textContent = contact.name || '(unnamed)';
+            details.textContent = contact.type===2?label:`${label} · ${contact.public_key.slice(0,12)}…`;
             details.title = contact.public_key;
             text.className = 'contact-label'; text.append(name, details, contactDetails(contact));
             button.type = 'button'; button.textContent = 'Delete'; button.className = 'contact-delete';

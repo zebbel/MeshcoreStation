@@ -48,3 +48,11 @@ for those procedures.
 The three optimizer subsections share dashboard typography, cards, controls and
 status styling. Analysis grows with its content rather than using an internally
 scrolling fixed-height iframe. Provider access failures remain visible in monitoring.
+
+Repeater identities display names where full-key records are available. Hover or
+open details for technical keys. Identical names get key suffixes; unknown keys
+use Unknown Repeater and short unresolved prefixes remain labeled as unresolved.
+Packet Path Patterns preserves sequence/count/time while displaying readable names.
+The three optimizer disclosures share matching content gutters on small and large
+screens. Observable Relationships uses S/R markers and dashed inferred links;
+missing background tiles do not remove the overlays.

@@ -19,7 +19,7 @@
         if(!managed.includes(key))return;
         window.meshcorestationSelectedRepeater=key;
         const picker=$('managed-repeater');picker.replaceChildren();
-        for(const value of managed){const r=known.find(r=>r.public_key===value);if(r)picker.add(new Option(`${r.name||'(unnamed)'} · ${value.slice(0,12)}`,value));}
+        for(const value of managed){const r=known.find(r=>r.public_key===value);if(r){const label=window.MeshcoreStationRepeaterNames?.label(value)||r.name||'(unnamed)';const option=new Option(label,value);option.title=value;if(window.MeshcoreStationRepeaterNames)option.dataset.repeaterKey=value;picker.add(option);}}
         picker.value=key;$('managed-repeater-open').disabled=false;$('managed-repeater-remove').disabled=false;$('open-voltage').disabled=false;
         persist();document.dispatchEvent(new CustomEvent('managed-repeater-selected',{detail:key}));
     }
@@ -27,7 +27,7 @@
         try{
             const response=await fetch('/api/bot/voltage?days=1',{headers:{'X-Meshcore-Control':'1'},cache:'no-store'});
             const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||'Could not load repeaters.');
-            known=data.repeaters;let saved={};
+            known=data.repeaters;window.MeshcoreStationRepeaterNames?.ingest(known);let saved={};
             try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};}catch{}
             managed=(Array.isArray(data.managed_repeaters)?data.managed_repeaters:[]).filter((key,i,keys)=>known.some(r=>r.public_key===key)&&keys.indexOf(key)===i);
             const initial=managed.includes(preferredKey)?preferredKey:managed.includes(saved.selected)?saved.selected:managed[0]||'';
@@ -48,7 +48,7 @@
         $('managed-repeater-open').onclick=()=>{const r=known.find(r=>r.public_key===window.meshcorestationSelectedRepeater);if(r)window.meshcorestationManageRepeater({...r,type:2});};
         $('managed-repeater-remove').onclick=async()=>{
             const key=window.meshcorestationSelectedRepeater;
-            const name=known.find(r=>r.public_key===key)?.name||key;
+            const name=window.MeshcoreStationRepeaterNames?.label(key)||known.find(r=>r.public_key===key)?.name||key;
             if(!key||!window.confirm(`Remove ${name} from management? Its telemetry settings, readings, report history and collected statistics will be permanently deleted.`))return;
             $('managed-repeater-remove').disabled=true;
             try{

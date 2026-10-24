@@ -1,23 +1,30 @@
 /* Experimental, on-demand external observations. No interval or background poll. */
 (() => {
-    let attached=false, controller=null, generation=0, current='', map=null, pendingKey=null, mapRender=0;
+    let attached=false, controller=null, generation=0, current='', map=null, pendingKey=null, mapRender=0, mapObserver=null, resizeHandler=null, resizeFrame=null, mapIdentityHandler=null;
     const cache=new Map(),$=id=>document.getElementById(id);
     const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;};
     const date=v=>v==null?'Unknown':window.meshcorestationFormatDate(v,'Europe/Berlin');
     const val=v=>v==null?'Unknown':String(v);
     const visible=()=>$('repeater-network-disclosure')?.open && $('repeater-optimizer-disclosure')?.open!==false;
-    function dispose(){++mapRender;if(map){map.remove();map=null;}}
+    const names=()=>window.MeshcoreStationRepeaterNames;
+    const identity=key=>names().element(key);
+    function dispose(){
+        ++mapRender;if(mapIdentityHandler)document.removeEventListener('repeater-names-updated',mapIdentityHandler);mapIdentityHandler=null;mapObserver?.disconnect();mapObserver=null;
+        if(resizeHandler)window.removeEventListener('resize',resizeHandler);resizeHandler=null;
+        if(resizeFrame!=null)window.cancelAnimationFrame?.(resizeFrame);resizeFrame=null;
+        if(map){map.remove();map=null;}
+    }
     function invalidate(){++generation;controller?.abort();controller=null;pendingKey=null;dispose();$('network-content')?.replaceChildren();$('network-content')?.setAttribute('aria-busy','false');}
     function table(title,headers,rows){
         const box=el('section',null,'stats-section');box.append(el('h3',title));
         if(!rows.length){box.append(el('p','No observations returned for this capture window.'));return box;}
         const wrap=el('div',null,'stats-table-scroll'),t=el('table'),head=el('tr');headers.forEach(x=>head.append(el('th',x)));const thead=el('thead');thead.append(head);t.append(thead);if(headers.length>=4)t.classList.add('stats-wide-table');
-        const body=el('tbody');for(const row of rows){const tr=el('tr');row.forEach(v=>tr.append(el('td',val(v))));body.append(tr);}t.append(body);wrap.append(t);box.append(wrap);return box;
+        const body=el('tbody');for(const row of rows){const tr=el('tr');row.forEach(v=>{const td=el('td');if(v instanceof Node)td.append(v);else td.textContent=val(v);tr.append(td);});body.append(tr);}t.append(body);wrap.append(t);box.append(wrap);return box;
     }
     function chart(title,points){
         const box=el('section',null,'stats-section');box.append(el('h3',title));
         if(!points.length){box.append(el('p','No historical buckets returned.'));return box;}
-        const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 800 180');svg.setAttribute('role','img');svg.setAttribute('aria-label',title);
+        const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('class','stats-chart');svg.setAttribute('viewBox','0 0 800 180');svg.setAttribute('role','img');svg.setAttribute('aria-label',title);
         const max=Math.max(1,...points.map(p=>Number(p.count)||0)),width=760/points.length;
         points.forEach((p,i)=>{const b=document.createElementNS(ns,'rect'),h=140*(Number(p.count)||0)/max;for(const [k,v] of Object.entries({x:20+i*width,y:150-h,width:Math.max(1,width-2),height:h,fill:'var(--accent)'}))b.setAttribute(k,v);const title=document.createElementNS(ns,'title');title.textContent=`${date(p.bucket)}: ${val(p.count)}`;b.append(title);svg.append(b);});box.append(svg);
         const details=el('details');details.append(el('summary','Show historical values'),table('Buckets',['Time','Count'],points.map(p=>[date(p.bucket),p.count])));box.append(details);return box;
@@ -36,32 +43,61 @@
             await window.meshcorestationLoadMapLibrary({clustering:false});
             if(id!==generation||version!==mapRender||!visible()||key!==current)return;
             const canvas=el('div',null,'map-canvas network-map');host.append(canvas);map=window.L.map(canvas,{maxZoom:19}).setView([center.lat,center.lon],10);
-            const points=[[center.lat,center.lon]];
-            window.L.marker(points[0]).addTo(map).bindPopup(el('span',center.name||key));
+            const points=[[center.lat,center.lon]],markers=[];
+            const popup=(key,inferred)=>{
+                const box=el('div');box.append(identity(key));
+                if(inferred)box.append(el('p','Analyzer-derived relationship; direct RF unverified.'));
+                return box;
+            };
+            function marker(pos,key,selected){
+                const icon=L.divIcon({className:'route-marker-icon',html:el('span',selected?'S':'R',selected?'map-marker bot':'map-marker'),iconSize:[28,28],iconAnchor:[14,14]});
+                markers.push({key,layer:L.marker(pos,{icon,title:names().label(key),zIndexOffset:selected?100:0}).addTo(map).bindPopup(()=>popup(key,!selected))});
+            }
+            marker(points[0],key,true);
+            const seen=new Set([key]);
             for(const n of neighbors.filter(coords)){
-                const pos=[n.lat,n.lon];points.push(pos);
-                window.L.marker(pos).addTo(map).bindPopup(el('span',`${n.name||n.pubkey} · analyzer-derived relationship; direct RF unverified`));
-                window.L.polyline([points[0],pos],{dashArray:'5 7',weight:2}).addTo(map);
+                if(seen.has(n.pubkey))continue;seen.add(n.pubkey);
+                const pos=[n.lat,n.lon];points.push(pos);marker(pos,n.pubkey,false);
+                if(n.weHear>0||n.theyHear>0||n.twoWay===true){
+                    const common={dashArray:'7 6',opacity:.95,lineCap:'round',interactive:false};
+                    L.polyline([points[0],pos],{...common,color:'var(--panel)',weight:7,className:'network-relationship-halo'}).addTo(map);
+                    L.polyline([points[0],pos],{...common,color:'var(--accent)',weight:3,className:'network-relationship'}).addTo(map);
+                }
             }
             if(points.length>1)map.fitBounds(points,{padding:[20,20],maxZoom:13});
+            mapIdentityHandler=()=>{for(const m of markers)m.layer.getElement?.()?.setAttribute('title',names().label(m.key));};
+            document.addEventListener('repeater-names-updated',mapIdentityHandler);
+            const activeMap=map;
+            resizeHandler=()=>{
+                if(resizeFrame!=null)window.cancelAnimationFrame?.(resizeFrame);
+                resizeFrame=window.requestAnimationFrame(()=>{resizeFrame=null;if(map===activeMap&&version===mapRender&&visible())activeMap.invalidateSize({pan:false});});
+            };
+            if(window.ResizeObserver){mapObserver=new ResizeObserver(resizeHandler);mapObserver.observe(canvas);}
+            window.addEventListener('resize',resizeHandler);resizeHandler();
             const tiles=window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
             tiles.on('tileerror',()=>{note.textContent='Background tiles unavailable; observation markers remain visible.';});tiles.addTo(map);
             note.textContent='Dashed lines show analyzer-derived relationships, not verified direct RF links.';
         }catch(e){if(id===generation)note.textContent='Observation map unavailable: '+(e.message||String(e));}
     }
+    function route(path){
+        const box=el('span',null,'network-route');box.title=path.join(' → ');
+        path.forEach((key,i)=>{if(i)box.append(document.createTextNode(' → '));box.append(identity(key));});return box;
+    }
     function render(r,id,key){
-        status(r);dispose();const host=$('network-content');host.replaceChildren();if(!r.data)return;
+        names().ingest(r.repeaters||[]);status(r);dispose();const host=$('network-content');host.replaceChildren();if(!r.data)return;
         const d=r.data,detail=d.detail,s=detail.stat,reach=d.reach;
-        host.append(el('p',`Analyzer snapshot for ${detail.node.name||key} · ${key}`,'network-identity'));
+        names().ingest(r.repeaters||[]);names().ingest([detail.node,...d.neighbors,...reach.neighbourList,...detail.relayNeighbours],'analyzer');
+        const heading=el('p',null,'network-identity');heading.append(document.createTextNode('Analyzer snapshot for '),identity(key));host.append(heading);
+        if($('network-selected'))$('network-selected').replaceChildren(identity(key));
         const cards=el('div',null,'stats-metrics');for(const [label,value] of [['Relayed packets / rolling 24h',s.relayCount24h],['Relayed packets / rolling 1h',s.relayCount1h],['Pairs served',s.pairsServed],['Graph degree',d.metrics.degree],['Directional neighbors',reach.neighbours],['Two-way inferred neighbors',reach.twoWayCount],['Direct observers',reach.directObservers]]){const card=el('div',null,'stats-metric');card.append(el('p',label,'muted'),el('strong',val(value)));cards.append(card);}host.append(cards);
         host.append(el('p','Rolling counts are replaced on refresh, never accumulated. Graph metrics and directional counts are not signal quality. Path prefixes may be ambiguous. Observer signal measurements describe the final hop only.','muted'));
-        host.append(table('Directional reachability (analyzer-derived)',['Repeater','Distance km','Confidence','weHear','theyHear','Two-way'],reach.neighbourList.map(n=>[n.name||n.pubkey,n.distanceKm,n.confidence,n.weHear,n.theyHear,n.twoWay==null?null:n.twoWay?'Yes':'No'])));
-        host.append(table('Inferred neighbors',['Repeater','Distance km','Confidence','Provenance','SNR'],d.neighbors.map(n=>[n.Name||n.ID,n.DistanceKm,n.Conf,n.Provenance,n.SNR])));
+        host.append(table('Directional reachability (analyzer-derived)',['Repeater','Distance km','Confidence','weHear','theyHear','Two-way'],reach.neighbourList.map(n=>[identity(n.pubkey),n.distanceKm,n.confidence,n.weHear,n.theyHear,n.twoWay==null?null:n.twoWay?'Yes':'No'])));
+        host.append(table('Inferred neighbors',['Repeater','Distance km','Confidence','Provenance','SNR'],d.neighbors.map(n=>[identity(n.ID),n.DistanceKm,n.Conf,n.Provenance,n.SNR])));
         host.append(chart('Hourly relay activity',detail.relayTimeline),chart('Historical receptions',detail.timeline));
-        host.append(table('Packet path patterns (potential hash ambiguity)',['Hop sequence','Count','Last seen'],detail.pathsThroughNode.map(p=>[p.path.join(' → '),p.count,date(p.lastSeen)])));
-        host.append(table('Forwarding participation',['Neighbor','To','From','Total'],detail.relayNeighbours.map(p=>[p.name||p.pubkey,p.toCount,p.fromCount,p.total])));
+        host.append(table('Packet path patterns (potential hash ambiguity)',['Hop sequence','Count','Last seen'],detail.pathsThroughNode.map(p=>[route(p.path),p.count,date(p.lastSeen)])));
+        host.append(table('Forwarding participation',['Neighbor','To','From','Total'],detail.relayNeighbours.map(p=>[identity(p.pubkey),p.toCount,p.fromCount,p.total])));
         host.append(table('Advertisement history',['Packet hash','Type','First seen'],detail.recentPackets.map(p=>[p.hash,p.packetType,date(p.firstSeen)])));
-        host.append(table('Network metrics',['Metric','Value'],Object.entries(d.metrics)));
+        host.append(table('Network metrics',['Metric','Value'],Object.entries(d.metrics).map(([field,value])=>[field,field==='id'?identity(value):value])));
         host.append(table('Clock evidence — counts only, no observer identities',['Packet hash','Observer count','Heard at'],d.clock.recentHashEvidence.map(p=>[p.hash,p.observers,date(p.heardAt)])));
         host.append(el('p',`Clock samples: ${val(d.clock.sampleCount)} · Direct packet rows: ${d.direct.rows.length} · Beacons: ${d.beacons.beacons.length} · Sensor readings: ${d.sensors.readings.length}. Empty successful responses are not access failures.`));
         host.append(table('Receiving observer evidence',['Field','Captured value'],detail.heardBy.map(p=>['Observer record',JSON.stringify(p)])));
@@ -73,7 +109,7 @@
         if(!visible())return;
         const key=window.meshcorestationSelectedRepeater||'';
         const identity=$('network-selected');
-        if(identity){identity.textContent=key?'Selected: '+(document.getElementById('managed-repeater')?.selectedOptions[0]?.textContent||key):'No repeater selected';identity.title=key;}
+        if(identity){identity.replaceChildren(key?names().element(key):document.createTextNode('No repeater selected'));identity.title=key;}
         if(!key){invalidate();$('network-status').textContent='Select a repeater in Repeater Management.';return;}
         if(pendingKey===key)return;
         invalidate();current=key;pendingKey=key;const id=generation;

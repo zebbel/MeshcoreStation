@@ -9,7 +9,7 @@
         for(const name of ['--bg','--panel','--text','--muted','--border','--accent','--soft','--green','--red','--shadow','--control-radius','--control-padding'])palette[name]=styles.getPropertyValue(name);
         post({type:'meshcorestation-optimizer-theme',palette});
     }
-    function context(){if(visible()){theme();post({type:'meshcorestation-optimizer-context',public_key:selected,name:$('managed-repeater')?.selectedOptions[0]?.textContent||'Repeater'});}}
+    function context(){if(visible()){theme();post({type:'meshcorestation-optimizer-context',public_key:selected,name:window.MeshcoreStationRepeaterNames?.label(selected)||$('managed-repeater')?.selectedOptions[0]?.textContent||'Repeater',repeaters:window.MeshcoreStationRepeaterNames?.entries()||[]});}}
     async function load(){
         if(!visible())return;
         await window.meshcorestationEnsureRepeaterSelection?.();if(!visible())return;
@@ -36,6 +36,7 @@
         };
         $('analysis-disconnect').onclick=()=>document.dispatchEvent(new CustomEvent('analysis-disconnect'));
     }
+    document.addEventListener('repeater-names-updated',()=>{if(visible())post({type:'meshcorestation-optimizer-names',repeaters:window.MeshcoreStationRepeaterNames.entries()});});
     window.addEventListener('message',event=>{
         if(event.origin!==location.origin||!frame||event.source!==frame.contentWindow)return;
         if(event.data?.type==='meshcorestation-optimizer-ready')context();

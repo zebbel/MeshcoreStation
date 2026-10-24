@@ -122,7 +122,8 @@ def register_optimizer_routes(server):
                 return json_response({'ok':True,'enabled':False})
             if after['since']!=state['since']:
                 return json_response({'ok':False,'error':'Optimizer storage changed while loading. Retry loading fresh data.'},409)
-            return json_response({'ok':True,'enabled':True,'since':state['since'],'profile':profile,'settings':optimizer_store.config(),
+            from meshcorestation.web.repeater_names import known_repeaters
+            return json_response({'ok':True,'repeaters':known_repeaters(),'enabled':True,'since':state['since'],'profile':profile,'settings':optimizer_store.config(),
                                   'statistics':summary,'daily':stats['daily'][-365:],
                                   'neighbor_snapshots':snapshots,'analysis':findings,
                                   'history':history,'comparisons':comparisons})

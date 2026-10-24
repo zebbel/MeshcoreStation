@@ -47,12 +47,13 @@
         window.MeshcoreStationBattery.chart(el('voltage-chart'), el('voltage-chart-note'), samples, zone, days, snapshot.server_time);
     }
     function candidates(data) {
+        window.MeshcoreStationRepeaterNames?.ingest(data.repeaters);
         const select = el('voltage-repeater'); select.replaceChildren(new Option('Choose a repeater…', ''));
-        for (const r of data.repeaters) select.append(new Option(`${r.name || '(unnamed)'} · ${r.public_key.slice(0,12)}`, r.public_key));
+        for (const r of data.repeaters) {const option=window.MeshcoreStationRepeaterNames?.element(r.public_key,'option')||new Option(r.name||'(unnamed)');option.value=r.public_key;select.append(option);};
         select.value = wantedKey || data.config.public_key;
         const list = el('voltage-repeaters'); list.replaceChildren();
         for (const r of data.repeaters) {
-            const row = document.createElement('li'), name = node('span', `${r.name || '(unnamed)'} · ${r.public_key.slice(0,12)}`), b=node('button','Select');
+            const row = document.createElement('li'), name = window.MeshcoreStationRepeaterNames?.element(r.public_key)||node('span',r.name||'(unnamed)'), b=node('button','Select');
             name.title=r.public_key; b.type='button'; b.addEventListener('click',()=>choose(r.public_key)); row.dataset.name=`${r.name} ${r.public_key}`.toLowerCase(); row.append(name,b); list.append(row);
         }
         filter();

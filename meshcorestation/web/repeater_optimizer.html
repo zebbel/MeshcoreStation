@@ -69,6 +69,7 @@
 <div id="history"></div><button id="clear-history" type="button" disabled>Clear verified changes and comparisons</button></section>
 </div>
 </main>
+<script src="/assets/ab_repeater_names.js"></script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), el=(tag,value)=>{const n=document.createElement(tag);if(value!==undefined)n.textContent=String(value);return n;};
@@ -103,7 +104,7 @@ async function api(action,signal){
  return data;
 }
 function render(data,replaceSettings=false){
- latest=data;
+ window.MeshcoreStationRepeaterNames?.ingest(data.repeaters||[]);latest=data;
  if(replaceSettings){
   $('role').value=data.profile.role;$('polling').value=data.profile.polling;
   for(const [k,v] of Object.entries(data.settings)){
@@ -163,7 +164,7 @@ function render(data,replaceSettings=false){
     for(const peer of snap.neighbors){
       const age=peer.secs_ago==null?'age unknown':Math.round(peer.secs_ago/60)+' min ago';
       const snr=peer.snr==null?'SNR unknown':'SNR '+peer.snr+' dB';
-      list.append(el('p','Prefix '+peer.neighbor_key+' · '+snr+' · last heard '+age));
+      const line=el('p');line.append(window.MeshcoreStationRepeaterNames?.element(peer.neighbor_key)||el('span','Prefix '+peer.neighbor_key),document.createTextNode(' · '+snr+' · last heard '+age));list.append(line);
     }
     block.append(list);
   }
@@ -277,6 +278,7 @@ $('clear-history').onclick=()=>{
 window.addEventListener('message',async event=>{
  if(event.origin!==origin||event.source!==manager)return;
  const data=event.data||{};
+ if(data.type==='meshcorestation-optimizer-names'){window.MeshcoreStationRepeaterNames?.ingest(data.repeaters||[]);return;}
  if(data.type==='meshcorestation-optimizer-pause'){
    ++loadSerial;loader?.abort();return;
  }
@@ -293,8 +295,9 @@ window.addEventListener('message',async event=>{
  }
  if(data.type==='meshcorestation-optimizer-context'){
   if(key&&key!==data.public_key){current={};readAt=0;latest=null;}
+  window.MeshcoreStationRepeaterNames?.ingest(data.repeaters||[]);
   key=data.public_key;name=data.name||'Repeater';
-  $('identity').textContent=name+' · '+key.slice(0,12)+'…';
+  $('identity').replaceChildren(window.MeshcoreStationRepeaterNames?.element(key)||el('span',name));$('identity').title=key;
   await refresh(true);return;
  }
  if(!pending||data.request_id!==pending.id)return;

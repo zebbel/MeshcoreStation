@@ -45,7 +45,7 @@
 @media (max-width: 700px) { .panel-disclosure > summary { padding: 20px 16px; } }
 
 .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-#repeater-statistics-inline { padding: 20px 26px 26px; }
+
 .command-history-summary { position: relative; padding-right: 155px !important; }
 .command-history-summary > h2 { vertical-align: middle; }
 .command-history-summary .history-latest { display: inline-block; margin-left: 36px; vertical-align: middle; }
@@ -59,7 +59,7 @@
 @media (max-width: 700px) {
     .cards { grid-template-columns: 1fr; }
     .cards .card:last-child { grid-column: auto; }
-    #repeater-statistics-inline { padding: 18px 16px; }
+
     .command-history-summary .history-latest { display: block; margin: 14px 0 0; }
     .command-history-summary > button { right: 16px; top: 30px; transform: none; }
     #repeater-statistics-inline .stats-content { display: block; }

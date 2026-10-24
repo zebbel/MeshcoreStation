@@ -15,7 +15,8 @@
             const response=await fetch('/api/bot/voltage?days='+days+(key?'&public_key='+encodeURIComponent(key):''),{cache:'no-store',headers:{'X-Meshcore-Control':'1'}});
             const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Telemetry history unavailable.');
             if(id!==generation)return;
-            const name=data.repeaters.find(r=>r.public_key===(key||data.config.public_key))?.name||data.config.public_key||'No repeater selected';
+            window.MeshcoreStationRepeaterNames?.ingest(data.repeaters);
+            const name=window.MeshcoreStationRepeaterNames?.label(key||data.config.public_key)||data.repeaters.find(r=>r.public_key===(key||data.config.public_key))?.name||data.config.public_key||'No repeater selected';
             const latest=data.latest;
             const date=stamp=>window.meshcorestationFormatDate(stamp,data.config.timezone,{seconds:false});
             el('battery-overview-latest').textContent=latest?`${name}: ${latest.voltage===null?'Reading failed':window.MeshcoreStationBattery.reading(latest.voltage)} · ${date(latest.sampled_at)}${latest.error?' · '+latest.error:''}`:name+' · No readings yet';

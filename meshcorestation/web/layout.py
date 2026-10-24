@@ -63,22 +63,22 @@ def build_layout():
             html.P("All subsections use the repeater selected in Repeater Management.", className="muted"),
             html.Details([
                 html.Summary(html.H2("Repeater statistics")),
-                html.Div(id="repeater-statistics-inline")
+                html.Div(html.Div(id="repeater-statistics-inline"), className="optimizer-section-body")
             ], id="repeater-statistics-disclosure", className="panel-disclosure managed-repeater-section"),
             html.Details([
                 html.Summary(html.H2("Optimization Analysis")),
-                html.P("Passive analysis loads on opening. Protected actions require an administrator session and explicit confirmation.", className="muted"),
+                html.Div([html.P("Passive analysis loads on opening. Protected actions require an administrator session and explicit confirmation.", className="muted"),
                 html.Div([html.Button("Connect as administrator", id="analysis-connect"),
                           html.Button("Disconnect administrator", id="analysis-disconnect")], className="stats-controls"),
-                html.Div(id="optimization-analysis-inline")
+                html.Div(id="optimization-analysis-inline")], className="optimizer-section-body")
             ], id="optimization-analysis-disclosure", className="panel-disclosure managed-repeater-section"),
             html.Details([
                 html.Summary(html.H2("Repeater Network Monitoring · Experimental")),
-                html.P("External Analyzer observations depend on participating observers. Missing evidence does not prove poor radio connectivity. Inferred relationships are not verified direct radio links. Loads on opening with a five-minute cache. External access may be restricted; live integration remains unverified.", className="muted"),
+                html.Div([html.P("External Analyzer observations depend on participating observers. Missing evidence does not prove poor radio connectivity. Inferred relationships are not verified direct radio links. Loads on opening with a five-minute cache. External access may be restricted; live integration remains unverified.", className="muted"),
                 html.Div([html.Span(id="network-selected", className="stats-selected"),
                           html.Button("Refresh Now", id="network-refresh")], className="stats-controls"),
                 html.P(id="network-status", className="stats-message", role="status", **{"aria-live": "polite"}),
-                html.Div(id="network-content")
+                html.Div(id="network-content")], className="optimizer-section-body")
             ], id="repeater-network-disclosure", className="panel-disclosure managed-repeater-section")
         ], id="repeater-optimizer-disclosure", className="panel-disclosure"), className="history"),
         html.Section(html.Details([

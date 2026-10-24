@@ -15,8 +15,10 @@ def register_analyzer_routes(server):
                 raise ValueError('Unsupported monitoring parameter.')
             for flag in ('refresh','cache_only'):
                 if request.args.get(flag,'0') not in ('0','1'): raise ValueError('Invalid monitoring option.')
-            return json_response(service.snapshot(request.args.get('public_key'),
-                force=request.args.get('refresh')=='1', cache_only=request.args.get('cache_only')=='1'))
+            result=service.snapshot(request.args.get('public_key'),
+                force=request.args.get('refresh')=='1', cache_only=request.args.get('cache_only')=='1')
+            from meshcorestation.web.repeater_names import known_repeaters
+            return json_response({**result,'repeaters':known_repeaters()})
         except ValueError as exc:
             return json_response({'ok':False,'error':str(exc)},400)
         except (OSError,sqlite3.Error):

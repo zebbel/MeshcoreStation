@@ -154,7 +154,7 @@
                 session = result.session; admin = result.admin; schema = result.fields;
                 values.clear(); inputs.clear(); loaded.clear(); buildConfig(); buildExtras();
                 if(!$('optimization-analysis-inline'))$('repeater-advisor-frame').removeAttribute('src');
-                $('repeater-name').textContent = contact.name || '(unnamed repeater)';
+                $('repeater-name').replaceChildren(window.MeshcoreStationRepeaterNames?.element(contact.public_key)||node('span',contact.name||'(unnamed repeater)'));
                 identity(result.contact); $('repeater-reconnect').hidden = true;
                 $('repeater-status-cards').replaceChildren(); $('repeater-last-response').textContent = 'Not yet read';
                 loginDialog.close(); tab('status'); dialog.showModal();
@@ -348,7 +348,7 @@
         });
     });
     function openLogin() {
-        $('repeater-login-name').textContent = contact.name || contact.public_key;
+        $('repeater-login-name').replaceChildren(window.MeshcoreStationRepeaterNames?.element(contact.public_key)||node('span',contact.name||contact.public_key));
         $('repeater-login-message').textContent = ''; $('repeater-password').value = savedPassword();
         $('repeater-remember-password').checked = $('repeater-password').value !== ''; $('repeater-password').type = 'password'; $('repeater-show-password').textContent = 'Show';
         controls(); loginDialog.showModal(); $('repeater-password').focus();
@@ -363,6 +363,7 @@
         if (!dialog) create();
         if (dialog.open || loginDialog.open) return;
         if(session)forget();
+        window.MeshcoreStationRepeaterNames?.ingest([selected]);
         contact = {...selected}; session = ''; admin = false; openLogin();
     };
     const duration = value => { if (!Number.isFinite(value)) return 'Not available'; const seconds = Math.max(0, Math.floor(value)); return `${Math.floor(seconds / 86400)}d ${Math.floor(seconds / 3600) % 24}h ${Math.floor(seconds / 60) % 60}m`; };
@@ -390,7 +391,7 @@
     function table(headings, rows) {
         const grid = node('table'), head = node('thead'), tr = node('tr'), body = node('tbody');
         headings.forEach(label => tr.append(node('th', label))); head.append(tr);
-        rows.forEach(row => { const line = node('tr'); row.forEach(value => line.append(node('td', typeof value === 'object' ? JSON.stringify(value) : String(value ?? 'Not available')))); body.append(line); });
+        rows.forEach(row => { const line = node('tr'); row.forEach(value => {const cell=node('td');if(value instanceof Node)cell.append(value);else cell.textContent=typeof value==='object'?JSON.stringify(value):String(value??'Not available');line.append(cell);}); body.append(line); });
         grid.append(head, body); return grid;
     }
     function disclosure(title, subtitle) {
@@ -412,7 +413,8 @@
                 if (!more) content.replaceChildren();
                 if (action === 'neighbors') {
                     const data = result.data, rows = data.neighbours || [];
-                    content.append(table(['Repeater', 'Last heard', 'SNR'], rows.map(row => [row.name || row.pubkey, duration(row.secs_ago) + ' ago', unit(row.snr, ' dB')])));
+                    window.MeshcoreStationRepeaterNames?.ingest(rows,'cached');
+                    content.append(table(['Repeater', 'Last heard', 'SNR'], rows.map(row => [window.MeshcoreStationRepeaterNames?.element(row.pubkey)||row.name||row.pubkey, duration(row.secs_ago) + ' ago', unit(row.snr, ' dB')])));
                     offset = (more ? offset : 0) + rows.length;
                     next.hidden = offset >= data.neighbours_count || rows.length === 0;
                     content.append(node('p', `${offset} / ${data.neighbours_count} neighbors`, 'muted'));

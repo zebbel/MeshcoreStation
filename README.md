@@ -1,4 +1,4 @@
-# MeshcoreStation 4.0.1
+# MeshcoreStation 4.0.2
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -7,6 +7,15 @@ local network analysis, and a room server in one Raspberry Pi dashboard.
 V4 preserves existing station and room databases. The external Analyzer feature
 is **experimental and available on demand without activation**. Offline fixture tests verify formats,
 not live access, service permission, or radio performance.
+
+## Changes in 4.0.2
+
+Repeater names are reused across network paths, analysis, statistics, selectors
+and map popups. Complete public keys remain in tooltips/details; unresolved short
+prefixes are never guessed, and duplicate names receive distinguishing suffixes.
+All optimizer subsections share one expanded-content gutter. Observable Relationships
+uses image-free markers and visible dashed inferred links; chart CSS is restricted
+to chart SVGs so it cannot resize Leaflet's overlay renderer.
 
 ## Installation and upgrades
 

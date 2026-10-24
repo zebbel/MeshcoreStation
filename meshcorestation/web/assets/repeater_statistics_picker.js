@@ -15,16 +15,17 @@
         return button;
     }
     function details(repeater){
-        const box=el('div');box.append(el('strong',repeater.name),el('p',repeater.public_key,'map-key'));
+        const box=el('div');box.append((window.MeshcoreStationRepeaterNames?.element(repeater.public_key,'strong')||el('strong',repeater.name)),el('p',repeater.public_key,'map-key'));
         box.append(action(repeater));window.meshcorestationRepeaterActions(box,repeater,()=>dialog.close());return box;
     }
     function filter(){
         const query=dialog.querySelector('.stats-map-search').value.trim().toLowerCase();
         const list=dialog.querySelector('.stats-map-list');list.replaceChildren();
+        window.MeshcoreStationRepeaterNames?.ingest(repeaters);
         const matches=repeaters.filter(r=>`${r.name} ${r.public_key}`.toLowerCase().includes(query));
         for(const repeater of matches){
             const row=el('div',null,'stats-picker-row');
-            row.append(el('strong',repeater.name+(repeater.public_key===selected?' (selected)':'')),el('span',repeater.public_key,'map-key'));
+            row.append((window.MeshcoreStationRepeaterNames?.element(repeater.public_key,'strong')||el('strong',repeater.name+(repeater.public_key===selected?' (selected)':''))),el('span',repeater.public_key,'map-key'));
             const marker=markers.get(repeater.public_key);
             if(marker){const locate=el('button','Show on map');locate.type='button';locate.onclick=()=>{const currentMap=map;window.meshcorestationRevealMarker(map,clusters,marker,()=>map===currentMap&&dialog.open);};row.append(locate);}
             else row.append(el('span','No map position available','muted'));
@@ -77,7 +78,7 @@
                 const chosen=repeater.public_key===selected;
                 const badge=el('span','R','map-marker repeater'+(chosen?' stats-selected-marker':''));
                 const icon=L.divIcon({html:badge,className:'map-icon',iconSize:[28,28],iconAnchor:[14,14]});
-                const marker=L.marker(node.position,{icon,title:repeater.name+(chosen?' (selected)':''),zIndexOffset:chosen?100:0}).addTo(clusters).bindPopup(() => details({...node,...repeater}));
+                const marker=L.marker(node.position,{icon,title:(window.MeshcoreStationRepeaterNames?.label(repeater.public_key)||repeater.name)+(chosen?' (selected)':''),zIndexOffset:chosen?100:0}).addTo(clusters).bindPopup(() => details({...node,...repeater}));
                 markers.set(repeater.public_key,marker);positions.push(node.position);
             }
             filter();message.textContent=`${markers.size} of ${repeaters.length} repeaters shown. Zoom in or click numbered groups to expand them. Use the list for missing positions.`;

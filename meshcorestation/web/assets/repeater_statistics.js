@@ -8,12 +8,12 @@
         if(!rows.length){section.append(el('p','No matching observations in this period.','muted'));return section;}
         const wrapper=el('div',null,'stats-table-scroll'),table=el('table'),head=el('thead'),tr=el('tr');
         for(const label of headers)tr.append(el('th',label));head.append(tr);table.append(head);
-        const body=el('tbody');for(const values of rows){const row=el('tr');for(const value of values)row.append(el('td',value));body.append(row);}table.append(body);wrapper.append(table);section.append(wrapper);return section;
+        const body=el('tbody');for(const values of rows){const row=el('tr');for(const value of values){const cell=el('td');if(value instanceof Node)cell.append(value);else cell.textContent=value;row.append(cell);}body.append(row);}table.append(body);wrapper.append(table);section.append(wrapper);return section;
     }
     function chart(points,days){
         const section=el('section',null,'stats-section');section.append(el('h3','Observed traffic over time'));
         section.append(el('p',`${days===1?'Hourly':'24-hour'} buckets · Europe/Berlin labels · blue = RF copies, green = unique payloads per bucket. Unique counts per bucket are not additive across the period.`,'muted'));
-        const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 900 210');svg.setAttribute('role','img');svg.setAttribute('aria-label','Observed copies and unique payloads over time');
+        const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('class','stats-chart');svg.setAttribute('viewBox','0 0 900 210');svg.setAttribute('role','img');svg.setAttribute('aria-label','Observed copies and unique payloads over time');
         const max=Math.max(1,...points.map(p=>p.copies)),width=830/Math.max(1,points.length);
         for(let i=0;i<points.length;i++){
             const p=points[i];for(const [j,key,color] of [[0,'copies','var(--accent)'],[1,'unique','var(--green)']]){
@@ -48,16 +48,22 @@
         return panel;
     }
     const nodeLabel=n=>`${n.name}${n.status==='matched'?'':` (${n.status})`}`;
+    function displayNode(n){
+        if(!window.MeshcoreStationRepeaterNames)return el('span',nodeLabel(n));
+        const box=el('span');box.append(window.MeshcoreStationRepeaterNames.element(n.key));
+        if(n.status!=='matched')box.append(document.createTextNode(' ('+n.status+')'));return box;
+    }
+    function routeNodes(path){const box=el('span');path.forEach((n,i)=>{if(i)box.append(document.createTextNode(' → '));box.append(displayNode(n));});return box;}
     function render(data){
-        knownRepeaters=data.repeaters;collectionEnabled=!!data.collection_enabled;
+        knownRepeaters=data.repeaters;window.MeshcoreStationRepeaterNames?.ingest(data.repeaters);collectionEnabled=!!data.collection_enabled;
         dialog.querySelector('.stats-pause').textContent=collectionEnabled?'Pause collection':'Start collection';
         const select=dialog.querySelector('.stats-repeater');
         select.replaceChildren();const empty=el('option','Not selected / pause collection');empty.value='';select.append(empty);
-        for(const repeater of data.repeaters){const option=el('option',`${repeater.name} · ${repeater.public_key.slice(0,12)}`);option.value=repeater.public_key;select.append(option);}
+        for(const repeater of data.repeaters){const option=window.MeshcoreStationRepeaterNames?.element(repeater.public_key,'option')||el('option',repeater.name);option.value=repeater.public_key;select.append(option);}
         const selected=data.selection?.public_key || '';
         if(selected && !data.repeaters.some(r=>r.public_key===selected)){const option=el('option',selected+' (no longer in Known repeaters)');option.value=selected;select.append(option);}
         select.value=selected;
-        dialog.querySelector('.stats-selected').textContent=selected ? `Selected: ${data.repeaters.find(r=>r.public_key===selected)?.name || selected}` : 'No repeater selected';
+        const selection=dialog.querySelector('.stats-selected');if(selected&&window.MeshcoreStationRepeaterNames)selection.replaceChildren(window.MeshcoreStationRepeaterNames.element(selected));else selection.textContent=selected ? `Selected: ${data.repeaters.find(r=>r.public_key===selected)?.name || selected}` : 'No repeater selected';
         const host=dialog.querySelector('.stats-content');
         const oldDetails=host.querySelector('.stats-detailed'),oldSimple=host.querySelector('.stats-usefulness');
         const detailOpen=oldDetails?.open??false,simpleOpen=oldSimple?.open??false;host.replaceChildren();
@@ -75,8 +81,8 @@
         content.append(table('Packet types',['Type','Observed copies'],Object.entries(data.types)));
         content.append(table('Position within observed routes',['Role','Copies'],Object.entries(data.roles)));
         content.append(el('p',`Roles can overlap, including first and final for a one-repeater path. Scoped flood copies: ${data.scoped}; ordinary flood copies: ${data.copies-data.scoped}.`,'muted'));
-        for(const [title,key] of [['Immediately before your repeater','previous'],['Immediately after your repeater','following']])content.append(table(title,['Repeater','Key / prefix','Observed adjacencies'],data[key].map(n=>[nodeLabel(n),n.key,n.count])));
-        content.append(table('Most common observed routes',['Repeater sequence','Copies'],data.routes.map(r=>[r.path.map(nodeLabel).join(' → '),r.count])));
+        for(const [title,key] of [['Immediately before your repeater','previous'],['Immediately after your repeater','following']])content.append(table(title,['Repeater','Observed adjacencies'],data[key].map(n=>[displayNode(n),n.count])));
+        content.append(table('Most common observed routes',['Repeater sequence','Copies'],data.routes.map(r=>[routeNodes(r.path),r.count])));
         content.append(el('p','Counts include only your selected repeater’s matched flood paths. Ambiguous target prefixes are counted separately and excluded from other totals. Short prefixes can also collide with unknown repeaters. Adjacent hops suggest a directional relationship, not a verified bidirectional link. Direct-route and trace packets are excluded because their paths are not a reliable forwarding history. No message text, raw payloads or network-wide statistics are stored.','muted'));
     }
     function visible(){const section=document.getElementById('repeater-statistics-disclosure');return section?.open && document.getElementById('repeater-optimizer-disclosure')?.open!==false;}

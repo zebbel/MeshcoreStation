@@ -22,3 +22,9 @@
  .optimizer-analysis-document .scope-field,
  .optimizer-analysis-document .period-field { max-width:none; }
 }
+
+/* The same expanded-content gutter for every optimizer subsection. */
+.optimizer-section-body { padding:22px 26px; min-width:0; overflow-wrap:anywhere; }
+.optimizer-section-body > :first-child { margin-top:0; }
+.optimizer-section-body > :last-child { margin-bottom:0; }
+@media(max-width:700px) { .optimizer-section-body { padding:18px 16px; } }

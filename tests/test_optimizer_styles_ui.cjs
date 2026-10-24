@@ -21,3 +21,8 @@ assert.equal(analysis.window.document.querySelectorAll('.stats-metrics .stats-me
 assert.equal(analysis.window.document.querySelectorAll('section:not(.stats-section)').length,0);
 assert.equal(analysis.window.document.querySelector('style'),null);
 dom.window.close();analysis.window.close();console.log('Shared optimizer surfaces, palette variables, responsive geometry, scroll wrappers and CSS isolation passed.');
+assert(!/\.stats-section svg\s*\{/.test(reference),'Chart sizing must not match Leaflet SVG overlays');
+assert(!/#network-content svg\s*\{/.test(network));
+assert(reference.includes('svg.stats-chart'));
+assert(layout.includes('.optimizer-section-body { padding:22px 26px;'));
+assert(layout.includes('.optimizer-section-body { padding:18px 16px;'));
