@@ -103,6 +103,8 @@ def voltage_request(request):
                     cfg = ensure_repeater(db, key)
                     from meshcorestation.storage import passive_stats
                     passive_stats.track(key)
+                    from meshcorestation.storage import performance_store
+                    performance_store.allow_repeater(key)
                     return {'ok': True, 'config': cfg}, 200
                 cfg = config(db, key)
                 if type(body.get('expected_revision')) is not int or body['expected_revision'] != cfg['revision']:

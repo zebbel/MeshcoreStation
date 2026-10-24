@@ -14,3 +14,12 @@
 
 .performance-series { display:inline-flex; align-items:center; gap:6px; }
 .performance-swatch { width:24px; flex:0 0 24px; border-top:3px solid var(--accent); }
+/* Keep comparison values readable; wide tables scroll inside the panel. */
+#performance-comparison .stats-table-scroll table { min-width:52rem; }
+#performance-comparison :is(th,td):first-child { min-width:12rem; }
+#performance-comparison :is(th,td):not(:first-child) { min-width:7rem; white-space:nowrap; }
+#performance-content .stats-table-scroll th { white-space:nowrap; }
+#performance-content .performance-journal table { min-width:44rem; }
+#performance-content .performance-journal :is(th,td):first-child { min-width:11rem; white-space:nowrap; }
+.performance-scroll-hint { display:none; }
+@media(max-width:700px) { .performance-scroll-hint { display:block; } }

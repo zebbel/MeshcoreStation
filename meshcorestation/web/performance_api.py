@@ -20,7 +20,7 @@ def register_performance_routes(server):
                 if len(raw)>4096:
                     raise ValueError('Request too large.')
                 data=json.loads(raw)
-                if not isinstance(data,dict) or set(data)-{'public_key','action','description','at','id'}:
+                if not isinstance(data,dict) or set(data)-{'public_key','action','description','at','id','revision'}:
                     raise ValueError('Invalid change-marker request.')
                 key=optimizer_store.valid_key(data.get('public_key'))
                 ident=store.marker_change(key,data.get('action'),data)

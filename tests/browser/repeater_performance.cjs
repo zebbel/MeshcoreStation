@@ -25,6 +25,10 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  assert((await page.locator('#performance-comparison').innerText()).includes('overlap'));
  for(const days of ['1','3','7']){await Promise.all([page.waitForResponse(r=>r.url().includes('compare_days='+days)&&r.request().method()==='GET'),page.locator('#performance-comparison select').selectOption(days)]);}
  await page.locator('#performance-comparison').screenshot({path:`${output}/performance-comparison-${token}.png`});
+ const comparisonTable=page.locator('#performance-comparison .stats-table-scroll');
+ assert.equal(await comparisonTable.locator('td').nth(1).evaluate(n=>getComputedStyle(n).whiteSpace),'nowrap');
+ if(viewport.width===390){assert(await comparisonTable.evaluate(n=>n.scrollWidth>n.clientWidth));await comparisonTable.evaluate(n=>{n.scrollLeft=n.scrollWidth;});await comparisonTable.screenshot({path:`${output}/performance-comparison-values-${token}.png`});await comparisonTable.evaluate(n=>{n.scrollLeft=0;});}
+
  for(const days of ['1','30','7']){const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/repeater-performance'&&new URL(r.url()).searchParams.get('days')===days);await page.locator('#performance-days').selectOption(days);await response;await page.getByText('Saved observations loaded.',{exact:false}).first().waitFor();}
  const description='Browser antenna test '+token;
  await page.locator('#performance-description').fill(description);

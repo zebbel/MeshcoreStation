@@ -64,7 +64,9 @@ marker changes its annotation/time only, not the protected configuration audit.
 Deletion retains a tombstone so backfill cannot recreate a deleted marker.
 
 Markers are permanent until individually deleted or the managed repeater is
-explicitly removed. They are not aged out with measurements or deleted when the
+explicitly removed. Removal invalidates older requests and backfill so deleted history cannot be restored
+by an in-flight operation. Re-adding the repeater starts a fresh journal. Markers
+are not aged out with measurements or deleted when the
 separate Optimizer history is reset/cleared. Keep the usual data-directory backup
 if the journal is important. Repeater removal's confirmation includes this data.
 

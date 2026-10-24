@@ -21,6 +21,9 @@ def database(path=None):
     db.row_factory = sqlite3.Row
     try:
         db.executescript('''
+        CREATE TABLE IF NOT EXISTS lifecycle (
+          public_key TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0,
+          deleted INTEGER NOT NULL DEFAULT 0, min_at REAL NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS measurements (
           public_key TEXT NOT NULL, bucket INTEGER NOT NULL, at REAL NOT NULL,
           relay_1h REAL, relay_24h REAL, neighbors INTEGER, two_way INTEGER, degree REAL,
@@ -39,6 +42,19 @@ def database(path=None):
         db.close()
 
 
+def lifecycle(db, key):
+    # Start a writer transaction before checking a removal tombstone. This
+    # serializes late cache/audit/annotation writes with managed-repeater removal.
+    db.execute('INSERT OR IGNORE INTO lifecycle(public_key) VALUES(?)', (key,))
+    return dict(db.execute('SELECT * FROM lifecycle WHERE public_key=?', (key,)).fetchone())
+
+
+def allow_repeater(key):
+    with database() as db:
+        lifecycle(db,key)
+        db.execute('UPDATE lifecycle SET deleted=0,min_at=? WHERE public_key=? AND deleted=1', (time.time(),key))
+
+
 def number(value):
     return value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
 
@@ -53,6 +69,9 @@ def record_analyzer(key, at, data, path=None):
     roles_known=all(isinstance(n.get('role'),str) and n['role'].strip() for n in data['reach']['neighbourList'])
     stat = data['detail']['stat']
     with database(path) as db:
+        state=lifecycle(db,key)
+        if state['deleted'] or at<state['min_at']:
+            return
         db.execute('INSERT OR IGNORE INTO measurements VALUES(?,?,?,?,?,?,?,?)',
           (key, int(at * 1000000), at, number(stat.get('relayCount1h')), number(stat.get('relayCount24h')),
            len(peers) if roles_known else None, sum(bidirectional(p) for p in peers.values()) if roles_known else None, number(data['metrics'].get('degree'))))
@@ -65,6 +84,9 @@ def import_verified(rows, path=None):
     with database(path) as db:
         for r in rows:
             if r.get('status') != 'verified' or r.get('actual') is None or r.get('actual') != r.get('requested'):
+                continue
+            state=lifecycle(db,r['public_key'])
+            if state['deleted'] or r['at']<state['min_at']:
                 continue
             description = f"Verified {r['field']}: {r.get('before_value')} → {r['actual']}"
             db.execute('''INSERT OR IGNORE INTO markers
@@ -97,6 +119,10 @@ def marker_change(key, action, data, now=None):
         if type(at) not in (int,float) or not math.isfinite(at) or not 0 <= at <= now+60:
             raise ValueError('Choose a valid date/time, not a future date.')
     with database() as db:
+        state=lifecycle(db,key)
+        revision=data.get('revision',0)
+        if type(revision) is not int or state['deleted'] or revision!=state['generation']:
+            raise ValueError('Repeater management changed. Reopen Repeater Performance before saving.')
         if action == 'create':
             ident = db.execute('INSERT INTO markers(public_key,at,description) VALUES(?,?,?)', (key,at,text.strip())).lastrowid
         elif action in ('edit','delete'):
@@ -114,6 +140,8 @@ def marker_change(key, action, data, now=None):
 
 def remove_repeater(key, path=None):
     with database(path) as db:
+        lifecycle(db,key)
+        db.execute('UPDATE lifecycle SET deleted=1,generation=generation+1 WHERE public_key=?', (key,))
         db.execute('DELETE FROM measurements WHERE public_key=?', (key,))
         db.execute('DELETE FROM markers WHERE public_key=?', (key,))
 
@@ -272,6 +300,10 @@ def comparison(key, marker, days, now, all_markers):
 
 def overview(key, days, now=None, marker_id=None, compare_days=7):
     now = time.time() if now is None else now
+    with database() as db:
+        state=lifecycle(db,key)
+        if state['deleted']:
+            raise ValueError('This repeater was removed from management.')
     sync_verified(key)
     journal = markers(key)
     start = now-days*DAY
@@ -294,7 +326,7 @@ def overview(key, days, now=None, marker_id=None, compare_days=7):
             bins[at]['optimizer_neighbors']=reading['observed']
             bins[at]['optimizer_at']=reading['at']
     neighbor = optimizer_neighbors(key,now)
-    result = {'ok':True,'public_key':key,'days':days,'now':now,'start':start,'step':step,
+    result = {'ok':True,'public_key':key,'revision':state['generation'],'days':days,'now':now,'start':start,'step':step,
               'local':{k:v for k,v in local.items() if k!='bins'},'analyzer':latest,'optimizer_neighbors':neighbor,
               'timeline':list(bins.values()),'markers':journal,
               'analyzer_buckets':sum(b['analyzer_at'] is not None for b in bins.values()),

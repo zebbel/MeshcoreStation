@@ -215,3 +215,23 @@ def test_history_failure_does_not_break_monitoring_snapshot(stores,monkeypatch):
     result=service.snapshot(KEY)
     assert result['state']=='available' and result['data']['detail']['stat']['relayCount24h']==107
     assert 'could not be saved' in result['history_error'] and service.cached(KEY)
+
+
+def test_removal_tombstone_rejects_late_writes_and_readd_uses_new_revision(stores):
+    now=time.time()
+    p.record_analyzer(KEY,now-20,DATA)
+    ident=p.marker_change(KEY,'create',{'description':'Old journal entry'})
+    audit={'id':55,'public_key':KEY,'at':now-10,'field':'flood.max','before_value':'10','requested':'8','actual':'8','status':'verified'}
+    p.remove_repeater(KEY)
+    p.record_analyzer(KEY,now-20,DATA);p.import_verified([audit])
+    assert p.markers(KEY)==[] and p.measurements(KEY,0,now+1)==[]
+    with pytest.raises(ValueError):p.marker_change(KEY,'create',{'description':'Late old request'})
+    with pytest.raises(ValueError):p.overview(KEY,7)
+    p.allow_repeater(KEY)
+    p.record_analyzer(KEY,now-20,DATA);p.import_verified([audit])
+    assert p.markers(KEY)==[] and p.measurements(KEY,0,now+1)==[]
+    with pytest.raises(ValueError):p.marker_change(KEY,'create',{'description':'Old revision','revision':0})
+    current=p.overview(KEY,7)
+    assert current['revision']==1
+    p.marker_change(KEY,'create',{'description':'New journal, historical timestamp','at':1000,'revision':current['revision']})
+    assert len(p.markers(KEY))==1 and p.markers(KEY)[0]['at']==1000
