@@ -1,6 +1,7 @@
 """Repeater Optimizer: passive capture, policy and explanation tests."""
 import time
 from flask import Flask
+from meshcorestation import __version__
 from meshcorestation.storage import optimizer_store,passive_stats
 from meshcorestation.optimizer_engine import analyze,compare_history
 from meshcorestation.web import optimizer_api
@@ -132,6 +133,10 @@ def test_api_never_uses_radio_for_analysis(tmp_path,monkeypatch):
     setup(tmp_path,monkeypatch)
     app=Flask(__name__);optimizer_api.register_optimizer_routes(app)
     client=app.test_client()
+    page=client.get('/repeater-optimizer')
+    assert page.headers['Cache-Control']=='no-store'
+    for asset in ('optimizer_sections.css','optimizer_embed.js'):
+        assert f'/assets/{asset}?v={__version__}' in page.get_data(as_text=True)
     headers={'X-Meshcore-Control':'1'}
     assert client.get('/api/repeater-optimizer?public_key='+KEY).status_code==403
     previous=optimizer_store.save_neighbors(KEY,{'neighbours':[{'pubkey':'11223344'}],

@@ -51,7 +51,6 @@ jobs:
       - name: Verify release version
         run: python -c 'from meshcorestation import __version__; assert __version__ == "4.0.5"'
   publish:
-    if: ${{ false }} # Hold publication until UI screenshots are reviewed.
     needs: validate
     runs-on: ubuntu-latest
     permissions:

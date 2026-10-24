@@ -3,6 +3,7 @@ import json
 import sqlite3
 from pathlib import Path
 from flask import request, Response
+from meshcorestation import __version__
 from meshcorestation.bridge import bridge
 from meshcorestation.storage import passive_stats, optimizer_store, advisor_history
 from meshcorestation.optimizer_engine import analyze, compare_history
@@ -23,6 +24,8 @@ def register_optimizer_routes(server):
     @server.route('/repeater-optimizer')
     def page():
         html=Path(__file__).with_name('repeater_optimizer.html').read_text(encoding='utf-8')
+        for asset in ('optimizer_sections.css','optimizer_embed.js'):
+            html=html.replace(f'/assets/{asset}"',f'/assets/{asset}?v={__version__}"')
         return Response(html,mimetype='text/html',
                         headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 

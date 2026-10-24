@@ -9,6 +9,7 @@ Branch: `v4.0.0`. Tag: `v4.0.5` (prerelease, not latest stable). V3 main is unch
   The iframe element, document root, body and main content now share that surface;
   palette and color-scheme synchronization covers light/dark changes and reopening.
   Content-based resizing, responsive geometry and existing spacing are preserved.
+  Versioned iframe stylesheet/script URLs refresh cached assets after upgrades.
 - Updated current README/help documentation. Experimental optimization suggestions,
   administrator authentication, confirmation/readback safeguards and configuration
   controls are unchanged.
@@ -23,3 +24,8 @@ Chromium desktop/mobile light/dark checks, including live theme changes, parent
 palette overrides, closed/reopened sections and iframe resizing. Screenshots are
 reviewed before publication. Offline tests establish behavior rather than provider
 permission or guaranteed availability on every installation.
+
+485 Python tests and all 35 JavaScript suites passed. Real Chromium checks passed
+at desktop/mobile widths in light/dark themes, including live theme transitions,
+inherited palette overrides, closed/reopened analysis and cross-viewport iframe
+resizing. Rendered screenshots were inspected for a continuous matching surface.
