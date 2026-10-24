@@ -27,5 +27,12 @@ fixtures cover realistic relationships; derived cases exercise missing/conflicti
 direction fields and all color/confidence combinations. Browser screenshots are
 reviewed before publication.
 
+Validated: 484 Python tests and all 35 JavaScript suites passed. Real Chromium
+passed desktop (1280px) and mobile (390px) cases in light and dark themes, including
+all direction/confidence combinations, actual SVG strokes, popup values, expanded
+key details, zoom/pan/resize/reopen/switching and simulated tile failures. Open
+popups were also resized across desktop/mobile widths and verified to remain
+inside the map without covering zoom controls. Rendered screenshots were inspected.
+
 Live Analyzer access and physical radio hardware remain unverified. Fixture/browser
 tests establish UI behavior, not provider permission or verified direct RF links.
