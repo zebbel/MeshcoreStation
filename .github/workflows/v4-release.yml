@@ -39,6 +39,7 @@ jobs:
           trap 'kill "$server_pid"' EXIT
           for attempt in {1..30}; do curl -fsS http://127.0.0.1:8050/ > /dev/null && break; sleep 1; done
           node tests/browser/network_monitoring.cjs
+          node tests/browser/repeater_performance.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -49,8 +50,9 @@ jobs:
           retention-days: 14
       - run: python -m scripts.check_install
       - name: Verify release version
-        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.0.5"'
+        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.1.0"'
   publish:
+    if: ${{ false }} # Hold release until performance screenshots are reviewed.
     needs: validate
     runs-on: ubuntu-latest
     permissions:
@@ -61,4 +63,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v4.0.5 --target "$GITHUB_SHA" --title "MeshcoreStation 4.0.5 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false
+          gh release create v4.1.0 --target "$GITHUB_SHA" --title "MeshcoreStation 4.1.0 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false

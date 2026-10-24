@@ -18,4 +18,28 @@ with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory
             owner.db.execute('INSERT INTO repeaters(public_key,name,adv_type,first_seen,last_seen) VALUES (?,?,2,0,0)',(public_key,name))
             voltage_store.ensure_repeater(owner.db,public_key)
     owner.close();passive_stats.initialize();passive_stats.track(key);passive_stats.track(other)
+    # Historical, synthetic local observations and real Analyzer response shapes.
+    # This disposable test app has no companion/radio worker or external caller.
+    import time, json
+    from contextlib import closing
+    from meshcorestation.storage import performance_store, optimizer_store, advisor_history
+    optimizer_store.initialize()
+    now=time.time()
+    root=Path('tests/fixtures/analyzer/responses')
+    sample={name:json.loads((root/file).read_text()) for name,file in {
+        'detail':'node_detail_24h.json','reach':'node_reach_1d.json','metrics':'graph_metrics.json'}.items()}
+    for hour in range(0,31*24,6):
+        if 72<hour<96: continue # An intentional observation gap.
+        performance_store.record_analyzer(key,now-hour*3600,sample)
+    with closing(passive_stats.connect()) as db,db:
+        for hour in range(31*24):
+            if 72<hour<96: continue
+            at=now-hour*3600-10
+            for i in range(1 if hour>48 else 2):
+                route=json.dumps([{'key':key,'name':'DE_HE_HP_RPT1','status':'matched'}])
+                db.execute("INSERT INTO observations(target,at,digest,kind,scoped,ambiguous,first_hop,middle_hop,last_hop,route,previous,following) VALUES(?,?,?,5,1,0,1,0,0,?,'[]','[]')",(key,at,'payload-'+str(hour)+'-'+str(i),route))
+                db.execute('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,5,1,1,1,?,?)',(at,key[:2],'payload-'+str(hour)+'-'+str(i)))
+    performance_store.marker_change(key,'create',{'description':'Fixture antenna replacement','at':now-2*86400})
+    with advisor_history.database() as db:
+        db.execute("INSERT INTO changes VALUES(12345,?,?,'flood.max','10','8','8','verified')",(now-2*86400+3600,key))
     create_app().server.run(host='127.0.0.1',port=8050,debug=False,use_reloader=False)

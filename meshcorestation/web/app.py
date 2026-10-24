@@ -40,4 +40,6 @@ def create_app():
     register_optimizer_routes(app.server)
     from meshcorestation.web.analyzer_api import register_analyzer_routes
     register_analyzer_routes(app.server)
+    from meshcorestation.web.performance_api import register_performance_routes
+    register_performance_routes(app.server)
     return app

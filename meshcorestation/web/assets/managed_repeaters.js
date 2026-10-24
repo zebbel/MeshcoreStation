@@ -49,7 +49,7 @@
         $('managed-repeater-remove').onclick=async()=>{
             const key=window.meshcorestationSelectedRepeater;
             const name=window.MeshcoreStationRepeaterNames?.label(key)||known.find(r=>r.public_key===key)?.name||key;
-            if(!key||!window.confirm(`Remove ${name} from management? Its telemetry settings, readings, report history and collected statistics will be permanently deleted.`))return;
+            if(!key||!window.confirm(`Remove ${name} from management? Its telemetry settings, readings, report history, collected statistics, performance measurements and change markers will be permanently deleted.`))return;
             $('managed-repeater-remove').disabled=true;
             try{
                 const response=await fetch('/api/bot/voltage',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},body:JSON.stringify({operation:'remove',public_key:key})});

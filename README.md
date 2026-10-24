@@ -1,4 +1,4 @@
-# MeshcoreStation 4.0.5
+# MeshcoreStation 4.1.0
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -9,14 +9,17 @@ is **available on demand without activation**, with live operation confirmed by 
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
 
-## Changes in 4.0.5
+## Changes in 4.1.0
 
-Repeater Network Monitoring no longer displays outdated Experimental or live-integration
-status labels following operator confirmation that it works. API errors, access
-restrictions, stale-cache notices and analyzer data limitations remain visible.
-Optimization Analysis now matches the Repeater Statistics background across its
-iframe and document, including live light/dark theme changes and responsive resizing.
-Unrelated experimental optimization suggestions are unchanged.
+Repeater Performance is the first subsection under Repeater Optimizer. It provides
+four plain-English indicators, 24h/7d/30d charts, a persistent local change journal
+and equal-window before/after comparisons. It reuses Companion and optimizer
+records and archives successful analyzer snapshots without adding rolling counts.
+No performance score or delivery-success claim is generated. Logging changes
+never sends commands; verified configuration audits create markers automatically.
+
+See [Repeater Performance](docs/repeater-performance.md) for collection gaps,
+storage bounds, comparisons and change-marker behavior.
 
 ## Installation and upgrades
 

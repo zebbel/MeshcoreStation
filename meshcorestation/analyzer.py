@@ -5,6 +5,7 @@ Access restrictions are surfaced as errors without any attempt to bypass them.
 """
 from contextlib import contextmanager
 import json
+import logging
 import math
 import re
 import sqlite3
@@ -48,7 +49,7 @@ class NoRedirect(HTTPRedirectHandler):
 def transport(url, headers, timeout):
     """Fixed-host caller; reject redirects, limit body and socket wait."""
     req = Request(url, headers={'Accept': 'application/json',
-                               'User-Agent': 'MeshcoreStation/4.0.5 (on-demand analyzer client)', **headers})
+                               'User-Agent': 'MeshcoreStation/4.1.0 (on-demand analyzer client)', **headers})
     try:
         with build_opener(NoRedirect()).open(req, timeout=timeout) as response:
             deadline = time.monotonic() + timeout
@@ -125,6 +126,7 @@ def validate(name, body, key):
 class AnalyzerService:
     def __init__(self, path=None, fetch=transport, clock=time.time):
         self.path = path or DATA_DIR / 'analyzer-cache.db'
+        self.history_path = self.path.with_name('repeater-performance.db')
         self.fetch, self.clock = fetch, clock
         self.lock = threading.Lock()
         self.cache_lock = threading.Lock()
@@ -156,6 +158,8 @@ class AnalyzerService:
             if self.path.exists():
                 with self.connection() as db:
                     db.execute('DELETE FROM analyzer_cache WHERE public_key=?', (key,))
+            from meshcorestation.storage import performance_store
+            performance_store.remove_repeater(key, self.history_path)
 
     def snapshot(self, key, force=False, cache_only=False):
         key = public_key(key)
@@ -209,7 +213,14 @@ class AnalyzerService:
                 with self.connection() as db:
                     db.execute('INSERT OR REPLACE INTO analyzer_cache VALUES (?,?,?,?)',
                                (key, at, json.dumps(data, allow_nan=False), json.dumps(validators)))
-            return {**result, 'data': data, 'fetched_at': at, 'stale': False, 'state': 'available'}
+                history_error = None
+                try:
+                    from meshcorestation.storage import performance_store
+                    performance_store.record_analyzer(key, at, data, self.history_path)
+                except (OSError, sqlite3.Error):
+                    logging.getLogger(__name__).exception('Performance history could not be saved')
+                    history_error = 'Performance history could not be saved. Monitoring snapshot is still available.'
+            return {**result, 'data': data, 'fetched_at': at, 'stale': False, 'state': 'available', 'history_error': history_error}
         except AnalyzerError as exc:
             return {**result, 'state': exc.state, 'error': str(exc)}
         except (TimeoutError, URLError, OSError):

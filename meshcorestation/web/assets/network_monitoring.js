@@ -32,7 +32,7 @@
     }
     function status(r){
         const stamp=r.fetched_at?`Last successful retrieval: ${date(r.fetched_at)}. `:'';
-        $('network-status').textContent=`${r.error||''} ${stamp}${r.data?(r.stale?'Stale saved snapshot.':'Five-minute snapshot cache.'):r.state==='empty'?'No saved snapshot.':''}`;
+        $('network-status').textContent=`${r.error||''} ${r.history_error||''} ${stamp}${r.data?(r.stale?'Stale saved snapshot.':'Five-minute snapshot cache.'):r.state==='empty'?'No saved snapshot.':''}`;
         $('network-status').dataset.state=r.state;
     }
     async function drawMap(data,host,id,key){
@@ -155,6 +155,7 @@
                 $('network-status').textContent+=' Refreshing external observations…';
                 r=await request(force?'&refresh=1':'');if(!active())return;cache.set(key,r);render(r,id,key);
             }
+            if(active())document.dispatchEvent(new CustomEvent('repeater-network-updated',{detail:key}));
         }catch(e){if(active()&&(e.name!=='AbortError'||timedOut)){$('network-status').dataset.state='unavailable';$('network-status').textContent='External monitoring unavailable: '+(timedOut?'request timed out.':e.message)+(cache.get(key)?.data?' Saved snapshot retained.':' No network activity conclusion can be drawn.');}}
         finally{clearTimeout(timeout);if(id===generation){pendingKey=null;controller=null;$('network-refresh').disabled=false;$('network-content').setAttribute('aria-busy','false');}}
     }

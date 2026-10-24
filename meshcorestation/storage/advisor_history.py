@@ -1,5 +1,6 @@
 """Bounded persistent audit trail; never stores session tokens or passwords."""
 import sqlite3
+import logging
 import time
 from contextlib import contextmanager
 from meshcorestation.config import DATA_DIR
@@ -34,6 +35,13 @@ def begin(key,field,before,value):
 def finish(ident,actual,status):
     with database() as db:
         db.execute('UPDATE changes SET actual=?,status=? WHERE id=?',(None if actual is None else str(actual),status,ident))
+        row=db.execute('SELECT * FROM changes WHERE id=?',(ident,)).fetchone()
+    if row and status=='verified':
+        try:
+            from meshcorestation.storage import performance_store
+            performance_store.import_verified([dict(row)], FILE.with_name('repeater-performance.db'))
+        except (OSError,sqlite3.Error):
+            logging.getLogger(__name__).exception('Performance change marker could not be saved; on-demand backfill will retry')
 
 
 def recent(key):

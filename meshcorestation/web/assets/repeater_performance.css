@@ -1,0 +1,16 @@
+/* Performance reuses the dashboard's statistics surfaces and single gutter. */
+#performance-content { min-width:0; overflow-wrap:anywhere; }
+#performance-content .stats-metric strong { font-size:1.4rem; }
+.performance-form { display:grid; gap:12px; max-width:42rem; }
+.performance-form label { display:grid; gap:6px; }
+.performance-form textarea, .performance-form input { width:100%; background:var(--panel); }
+#performance-content .performance-chart { width:100%; height:auto; }
+.performance-chart text { font-size:11px; }
+.performance-change-line { cursor:pointer; }
+.performance-change-line:focus { outline:2px solid var(--accent); }
+#performance-comparison select { max-width:100%; background:var(--panel); }
+#performance-content .stats-table-scroll table { min-width:36rem; }
+@media(max-width:600px) { #performance-content .stats-metrics { grid-template-columns:minmax(0,1fr); } }
+
+.performance-series { display:inline-flex; align-items:center; gap:6px; }
+.performance-swatch { width:24px; flex:0 0 24px; border-top:3px solid var(--accent); }

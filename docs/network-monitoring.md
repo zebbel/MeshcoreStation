@@ -73,7 +73,7 @@ code loads these fixtures and no tests require the external service.
 
 ## Integrated dashboard appearance
 
-All three optimizer subsections share statistics cards, headings, controls,
+All four optimizer subsections share statistics cards, headings, controls,
 tables and status styling from the dashboard. Long tables scroll horizontally
 inside their own wrapper only when needed. Historical charts and maps resize
 with the available width. The selected repeater and snapshot provenance stay
@@ -133,3 +133,12 @@ Relationships are inferred from analyzer observations and do not necessarily rep
 All application labels are English. Proper names, repeater names and externally
 supplied or user-generated content are preserved in their original form. These
 visual changes reuse the existing snapshot without additional external requests.
+
+## Saved performance measurements
+
+A successful complete refresh also saves compact, timestamped measurements for
+[Repeater Performance](repeater-performance.md). Cache reads do not generate new
+measurements; opening Performance may import the existing saved snapshot using its
+original retrieval timestamp. Historical samples survive cache replacement.
+Rolling counts are not added together. A history-write failure leaves monitoring
+available and displays a warning. Access failures do not create zero-valued samples.

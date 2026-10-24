@@ -41,7 +41,7 @@ def test_repeater_management_telemetry_and_independent_optimizer_subsections():
     assert 'repeater-statistics-inline' not in ids
     optimizer=next(n for n in nodes if getattr(n,'id',None)=='repeater-optimizer-disclosure')
     children=[n.id for n in optimizer.children if isinstance(n,html.Details)]
-    assert children==['repeater-statistics-disclosure','optimization-analysis-disclosure','repeater-network-disclosure']
+    assert children==['repeater-performance-disclosure','repeater-statistics-disclosure','optimization-analysis-disclosure','repeater-network-disclosure']
     assert {'managed-repeater-add','managed-repeater-open','open-voltage'} <= set(ids)
     # The dropdown takes its own full-width row; actions share the next row.
     controls=next(n for n in walk(management) if getattr(n,'className',None)=='managed-repeater-controls')
@@ -67,7 +67,7 @@ def test_every_dashboard_disclosure_starts_collapsed():
 
 def test_optimizer_subsections_use_one_shared_gutter_without_double_padding():
     nodes=list(walk(build_layout()))
-    for key in ('repeater-statistics-disclosure','optimization-analysis-disclosure','repeater-network-disclosure'):
+    for key in ('repeater-performance-disclosure','repeater-statistics-disclosure','optimization-analysis-disclosure','repeater-network-disclosure'):
         section=next(n for n in nodes if getattr(n,'id',None)==key)
         assert len(section.children)==2
         assert section.children[1].className=='optimizer-section-body'

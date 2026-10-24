@@ -62,6 +62,17 @@ def build_layout():
             html.Summary(html.H2("Repeater Optimizer")),
             html.P("All subsections use the repeater selected in Repeater Management.", className="muted"),
             html.Details([
+                html.Summary(html.H2("Repeater Performance")),
+                html.Div([
+                    html.P("Observed contribution, not a delivery-success score. Uses saved Companion, Optimization Analysis and Analyzer records. Opening this section does not contact the radio or external analyzer.", className="muted"),
+                    html.Div([html.Span(id="performance-selected", className="stats-selected"),
+                        html.Label(["History", html.Select([html.Option("24 hours",value="1"),html.Option("7 days",value="7",selected=True),html.Option("30 days",value="30")],id="performance-days")]),
+                        html.Button("Refresh saved data",id="performance-refresh")],className="stats-controls"),
+                    html.P(id="performance-status",className="stats-message",role="status",**{"aria-live":"polite"}),
+                    html.Div(id="performance-content")
+                ],className="optimizer-section-body")
+            ],id="repeater-performance-disclosure",className="panel-disclosure managed-repeater-section"),
+            html.Details([
                 html.Summary(html.H2("Repeater statistics")),
                 html.Div(html.Div(id="repeater-statistics-inline"), className="optimizer-section-body")
             ], id="repeater-statistics-disclosure", className="panel-disclosure managed-repeater-section"),

@@ -1,31 +1,32 @@
-# MeshcoreStation 4.0.5 — V4 branch prerelease
+# MeshcoreStation 4.1.0 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.0.5` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.1.0` (prerelease, not latest stable). V3 main is unchanged.
 
-- Removed the Network Monitoring Experimental heading and outdated live-integration
-  status following operator confirmation of working live monitoring. API metadata
-  no longer labels monitoring experimental or supplies an obsolete verification flag.
-- Matched Optimization Analysis to the rendered Repeater Statistics background.
-  The iframe element, document root, body and main content now share that surface;
-  palette and color-scheme synchronization covers light/dark changes and reopening.
-  Content-based resizing, responsive geometry and existing spacing are preserved.
-  Versioned iframe stylesheet/script URLs refresh cached assets after upgrades.
-- Updated current README/help documentation. Experimental optimization suggestions,
-  administrator authentication, confirmation/readback safeguards and configuration
-  controls are unchanged.
+- Added Repeater Performance above Statistics, sharing selection, dashboard styling,
+  lazy loading and independently collapsible behavior. Four observed-contribution
+  indicators and 24h/7d/30d charts keep Companion, optimizer and analyzer evidence
+  separate, with readable names and explicit gaps rather than performance scores.
+- Added a permanent per-repeater local change journal with manual timestamps,
+  edit/delete controls, verified-configuration markers, chart lines and accessible
+  comparison controls. Annotation writes never send radio/configuration commands.
+- Added equal 24h/3d/7d before/after windows (7d default), measured values, percentage
+  differences, plain-English interpretation and warnings for missing/partial data,
+  overlapping changes, source differences and unknown historical collector uptime.
+- Successful analyzer refreshes archive bounded 15-minute measurements separately
+  from the five-minute cache. Rolling windows are never added; before/after means
+  use contained non-overlapping hourly samples. Existing errors, cooldowns, last
+  successful snapshots and no-background-polling behavior remain intact.
 
-Monitoring retains on-demand loading, five-minute caching, manual Refresh Now,
-request validation/timeouts, rate limits, stale-data retention and normal API/access
-errors. Relationships remain inferred observations rather than verified direct
-radio links. No additional requests, polling or radio traffic are introduced.
+The additive repeater-performance.db file leaves existing databases compatible.
+Measurements retain up to 400 days and 250,000 shared rows; markers are not aged out.
+Removing a managed repeater explicitly removes its journal and measurements.
+Optimizer resets retain the separate journal/archive. Administrator authorization,
+confirmation/readback protections and unrelated experimental optimization features
+are preserved. Correlation is not proof of causation or successful radio delivery.
 
-Validation includes complete Python and JavaScript regression suites plus real
-Chromium desktop/mobile light/dark checks, including live theme changes, parent
-palette overrides, closed/reopened sections and iframe resizing. Screenshots are
-reviewed before publication. Offline tests establish behavior rather than provider
-permission or guaranteed availability on every installation.
-
-485 Python tests and all 35 JavaScript suites passed. Real Chromium checks passed
-at desktop/mobile widths in light/dark themes, including live theme transitions,
-inherited palette overrides, closed/reopened analysis and cross-viewport iframe
-resizing. Rendered screenshots were inspected for a continuous matching surface.
+Validation covers historical storage, retention, cache deduplication, source
+separation, verified-marker hooks/backfill, CRUD/tombstones, timestamps, comparisons,
+missing data, switching/races and local API protections. Full Python/JavaScript
+regression plus Chromium desktop/mobile light/dark visual checks precede publication.
+Browser tests use captured analyzer formats and synthetic local historical records;
+they cannot establish historical coverage or physical radio delivery success.

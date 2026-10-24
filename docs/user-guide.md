@@ -11,7 +11,7 @@ keeping the same map. Unknown or ambiguous prefixes remain labeled. Recorded
 replies are not proof of delivery.
 
 In Repeater Management, add repeaters from the map and choose one in the dropdown.
-The selection drives telemetry and all three optimizer subsections. Removing a
+The selection drives telemetry and all four optimizer subsections. Removing a
 repeater deletes its monitoring settings and local telemetry/statistics/history
 according to the removal confirmation, but leaves its Known Repeaters map entry.
 Its external snapshot is deleted too; other repeaters are unaffected.
@@ -25,6 +25,10 @@ the latest successful sample with its original timestamp.
 
 Repeater Optimizer contains three independent disclosures:
 
+- Repeater Performance: four observed-contribution indicators, 24h/7d/30d charts,
+  a local change journal and 24h/3d/7d before/after windows. Saved data loads only
+  when opened. Logging does not transmit or apply configuration changes. See
+  [Performance and comparisons](repeater-performance.md).
 - Repeater Statistics: local passive evidence, collection pause/resume, periods,
   charts, route counts and usefulness. Closed panels do not load data.
 - Optimization Analysis: passive analysis and comparisons. Protected actions require
@@ -45,7 +49,7 @@ persist across browsers; timezone conversion and report schedules are independen
 See the specialized companion firmware, OLED, room protocol and operations guides
 for those procedures.
 
-The three optimizer subsections share dashboard typography, cards, controls and
+The four optimizer subsections share dashboard typography, cards, controls and
 status styling. Analysis grows with its content rather than using an internally
 scrolling fixed-height iframe. Provider access failures remain visible in monitoring. Analysis uses the same background
 as Repeater Statistics, synchronized across the iframe in light and dark modes.
@@ -54,7 +58,7 @@ Repeater identities display names where full-key records are available. Hover or
 open details for technical keys. Identical names get key suffixes; unknown keys
 use Unknown Repeater and short unresolved prefixes remain labeled as unresolved.
 Packet Path Patterns preserves sequence/count/time while displaying readable names.
-The three optimizer disclosures share matching content gutters on small and large
+The four optimizer disclosures share matching content gutters on small and large
 screens. Observable Relationships uses S/R markers and an English line legend.
 Green means bidirectional observations, red means one observed direction, and gray
 means unknown direction. Solid lines indicate medium/high analyzer confidence;
