@@ -8,7 +8,7 @@ w.AbortController=AbortController;w.meshcorestationSelectedRepeater=key;w.meshco
 w.setInterval=()=>{throw Error('No background polling permitted')};
 const maps=[];w.meshcorestationLoadMapLibrary=async o=>{assert.equal(o.clustering,false)};
 w.requestAnimationFrame=fn=>w.setTimeout(fn,0);w.cancelAnimationFrame=w.clearTimeout;
-w.L={divIcon:o=>o,map:(host,options)=>{assert.equal(options.maxZoom,19);const m={removed:false,setView(){return this},fitBounds(){return this},invalidateSize(){return this},remove(){this.removed=true}};maps.push(m);return m;},marker:()=>({addTo(){return this},bindPopup(){return this}}),polyline:()=>({addTo(){return this}}),tileLayer:()=>({on(){return this},addTo(){return this}})};
+w.L={divIcon:o=>o,map:(host,options)=>{assert.equal(options.maxZoom,19);const m={removed:false,setView(){return this},fitBounds(){return this},invalidateSize(){return this},remove(){this.removed=true}};maps.push(m);return m;},marker:()=>({addTo(){return this},bindPopup(){return this}}),polyline:()=>({addTo(){return this},bindPopup(){return this}}),tileLayer:()=>({on(){return this},addTo(){return this}})};
 let calls=[],state='initial',deferred=null;
 function result(k=key,cacheOnly=false){
  const empty=state==='empty'||(state==='initial'&&cacheOnly);
@@ -23,6 +23,7 @@ const select=k=>{w.meshcorestationSelectedRepeater=k;w.document.dispatchEvent(ne
 (async()=>{
  w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
  w.eval(fs.readFileSync('meshcorestation/web/assets/ab_repeater_names.js','utf8'));
+ w.eval(fs.readFileSync('meshcorestation/web/assets/ac_network_relationships.js','utf8'));
  w.eval(fs.readFileSync('meshcorestation/web/assets/network_monitoring.js','utf8'));await settle();assert.equal(calls.length,0);
  toggle('repeater-optimizer-disclosure',true);await settle();assert.equal(calls.length,0);
  toggle('repeater-network-disclosure',true);await settle();assert(calls[0].includes('cache_only=1'));assert(calls.some(x=>!x.includes('cache_only=1')),'stale data automatically fetched with no activation flag');assert($('network-content').textContent.includes('107'));

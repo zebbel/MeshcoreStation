@@ -1,4 +1,4 @@
-# MeshcoreStation 4.0.3
+# MeshcoreStation 4.0.4
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -8,14 +8,18 @@ V4 preserves existing station and room databases. The external Analyzer feature
 is **experimental and available on demand without activation**. Offline fixture tests verify formats,
 not live access, service permission, or radio performance.
 
-## Changes in 4.0.3
+## Changes in 4.0.4
 
-Repeater names are reused across network paths, analysis, statistics, selectors
-and map popups. Complete public keys remain in tooltips/details; unresolved short
-prefixes are never guessed, and duplicate names receive distinguishing suffixes.
-All optimizer subsections share one expanded-content gutter. Observable Relationships
-uses image-free markers and visible dashed inferred links; chart CSS is restricted
-to chart SVGs so it cannot resize Leaflet's overlay renderer.
+Observable Relationships now uses green for bidirectional observations, red for
+one observed direction, and gray for unknown direction. Solid lines mean reported
+medium/high confidence; dashed lines mean low confidence. Unknown confidence is
+explicitly dotted. An English legend and named connection popups explain counts,
+direction, confidence, distance and public keys. Colors and styles are independent.
+Relationships are inferred from analyzer observations and do not necessarily represent verified direct radio links.
+
+Existing name resolution, responsive layout, image-free markers and monitoring
+request/cache behavior are preserved. Interface text remains English; repeater
+names and other user or external data keep their original text.
 
 ## Installation and upgrades
 

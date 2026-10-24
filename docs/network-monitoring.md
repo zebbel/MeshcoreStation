@@ -47,7 +47,7 @@ in-flight cache write. The cache may be removed while stopped without losing V3 
 | --- | --- |
 | Relay counts | Rolling Analyzer windows, not cumulative station counters |
 | Directional weHear / theyHear / twoWay | Analyzer-derived reachability, not proof of direct RF links |
-| Inferred neighbors and dashed map edges | Inferred relationships, labeled with provenance and confidence |
+| Inferred neighbors and map edges | Inferred relationships, labeled with provenance and confidence |
 | Graph degree / betweenness / rank | Graph structure, not radio signal quality |
 | Path sequences | Analyzer patterns; hash prefixes can collide or be incomplete |
 | Clock hash observer counts | Counts only; do not disclose individual observers or signal values |
@@ -91,10 +91,42 @@ full keys or the original unresolved prefix. Internal IDs and route order do not
 change when names change.
 
 Observable Relationships uses CSS divIcon markers: S identifies the selected
-repeater; R identifies a neighbor. Dashed lines require both coordinates and
-Analyzer directional evidence (weHear, theyHear or twoWay). They represent inferred
-relationships, never verified direct RF connections. Missing-coordinate entries
-remain in tables; they are not assigned invented positions. Chart sizing applies
-only to explicitly marked chart SVGs. Map size observers invalidate the map after
-layout changes, and reopening/switching cleans up old instances. Tile failures
-leave valid markers and relationship overlays visible with a status message.
+repeater; R identifies a neighbor. Lines connect coordinate-bearing records from
+the analyzer reach list; missing-coordinate entries remain in the tables without
+invented positions. Chart sizing applies only to marked chart SVGs. Map size
+observers invalidate the map after layout changes, and reopening/switching cleans
+up old instances. Tile failures leave markers and overlays visible.
+
+### Direction and confidence
+
+Color represents directionality; line style independently represents the
+analyzer's reported confidence:
+
+| Direction | Medium/high confidence | Low confidence | Missing/unknown confidence |
+| --- | --- | --- | --- |
+| Bidirectional | Solid green | Dashed green | Dotted green |
+| Unidirectional | Solid red | Dashed red | Dotted red |
+| Unknown direction | Solid gray | Dashed gray | Dotted gray |
+
+Two positive directional counts confirm observations in both directions. An
+explicit `twoWay: true` also confirms both directions unless available zero counts
+contradict it, in which case direction stays unknown. One positive count and an
+explicit zero in the other direction, without `twoWay: true`, indicate a
+unidirectional observation. Incomplete counts without confirmation remain gray.
+A reach-list entry supplies relationship provenance, not invented directional or
+signal evidence. Missing observations do not prove that communication in the
+other direction is impossible. Unknown confidence is dotted and explicitly
+labeled; it is never silently treated as medium/high or low confidence.
+
+The visible English legend includes line samples. Clicking/tapping a line shows
+the selected and connected repeater names, direction, `weHear` and `theyHear`
+counts, original analyzer confidence and available distance. `weHear` means the
+selected repeater hears the connected repeater; `theyHear` means the connected
+repeater hears the selected repeater. Tooltips and expandable details retain the
+original public keys. Unknown values remain Unknown; no measurements are invented.
+
+Relationships are inferred from analyzer observations and do not necessarily represent verified direct radio links.
+
+All application labels are English. Proper names, repeater names and externally
+supplied or user-generated content are preserved in their original form. These
+visual changes reuse the existing snapshot without additional external requests.

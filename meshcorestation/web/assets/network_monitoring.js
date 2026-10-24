@@ -7,6 +7,7 @@
     const val=v=>v==null?'Unknown':String(v);
     const visible=()=>$('repeater-network-disclosure')?.open && $('repeater-optimizer-disclosure')?.open!==false;
     const names=()=>window.MeshcoreStationRepeaterNames;
+    const relationships=()=>window.MeshcoreStationNetworkRelationships;
     const identity=key=>names().element(key);
     function dispose(){
         ++mapRender;if(mapIdentityHandler)document.removeEventListener('repeater-names-updated',mapIdentityHandler);mapIdentityHandler=null;mapObserver?.disconnect();mapObserver=null;
@@ -36,6 +37,11 @@
     }
     async function drawMap(data,host,id,key){
         const version=mapRender,center=data.detail.node,neighbors=data.reach.neighbourList;
+        const legend=el('div',null,'network-map-legend');legend.setAttribute('aria-label','Relationship map legend');
+        for(const [label,kind] of [['Green — Bidirectional connection','bidirectional'],['Red — Unidirectional connection','unidirectional'],['Solid line — Medium/high confidence','solid'],['Dashed line — Low confidence','low'],['Gray — Unknown direction','unknown'],['Dotted line — Unknown confidence','unreported']]){
+            const item=el('div'),sample=el('span',null,'network-line-sample '+kind);sample.setAttribute('aria-hidden','true');item.append(sample,document.createTextNode(label));legend.append(item);
+        }
+        host.append(legend,el('p',relationships().explanation,'muted'));
         const coords=n=>typeof n.lat==='number'&&typeof n.lon==='number'&&Math.abs(n.lat)<=90&&Math.abs(n.lon)<=180;
         if(!coords(center)){host.append(el('p','Map unavailable: no usable selected-repeater coordinates.'));return;}
         const note=el('p','Loading observation map…');host.append(note);
@@ -46,9 +52,22 @@
             const points=[[center.lat,center.lon]],markers=[];
             const popup=(key,inferred)=>{
                 const box=el('div');box.append(identity(key));
-                if(inferred)box.append(el('p','Analyzer-derived relationship; direct RF unverified.'));
+                if(inferred)box.append(el('p',relationships().explanation));
                 return box;
             };
+            function connectionPopup(n,relationship){
+                const box=el('div',null,'network-connection-popup');
+                for(const [label,node] of [['Selected repeater',identity(key)],['Connected repeater',identity(n.pubkey)]]){
+                    const row=el('p');row.append(el('strong',label+': '),node);box.append(row);
+                }
+                box.append(el('p','Relationship direction: '+relationship.observation));
+                if(relationship.direction==='unidirectional')box.append(el('p','Missing observations do not prove that communication in the other direction is impossible.'));
+                const rows=[['weHear',relationship.we],['theyHear',relationship.they],['Analyzer confidence',n.confidence==null?'Unknown (not reported)':n.confidence],['Distance',typeof n.distanceKm==='number'&&Number.isFinite(n.distanceKm)&&n.distanceKm>=0?n.distanceKm+' km':'Unknown']];
+                for(const [label,value] of rows)box.append(el('p',label+': '+val(value)));
+                if(relationship.confidence==='unknown')box.append(el('p','Confidence unknown; dotted line.'));
+                const details=el('details');details.append(el('summary','Public keys'),el('p','Selected repeater: '+key),el('p','Connected repeater: '+n.pubkey));box.append(details,el('p',relationships().explanation));
+                return box;
+            }
             function marker(pos,key,selected){
                 const icon=L.divIcon({className:'route-marker-icon',html:el('span',selected?'S':'R',selected?'map-marker bot':'map-marker'),iconSize:[28,28],iconAnchor:[14,14]});
                 markers.push({key,layer:L.marker(pos,{icon,title:names().label(key),zIndexOffset:selected?100:0}).addTo(map).bindPopup(()=>popup(key,!selected))});
@@ -58,11 +77,11 @@
             for(const n of neighbors.filter(coords)){
                 if(seen.has(n.pubkey))continue;seen.add(n.pubkey);
                 const pos=[n.lat,n.lon];points.push(pos);marker(pos,n.pubkey,false);
-                if(n.weHear>0||n.theyHear>0||n.twoWay===true){
-                    const common={dashArray:'7 6',opacity:.95,lineCap:'round',interactive:false};
-                    L.polyline([points[0],pos],{...common,color:'var(--panel)',weight:7,className:'network-relationship-halo'}).addTo(map);
-                    L.polyline([points[0],pos],{...common,color:'var(--accent)',weight:3,className:'network-relationship'}).addTo(map);
-                }
+                // Inclusion in the analyzer reach list is relationship provenance;
+                // missing directional counts remain neutral rather than fabricated.
+                const relationship=relationships().describe(n),common={dashArray:relationship.dashArray,opacity:1,lineCap:'round'};
+                L.polyline([points[0],pos],{...common,color:'var(--panel)',weight:8,interactive:false,className:'network-relationship-halo'}).addTo(map);
+                L.polyline([points[0],pos],{...common,color:relationship.color,weight:4,interactive:true,className:'network-relationship network-direction-'+relationship.direction+' network-confidence-'+relationship.confidence}).addTo(map).bindPopup(()=>connectionPopup(n,relationship),{maxWidth:Math.max(160,Math.min(280,canvas.clientWidth-60)),maxHeight:Math.max(130,canvas.clientHeight-100),autoPanPadding:[12,12]});
             }
             if(points.length>1)map.fitBounds(points,{padding:[20,20],maxZoom:13,animate:false});
             mapIdentityHandler=()=>{for(const m of markers)m.layer.getElement?.()?.setAttribute('title',names().label(m.key));};
@@ -76,7 +95,7 @@
             window.addEventListener('resize',resizeHandler);resizeHandler();
             const tiles=window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
             tiles.on('tileerror',()=>{note.textContent='Background tiles unavailable; observation markers remain visible.';});tiles.addTo(map);
-            note.textContent='Dashed lines show analyzer-derived relationships, not verified direct RF links.';
+            note.textContent='Color indicates direction; line style indicates analyzer confidence. Missing observations do not prove a direction is impossible.';
         }catch(e){if(id===generation)note.textContent='Observation map unavailable: '+(e.message||String(e));}
     }
     function route(path){

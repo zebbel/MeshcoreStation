@@ -9,3 +9,17 @@
 #network-content .network-route-table { min-width:36rem; }
 #network-content .network-route-table :is(th,td):nth-child(2) { width:5rem; white-space:nowrap; }
 #network-content .network-route-table :is(th,td):nth-child(3) { width:13rem; white-space:nowrap; }
+
+/* Legend sits above the canvas so it never covers map controls or neighbors. */
+.network-map-legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(245px,1fr)); gap:10px 18px; margin:14px 0; padding:14px; border:1px solid var(--border); border-radius:var(--control-radius); background:var(--soft); font-size:13px; }
+.network-map-legend > div { display:flex; align-items:center; gap:10px; min-width:0; }
+.network-line-sample { display:inline-block; width:36px; flex:0 0 36px; border-top:4px solid var(--muted); }
+.network-line-sample.bidirectional { border-color:var(--green); }
+.network-line-sample.unidirectional { border-color:var(--red); }
+.network-line-sample.low { border-top-style:dashed; }
+.network-line-sample.unreported { border-top-style:dotted; }
+.network-connection-popup { overflow-wrap:anywhere; }
+#network-content .leaflet-popup-content-wrapper, #network-content .leaflet-popup-tip { background:var(--panel); color:var(--text); }
+#network-content .leaflet-popup-content { margin:14px 18px; }
+#network-content .network-map { margin-top:14px; }
+@media(max-width:600px) { .network-map-legend { grid-template-columns:minmax(0,1fr); } }
