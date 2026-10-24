@@ -64,7 +64,7 @@ def build_layout():
             html.Details([
                 html.Summary(html.H2("Repeater Performance")),
                 html.Div([
-                    html.P("Observed contribution, not a delivery-success score. Uses saved Companion, Optimization Analysis and Analyzer records. Opening this section does not contact the radio or external analyzer.", className="muted"),
+                    html.P("Understand observed activity, connectivity and contribution. Analyzer history is collected automatically every 12 hours while the station runs. This view reads saved data and never transmits to the repeater.", className="muted"),
                     html.Div([html.Span(id="performance-selected", className="stats-selected"),
                         html.Label(["History", html.Select([html.Option("24 hours",value="1"),html.Option("7 days",value="7",selected=True),html.Option("30 days",value="30")],id="performance-days")]),
                         html.Button("Refresh saved data",id="performance-refresh")],className="stats-controls"),

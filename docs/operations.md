@@ -83,7 +83,8 @@ compatibility of every peripheral. Test the real companion after an update.
 ## External monitoring
 
 Live operation has been confirmed by the operator. Available on demand without
-activation and never polled in the
-background. Read [access and caching](network-monitoring.md) for provider limitations.
+activation. The dashboard does not poll. A server worker collects managed-repeater
+Analyzer history every 12 hours, even without an open dashboard; persistent
+schedules and provider cooldowns handle restarts/failures. No radio traffic is added. Read [access and caching](network-monitoring.md) for provider limitations.
 403/Cloudflare 1010 means unavailable; cached evidence is retained. V3 remains on
 `main`; V4 updates use `v4.0.0`. Back up all data before branch switching.

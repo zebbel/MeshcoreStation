@@ -50,8 +50,9 @@ jobs:
           retention-days: 14
       - run: python -m scripts.check_install
       - name: Verify release version
-        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.1.0"'
+        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.2.0"'
   publish:
+    if: ${{ false }} # Hold publication until browser screenshots are reviewed.
     needs: validate
     runs-on: ubuntu-latest
     permissions:
@@ -62,4 +63,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v4.1.0 --target "$GITHUB_SHA" --title "MeshcoreStation 4.1.0 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false
+          gh release create v4.2.0 --target "$GITHUB_SHA" --title "MeshcoreStation 4.2.0 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false

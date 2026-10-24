@@ -14,8 +14,16 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  await page.locator('#repeater-performance-disclosure > summary').click();await page.getByText('Saved observations loaded.',{exact:false}).first().waitFor();
  assert.equal(await page.locator('#performance-selected').innerText(),'DE_HE_HP_RPT1');assert.equal(await page.locator('#performance-content .stats-metric').count(),4);
  const section=page.locator('#repeater-performance-disclosure');
+ assert(await page.locator('.performance-overview').innerText().then(t=>t.includes('Performance Trend')&&t.includes('Data completeness')));
+ assert.equal(await page.locator('#performance-history').getAttribute('open'),null);
+ assert.equal(await page.locator('#performance-details').getAttribute('open'),null);
+ await page.locator('#performance-history > summary').click();
+ await page.locator('#performance-changes > summary').click();
+ await page.locator('.performance-overview').screenshot({path:`${output}/performance-overview-${token}.png`});
  assert.equal(await section.locator('svg.performance-chart').count(),3);assert(await section.locator('.performance-change-line').count()>=3);
  assert(await section.locator('svg.performance-chart circle').count()>0);
+ const reachTicks=await section.locator('svg.performance-chart').nth(2).locator('text[text-anchor="end"]').allTextContents();assert(reachTicks.filter(t=>/^\d/.test(t)).every(t=>!t.includes('.')),'neighbor axes use whole counts');
+ const hourlyPaths=await section.locator('svg.performance-chart').nth(1).locator('path[stroke-width="2"]').getAttribute('d');assert((hourlyPaths.match(/M/g)||[]).length>=2,'missing hourly observations break the rendered line');
  const geometry=await section.locator('.performance-marker-line').evaluateAll(nodes=>nodes.map(n=>({length:n.getTotalLength(),width:n.getBBox().width,height:n.getBBox().height,stroke:getComputedStyle(n).stroke})));assert(geometry.every(n=>n.length>100&&n.height>100&&n.stroke!=='none'));
  assert((await section.innerText()).includes('Verified flood.max'));
  assert.equal(requests.filter(r=>r.url.includes('/api/repeater-network')).length,0,'performance does not fetch Analyzer data');
@@ -37,7 +45,7 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  await page.getByRole('button',{name:'Save marker',exact:true}).click();
  let row=page.locator('#performance-content tr').filter({hasText:description});await row.waitFor();
  const saved=await page.request.get('http://127.0.0.1:8050/api/repeater-performance?public_key='+key,{headers:{'X-Meshcore-Control':'1'}}).then(r=>r.json());const marker=saved.markers.find(m=>m.description===description);assert(marker);if(manualAt!=null)assert.equal(marker.at,manualAt);
- await page.reload();await page.locator('#repeater-management-disclosure > summary').click();await page.waitForFunction(k=>document.querySelector('#managed-repeater')?.value===k,key);await page.locator('#repeater-optimizer-disclosure > summary').click();await page.locator('#repeater-performance-disclosure > summary').click();row=page.locator('#performance-content tr').filter({hasText:description});await row.waitFor();
+ await page.reload();await page.locator('#repeater-management-disclosure > summary').click();await page.waitForFunction(k=>document.querySelector('#managed-repeater')?.value===k,key);await page.locator('#repeater-optimizer-disclosure > summary').click();await page.locator('#repeater-performance-disclosure > summary').click();await page.locator('#performance-changes > summary').click();row=page.locator('#performance-content tr').filter({hasText:description});await row.waitFor();
  await row.getByRole('button',{name:'Edit',exact:true}).click();await page.locator('#performance-description').fill(description+' edited');await page.getByRole('button',{name:'Save marker',exact:true}).click();row=page.locator('#performance-content tr').filter({hasText:description+' edited'});await row.waitFor();
  const updated=await page.request.get('http://127.0.0.1:8050/api/repeater-performance?public_key='+key,{headers:{'X-Meshcore-Control':'1'}}).then(r=>r.json());assert.equal(updated.markers.find(m=>m.id===marker.id).at,marker.at,'editing text preserves the original timestamp');
  page.once('dialog',dialog=>dialog.accept());await row.getByRole('button',{name:'Delete',exact:true}).click();await row.waitFor({state:'detached'});

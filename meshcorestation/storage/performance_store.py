@@ -1,6 +1,7 @@
 """Local performance journal and bounded analyzer measurements. Never uses a radio."""
 from contextlib import contextmanager, closing
 import json
+from datetime import datetime
 import math
 import sqlite3
 import time
@@ -34,6 +35,19 @@ def database(path=None):
           id INTEGER PRIMARY KEY AUTOINCREMENT, public_key TEXT NOT NULL, at REAL NOT NULL,
           description TEXT NOT NULL, source_id TEXT UNIQUE, source_at REAL,
           provenance TEXT, deleted INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS hourly_relays (
+          public_key TEXT NOT NULL, at INTEGER NOT NULL, count INTEGER NOT NULL,
+          retrieved_at REAL NOT NULL, PRIMARY KEY(public_key,at));
+        CREATE INDEX IF NOT EXISTS performance_hour_at ON hourly_relays(at);
+        CREATE TABLE IF NOT EXISTS measurement_details (
+          public_key TEXT NOT NULL, at REAL NOT NULL, pairs REAL, routes INTEGER,
+          betweenness REAL, graph_rank REAL, PRIMARY KEY(public_key,at));
+        CREATE TABLE IF NOT EXISTS collection_schedule (
+          public_key TEXT PRIMARY KEY, next_at REAL NOT NULL DEFAULT 0,
+          attempted_at REAL, success_at REAL, state TEXT, error TEXT);
+        CREATE TABLE IF NOT EXISTS collection_control (
+          id INTEGER PRIMARY KEY CHECK(id=1), next_at REAL NOT NULL DEFAULT 0);
+        INSERT OR IGNORE INTO collection_control(id) VALUES(1);
         CREATE INDEX IF NOT EXISTS performance_marker_key ON markers(public_key,at);
         ''')
         with db:
@@ -75,10 +89,86 @@ def record_analyzer(key, at, data, path=None):
         db.execute('INSERT OR IGNORE INTO measurements VALUES(?,?,?,?,?,?,?,?)',
           (key, int(at * 1000000), at, number(stat.get('relayCount1h')), number(stat.get('relayCount24h')),
            len(peers) if roles_known else None, sum(bidirectional(p) for p in peers.values()) if roles_known else None, number(data['metrics'].get('degree'))))
-        db.execute('DELETE FROM measurements WHERE at<?', (at-RETENTION,))
-        db.execute('''DELETE FROM measurements WHERE rowid IN
-          (SELECT rowid FROM measurements ORDER BY at DESC LIMIT -1 OFFSET ?)''', (MAX_SAMPLES,))
+        db.execute('INSERT OR IGNORE INTO measurement_details VALUES(?,?,?,?,?,?)',
+          (key,at,number(stat.get('pairsServed')),len(data['detail']['pathsThroughNode']),
+           number(data['metrics'].get('betweenness')),number(data['metrics'].get('rank'))))
+        for row in data['detail'].get('relayTimeline',[]):
+            # Only complete, explicitly returned hourly buckets. Absent hours are
+            # unknown, never inferred zero. UTC offset required; preserve instant.
+            try:
+                stamp=datetime.fromisoformat(row['bucket'].replace('Z','+00:00'))
+                hour=stamp.timestamp()
+                count=row['count']
+                if stamp.tzinfo is None or hour%3600 or type(count) is not int or count<0:
+                    continue
+                if not max(at-RETENTION,state['min_at'])<=hour or hour+3600>at:
+                    continue
+            except (KeyError,ValueError,TypeError,OverflowError,AttributeError):
+                continue
+            db.execute('''INSERT INTO hourly_relays VALUES(?,?,?,?)
+              ON CONFLICT(public_key,at) DO UPDATE SET count=excluded.count,retrieved_at=excluded.retrieved_at
+              WHERE excluded.retrieved_at>hourly_relays.retrieved_at''', (key,int(hour),count,at))
+        prune(db,at)
 
+
+
+def prune(db, now):
+    for table in ('measurements','hourly_relays','measurement_details'):
+        db.execute(f'DELETE FROM {table} WHERE at<?',(now-RETENTION,))
+        db.execute(f'DELETE FROM {table} WHERE rowid IN (SELECT rowid FROM {table} ORDER BY at DESC LIMIT -1 OFFSET ?)',(MAX_SAMPLES,))
+
+
+def hourly(key,start,end):
+    with database() as db:
+        return [dict(r) for r in db.execute('SELECT * FROM hourly_relays WHERE public_key=? AND at>=? AND at+3600<=? ORDER BY at',(key,start,end))]
+
+
+def collection_status(key):
+    with database() as db:
+        row=db.execute('SELECT * FROM collection_schedule WHERE public_key=?',(key,)).fetchone()
+        return dict(row) if row else None
+
+
+def performance_summary(key,start,now,local,latest):
+    rows=hourly(key,start,now)
+    first_hour=math.ceil(start/3600)*3600
+    end_hour=int(now//3600)*3600
+    expected=max(0,int((end_hour-first_hour)//3600))
+    # Compare equally sized completed hourly halves, with complete evidence only.
+    half=expected//2
+    split=end_hour-half*3600
+    selected=[r for r in rows if end_hour-2*half*3600<=r['at']<end_hour]
+    before=[r['count'] for r in selected if r['at']<split]
+    after=[r['count'] for r in selected if r['at']>=split]
+    reliable=half>0 and len(before)==half and len(after)==half
+    trend='Not enough complete history to assess a trend.'
+    percent=None
+    if reliable:
+        b,a=sum(before),sum(after)
+        if a==b: trend='Observed hourly forwarding was unchanged between equal periods.'
+        elif b:
+            percent=100*(a-b)/b
+            trend=f"Observed hourly forwarding was {abs(percent):.1f}% {'higher' if a>b else 'lower'} in the recent half of this period."
+        else: trend='Forwarding was observed after a recorded zero baseline; a percentage is unavailable.'
+    latest_hour=rows[-1] if rows else None
+    fresh=latest and 0<=now-latest['at']<=13*3600
+    activity=('Forwarding observed' if latest_hour['count']>0 else 'No forwarding in latest recorded hour') if latest_hour and now-latest_hour['at']<=13*3600 else 'No recent hourly evidence'
+    with database() as db:
+        details=db.execute('SELECT * FROM measurement_details WHERE public_key=? AND at<=? ORDER BY at DESC LIMIT 1',(key,now)).fetchone()
+    share=100*local['copies']/local['network'] if local.get('copies') is not None and local.get('network') and local.get('source','').startswith('Optimization Analysis') else None
+    context='Companion network observations provide separate context; their reception coverage is not a measure of total mesh traffic.'
+    if reliable:
+        network_before=passive(key,end_hour-2*half*3600,split,3600).get('network')
+        network_after=passive(key,split,end_hour,3600).get('network')
+        if network_before and network_after is not None:
+            pct=100*(network_after-network_before)/network_before
+            context=f"Over the same periods, Companion received network traffic was {abs(pct):.1f}% {'higher' if pct>=0 else 'lower'}. Different source coverage prevents attributing this difference to the repeater."
+    return {'activity':activity,'trend':trend,'trend_complete':reliable,'trend_percent':percent,
+        'hourly_observed':len(rows),'hourly_expected':expected,'hourly_total':sum(r['count'] for r in rows) if rows else None,
+        'first_hour':rows[0]['at'] if rows else None,'last_hour':latest_hour['at'] if rows else None,
+        'network_context':context,'snapshot_recent':bool(fresh),'companion_share':share,'details':dict(details) if details else None,
+        'collection':collection_status(key),
+        'explanation':'Higher activity is not automatically better performance. Network traffic, observer coverage and routing can change; these observations do not prove delivery success.'}
 
 def import_verified(rows, path=None):
     with database(path) as db:
@@ -144,6 +234,8 @@ def remove_repeater(key, path=None):
         db.execute('UPDATE lifecycle SET deleted=1,generation=generation+1 WHERE public_key=?', (key,))
         db.execute('DELETE FROM measurements WHERE public_key=?', (key,))
         db.execute('DELETE FROM markers WHERE public_key=?', (key,))
+        for table in ('hourly_relays','measurement_details','collection_schedule'):
+            db.execute(f'DELETE FROM {table} WHERE public_key=?', (key,))
 
 
 def measurements(key, start, end):
@@ -243,17 +335,25 @@ def comparison(key, marker, days, now, all_markers):
         for row in measurements(key,start, min(stop,now)+0.000001):
             if row['at']-3600 >= start and (not samples or row['at']-samples[-1]['at'] >= 3600):
                 samples.append(row)
+        hours=hourly(key,start,min(stop,now))
         def mean(field):
             values = [r[field] for r in samples if r[field] is not None]
+            return sum(values)/len(values) if values else None
+        with database() as db:
+            detail_rows=[dict(r) for r in db.execute('SELECT * FROM measurement_details WHERE public_key=? AND at>=? AND at<? ORDER BY at',(key,start,min(stop,now)))]
+        detail_hours={int(r['at']//3600):r for r in detail_rows}
+        def detail_mean(field):
+            values=[r[field] for r in detail_hours.values() if r[field] is not None]
             return sum(values)/len(values) if values else None
         neighbor_readings={int(r['at']//3600):r['observed'] for r in optimizer_samples(key,start,min(stop,now))}
         result['windows'][name] = {'start':start,'end':stop,'observed_until':min(stop,now),
             'values':{'companion_packets':p['copies'],'distinct_packets':p['unique'],'observed_routes':p['routes'],
-                      'companion_network_packets':p['network'],'analyzer_hourly_relays_mean':mean('relay_1h'),
+                      'companion_network_packets':p['network'],'analyzer_hourly_relays_mean':sum(r['count'] for r in hours)/len(hours) if hours else mean('relay_1h'),
                       'analyzer_neighbors_mean':mean('neighbors'),'analyzer_bidirectional_mean':mean('two_way'),
+                      'analyzer_pairs_mean':detail_mean('pairs'),'analyzer_routes_mean':detail_mean('routes'),
                       'optimizer_neighbors_mean':sum(neighbor_readings.values())/len(neighbor_readings) if neighbor_readings else None},
             'optimizer_samples':len(neighbor_readings),
-            'analyzer_samples':len(samples),'expected_hourly_samples':int(width//3600),
+            'analyzer_samples':len(hours) if hours else len(samples),'analyzer_source':'Original hourly buckets' if hours else 'Legacy rolling 1h samples','expected_hourly_samples':int(width//3600),
             'companion_source':p.get('source','No saved Companion observations'),
             'companion_buckets_with_packets':sum(b['copies'] is not None for b in p['bins']),
             'first_companion':p['first'],'last_companion':p['last']}
@@ -263,8 +363,8 @@ def comparison(key, marker, days, now, all_markers):
             result['warnings'].append(p['error'])
         if p['first'] is None or p['first']>start+3600 or p['last']<min(stop,now)-3600:
             result['warnings'].append(f'{name.title()} Companion observations do not span the full window.')
-        if len(samples)<int(width//3600):
-            result['warnings'].append(f'{name.title()} analyzer coverage is incomplete ({len(samples)}/{int(width//3600)} non-overlapping hourly samples).')
+        if (len(hours) if hours else len(samples))<int(width//3600):
+            result['warnings'].append(f'{name.title()} analyzer coverage is incomplete ({len(hours) if hours else len(samples)}/{int(width//3600)} non-overlapping hourly samples).')
         if p.get('trimmed_at') and p['trimmed_at']>=start:
             result['warnings'].append(f'{name.title()} Companion history may have been trimmed.')
     before,after = (result['windows'][n]['values'] for n in ('before','after'))
@@ -274,6 +374,8 @@ def comparison(key, marker, days, now, all_markers):
         result['differences'][field] = {'before':b,'after':a,'absolute':a-b if a is not None and b is not None else None,
             'percent':100*(a-b)/b if not collecting and a is not None and b is not None and b!=0 else None,
             'reason':'Window still collecting' if collecting else 'Missing observations' if a is None or b is None else 'Zero baseline' if b==0 else None}
+        if field=='analyzer_hourly_relays_mean' and any(w['analyzer_samples']<w['expected_hourly_samples'] for w in result['windows'].values()):
+            result['differences'][field].update(percent=None,reason='Incomplete hourly observations')
     overlap = [m['id'] for m in all_markers if m['id']!=marker['id'] and marker['at']-width<=m['at']<marker['at']+width]
     if overlap:
         result['warnings'].append(f'{len(overlap)} other logged changes overlap these windows.')
@@ -288,7 +390,7 @@ def comparison(key, marker, days, now, all_markers):
         if change['absolute']==0:
             text=f'The recorded {label} was unchanged.'
         elif change['percent'] is None:
-            text=f'The recorded {label} increased from a zero baseline; a percentage is unavailable.'
+            text=f'The recorded {label} differs, but a percentage is unavailable ({change["reason"]}).'
         else:
             text=f"The recorded {label} was {abs(change['percent']):.1f}% {'higher' if change['percent']>0 else 'lower'} in the after window."
         result['interpretation']=text+' Coverage is incomplete or uncertain; this is an activity difference, not a delivery-success rate. '+result['interpretation']
@@ -317,7 +419,7 @@ def overview(key, days, now=None, marker_id=None, compare_days=7):
             bins[at].update({f:r[f] for f in ('relay_1h','relay_24h','neighbors','two_way')})
             bins[at]['analyzer_at']=r['at']
     with database() as db:
-        db.execute('DELETE FROM measurements WHERE at<?', (now-RETENTION,))
+        prune(db,now)
         latest = db.execute('SELECT * FROM measurements WHERE public_key=? AND at<=? ORDER BY at DESC LIMIT 1', (key,now)).fetchone()
         latest = dict(latest) if latest else None
     for reading in optimizer_samples(key,start,now):
@@ -325,13 +427,23 @@ def overview(key, days, now=None, marker_id=None, compare_days=7):
         if at in bins:
             bins[at]['optimizer_neighbors']=reading['observed']
             bins[at]['optimizer_at']=reading['at']
+    # Hourly series is distinct from rolling snapshot totals. Bucket aggregates
+    # contain only explicitly observed hours; never bridge absent hours.
+    hour_rows=hourly(key,start,now)
+    for b in bins.values():
+        h=[r for r in hour_rows if b['at']<=r['at']<b['at']+step]
+        b['hourly_relays']=sum(r['count'] for r in h)/len(h) if h else None
+        b['hourly_count']=len(h)
+        b['hourly_at']=h[-1]['at'] if h else None
     neighbor = optimizer_neighbors(key,now)
     result = {'ok':True,'public_key':key,'revision':state['generation'],'days':days,'now':now,'start':start,'step':step,
               'local':{k:v for k,v in local.items() if k!='bins'},'analyzer':latest,'optimizer_neighbors':neighbor,
               'timeline':list(bins.values()),'markers':journal,
+              'summary':performance_summary(key,start,now,local,latest),
+              'hourly_timeline':[{'at':h,'hourly_at':h,'hourly_relays':next((r['count'] for r in hour_rows if r['at']==h),None)} for h in range(math.ceil(start/3600)*3600,int(now//3600)*3600,3600)],
               'analyzer_buckets':sum(b['analyzer_at'] is not None for b in bins.values()),
               'notes':['Companion values are received packet copies with this repeater in a collision-checked path, not proven direct forwarding or delivery success.',
-                       'Analyzer chart points are the latest saved measurement per bucket; rolling counts are not added. Blank intervals are collection gaps.',
+                       'Hourly Analyzer values retain original timestamps; longer chart intervals show means of available hours, with coverage shown in details. Reach is the latest snapshot per interval. Missing hours remain unknown; rolling totals are never added.',
                        'Observations from different sources are shown separately, never added into a performance score.']}
     if marker_id is not None:
         marker = next((m for m in journal if m['id']==marker_id),None)

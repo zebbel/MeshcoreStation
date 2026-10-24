@@ -135,7 +135,8 @@ def test_exact_comparison_windows_nonoverlap_zero_and_missing_baselines(stores):
     assert b['values']['analyzer_hourly_relays_mean']==5
     assert a['values']['analyzer_hourly_relays_mean']==15
     assert result['differences']['companion_packets']['percent']==100
-    assert result['differences']['analyzer_hourly_relays_mean']['percent']==200
+    assert result['differences']['analyzer_hourly_relays_mean']['percent'] is None
+    assert result['differences']['analyzer_hourly_relays_mean']['reason']=='Incomplete hourly observations'
     assert len(result['overlapping_markers'])==1 and any('incomplete' in w for w in result['warnings'])
     assert 'Correlation does not prove' in result['interpretation']
     empty=p.comparison(OTHER,marker,7,NOW,[])

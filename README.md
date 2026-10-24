@@ -1,4 +1,4 @@
-# MeshcoreStation 4.1.0
+# MeshcoreStation 4.2.0
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -9,14 +9,15 @@ is **available on demand without activation**, with live operation confirmed by 
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
 
-## Changes in 4.1.0
+## Changes in 4.2.0
 
-Repeater Performance is the first subsection under Repeater Optimizer. It provides
-four plain-English indicators, 24h/7d/30d charts, a persistent local change journal
-and equal-window before/after comparisons. It reuses Companion and optimizer
-records and archives successful analyzer snapshots without adding rolling counts.
-No performance score or delivery-success claim is generated. Logging changes
-never sends commands; verified configuration audits create markers automatically.
+Repeater Performance now starts with a plain-English overview of activity,
+connectivity, contribution and trends. Detailed Statistics, Performance History
+and Performance Changes are separately expandable. The station automatically
+collects Analyzer history every 12 hours for managed repeaters, even with no open
+dashboard. Original hourly buckets are deduplicated across overlapping responses;
+missing evidence stays unknown. Existing journal markers and comparisons remain.
+No performance score, delivery-success claim or extra radio traffic is generated.
 
 See [Repeater Performance](docs/repeater-performance.md) for collection gaps,
 storage bounds, comparisons and change-marker behavior.
@@ -82,8 +83,9 @@ cache is stale. There is no activation switch or environment setting. HTTP 403 /
 1010 is reported as unavailable, never as zero traffic. There is no bypass,
 browser impersonation, cookie reuse or continuous polling.
 
-Snapshots are fetched only on opening the subsection or pressing Refresh Now,
-cached for five minutes in a separate local database, and retained after failures.
+Snapshots are fetched on demand and by the independent 12-hour server history
+collector, cached for five minutes, and retained after failures. Provider blocks
+pause scheduled collection; unavailable data is never converted to zero activity.
 Read [external monitoring](docs/network-monitoring.md) for source-access limits.
 Captured fixture data is used only in tests, never as production fallback data.
 

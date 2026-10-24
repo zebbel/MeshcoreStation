@@ -22,15 +22,17 @@ HTTPS host, fixed endpoint templates and strictly validated 64-digit public keys
 Redirects are refused. Responses have a 2 MiB cap, bounded socket/body waits and a
 25-second refresh budget. One short retry is allowed for transient gateway
 502/503/504 failures; other failures are not immediately retried. 403 and 429
-establish a shared five-minute cooldown, including manual refreshes and other keys.
+establish a shared cooldown of at least five minutes, including manual refreshes
+and other keys; longer Retry-After values are respected and cooldowns survive restarts.
 
 ## Loading and storage
 
 Opening the subsection reads the saved snapshot first. If stale (or missing), it starts one refresh. Fresh data is cached for five minutes.
 Refresh Now explicitly refreshes within access/cooldown limits. Closing the
 section or parent aborts/ignores the browser request; an already dispatched
-server request can finish. No new refresh is scheduled while closed and there
-is no external polling worker or interval. Repeater changes invalidate old UI
+server request can finish. No new browser refresh is scheduled while closed. Separately, the server collects
+history for managed repeaters every 12 hours, regardless of dashboard visibility.
+Provider blocks/rate limits pause the scheduled queue for at least 12 hours. Repeater changes invalidate old UI
 responses. One refresh at a time is allowed per application process.
 
 `data/analyzer-cache.db` stores the last successful complete snapshot and retrieval
@@ -140,5 +142,8 @@ A successful complete refresh also saves compact, timestamped measurements for
 [Repeater Performance](repeater-performance.md). Cache reads do not generate new
 measurements; opening Performance may import the existing saved snapshot using its
 original retrieval timestamp. Historical samples survive cache replacement.
-Rolling counts are not added together. A history-write failure leaves monitoring
+Original complete hourly relay buckets are deduplicated by repeater and UTC hour;
+later corrections replace values. Rolling counts are not added together. The
+server collector operates every 12 hours with persistent scheduling and no radio
+traffic; see Performance documentation for restart, retention and gap semantics. A history-write failure leaves monitoring
 available and displays a warning. Access failures do not create zero-valued samples.

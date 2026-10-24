@@ -1,41 +1,40 @@
-# MeshcoreStation 4.1.0 — V4 branch prerelease
+# MeshcoreStation 4.2.0 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.1.0` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.2.0` (prerelease, not latest stable). V3 main is unchanged.
 
-- Added Repeater Performance above Statistics, sharing selection, dashboard styling,
-  lazy loading and independently collapsible behavior. Four observed-contribution
-  indicators and 24h/7d/30d charts keep Companion, optimizer and analyzer evidence
-  separate, with readable names and explicit gaps rather than performance scores.
-- Added a permanent per-repeater local change journal with manual timestamps,
-  edit/delete controls, verified-configuration markers, chart lines and accessible
-  comparison controls. Annotation writes never send radio/configuration commands.
-- Added equal 24h/3d/7d before/after windows (7d default), measured values, percentage
-  differences, plain-English interpretation and warnings for missing/partial data,
-  overlapping changes, source differences and unknown historical collector uptime.
-- Successful analyzer refreshes archive bounded timestamped measurements separately
-  from the five-minute cache. Rolling windows are never added; before/after means
-  use contained non-overlapping hourly samples. Existing errors, cooldowns, last
-  successful snapshots and no-background-polling behavior remain intact.
+- Added unattended Analyzer collection every 12 hours for managed repeaters.
+  Durable schedules, crash leases, one-minute repeater spacing and global provider
+  cooldowns handle restarts and connectivity failures without a catch-up burst.
+  No new mesh radio traffic is generated. Existing five-minute caching and manual
+  Network Monitoring refresh remain available; browsers do not poll.
+- Preserved original complete hourly relay buckets, deduplicated by repeater and
+  UTC timestamp. Overlapping responses replace corrections rather than adding
+  rolling totals. Compact snapshot history includes neighbor/bidirectional counts,
+  graph metrics, reported communication pairs and returned route-pattern counts.
+- Simplified Performance Overview to activity, connectivity, contribution and trend
+  with explicit history coverage and collection status. Technical measurements,
+  history charts and the unchanged journal are separately expandable. Sources
+  remain separate, missing hours break chart lines, and neighbor axes are integers.
+- Preserved manual/verified change markers and equal 24h/3d/7d comparisons. Original
+  hourly buckets are preferred; missing hourly evidence withholds relay percentage
+  comparisons and trend assessments. Network traffic context and missing/partial
+  coverage warnings prevent interpreting activity differences as proven improvement.
 
-The additive repeater-performance.db file leaves existing databases compatible.
-Measurements retain up to 400 days and 250,000 shared rows; markers are not aged out.
-Removing a managed repeater explicitly removes its journal and measurements.
-Optimizer resets retain the separate journal/archive. Administrator authorization,
-confirmation/readback protections and unrelated experimental optimization features
-are preserved. Correlation is not proof of causation or successful radio delivery.
+The existing performance database gains additive tables; existing records and
+other databases remain compatible. Measurement tables retain up to 400 days and
+250,000 rows each across managed repeaters. Permanent markers are not aged out.
+Existing administrator controls, explicit confirmations/readback, maps, names,
+telemetry, Room Server and unrelated experimental optimization features remain.
 
-Validation covers historical storage, retention, cache deduplication, source
-separation, verified-marker hooks/backfill, CRUD/tombstones, timestamps, comparisons,
-missing data, switching/races and local API protections. Full Python/JavaScript
-regression plus Chromium desktop/mobile light/dark visual checks precede publication.
-Browser tests use captured analyzer formats and synthetic local historical records;
-they cannot establish historical coverage or physical radio delivery success.
+Limits: station service/connectivity/provider access are required. Provider history
+cannot recover older missing data after extended outages. Relationships are
+inferred; activity changes, graph metrics and communication-pair counts do not
+prove direct radio links, successful delivery or causation. Historical Companion
+uptime is unknown. Screenshots/tests use captured formats and synthetic local
+history, not a new verification of external API access or RF performance.
 
-Validated: 496 Python tests and all 36 JavaScript suites passed. Chromium passed
-both desktop (1280px) and mobile (390px) in light/dark modes, with actual local API
-and database journal CRUD/reload persistence, automatic markers, exact timestamp
-preservation, all history/comparison windows, SVG line geometry/selection, responsive
-chart resizing, table scrolling and stale-selection isolation. Existing maps,
-analysis iframe theme/resizing and monitoring regressions also passed. Screenshots
-were inspected. Removal/re-add tombstones and journal revisions prevent stale
-requests from restoring deleted data; monitoring updates do not interrupt saves.
+Validation: full Python and JavaScript regression suites; simulated unattended
+collection across 60 hours with process restarts, overlapping hourly history,
+retention, errors/cooldowns and crash leases; real Chromium desktop/mobile in both
+themes, charts/gaps/marker geometry, local journal CRUD/reload, comparisons, resizing,
+shared selection and existing map/iframe regressions. See release report for counts.

@@ -20,7 +20,8 @@ with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory
     owner.close();passive_stats.initialize();passive_stats.track(key);passive_stats.track(other)
     # Historical, synthetic local observations and real Analyzer response shapes.
     # This disposable test app has no companion/radio worker or external caller.
-    import time, json
+    import time, json, copy
+    from datetime import datetime, timezone
     from contextlib import closing
     from meshcorestation.storage import performance_store, optimizer_store, advisor_history
     optimizer_store.initialize()
@@ -30,7 +31,13 @@ with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory
         'detail':'node_detail_24h.json','reach':'node_reach_1d.json','metrics':'graph_metrics.json'}.items()}
     for hour in range(0,31*24,6):
         if 72<hour<96: continue # An intentional observation gap.
-        performance_store.record_analyzer(key,now-hour*3600,sample)
+        at=now-hour*3600
+        snapshot=copy.deepcopy(sample)
+        end=int(at//3600)*3600
+        snapshot['detail']['relayTimeline']=[{'bucket':datetime.fromtimestamp(h,timezone.utc).isoformat(),'count':5 if hour<48 else 3} for h in range(end-24*3600,end,3600) if not 72<(now-h)/3600<96]
+        performance_store.record_analyzer(key,at,snapshot)
+    with performance_store.database() as db:
+        db.execute("INSERT INTO collection_schedule VALUES(?,?,?,?,?,?)",(key,now+43200,now,now,'available',None))
     with closing(passive_stats.connect()) as db,db:
         for hour in range(31*24):
             if 72<hour<96: continue

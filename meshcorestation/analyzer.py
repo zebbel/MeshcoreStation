@@ -1,4 +1,5 @@
-"""On-demand read-only Analyzer integration. No worker, radio, cookies or browser identity.
+"""Read-only Analyzer client shared by on-demand UI and scheduled history collection.
+No radio, cookies or browser identity.
 
 Fixtures verify response formats only, not live access or provider permission.
 Access restrictions are surfaced as errors without any attempt to bypass them.
@@ -49,7 +50,7 @@ class NoRedirect(HTTPRedirectHandler):
 def transport(url, headers, timeout):
     """Fixed-host caller; reject redirects, limit body and socket wait."""
     req = Request(url, headers={'Accept': 'application/json',
-                               'User-Agent': 'MeshcoreStation/4.1.0 (on-demand analyzer client)', **headers})
+                               'User-Agent': 'MeshcoreStation/4.2.0 (read-only analyzer client)', **headers})
     try:
         with build_opener(NoRedirect()).open(req, timeout=timeout) as response:
             deadline = time.monotonic() + timeout
@@ -66,7 +67,7 @@ def transport(url, headers, timeout):
             return response.status, dict(response.headers), body
     except HTTPError as exc:
         # Never read error pages, follow redirects or reuse browser headers.
-        return exc.code, {}, b''
+        return exc.code, dict(exc.headers or {}), b''
     except (TimeoutError, URLError, OSError) as exc:
         raise AnalyzerError('unavailable', 'External monitoring unavailable: request timed out or connection failed.') from exc
 
@@ -139,6 +140,7 @@ class AnalyzerService:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         db = sqlite3.connect(self.path, timeout=3)
         db.execute('CREATE TABLE IF NOT EXISTS analyzer_cache (public_key TEXT PRIMARY KEY, fetched_at REAL NOT NULL, payload TEXT NOT NULL, validators TEXT NOT NULL)')
+        db.execute('CREATE TABLE IF NOT EXISTS analyzer_policy (id INTEGER PRIMARY KEY CHECK(id=1), until_at REAL NOT NULL, state TEXT NOT NULL, error TEXT NOT NULL)')
         try:
             with db: yield db
         finally:
@@ -161,10 +163,12 @@ class AnalyzerService:
             from meshcorestation.storage import performance_store
             performance_store.remove_repeater(key, self.history_path)
 
-    def snapshot(self, key, force=False, cache_only=False):
+    def snapshot(self, key, force=False, cache_only=False, expected_revision=None):
         key = public_key(key)
         with self.cache_lock:
             revision = self.revisions.get(key, 0)
+            if expected_revision is not None and revision != expected_revision:
+                return {'state':'removed','error':'Repeater removed before scheduled collection.','data':None}
             previous = self.cached(key)
         now = self.clock()
         stale = previous is None or not 0 <= now-previous[0] < TTL
@@ -172,6 +176,11 @@ class AnalyzerService:
                   'data': previous[1] if previous else None,
                   'fetched_at': previous[0] if previous else None, 'stale': stale,
                   'state': 'cached' if previous else 'empty', 'error': None}
+        with self.connection() as db:
+            policy=db.execute('SELECT until_at,state,error FROM analyzer_policy WHERE id=1').fetchone()
+        if policy and policy[0]>self.blocked_until:
+            self.blocked_until=policy[0]
+            self.blocked_error=AnalyzerError(policy[1],policy[2])
         if now < self.blocked_until:
             return {**result, 'state': self.blocked_error.state, 'error': str(self.blocked_error)}
         if cache_only: return result
@@ -194,8 +203,16 @@ class AnalyzerService:
                     self.blocked_error = AnalyzerError('blocked', 'External monitoring unavailable: Analyzer denied access (HTTP 403 / possible Cloudflare 1010). No bypass or automatic retry will be attempted during the five-minute cooldown.')
                     raise self.blocked_error
                 if status == 429:
-                    self.blocked_until = self.clock()+TTL
-                    self.blocked_error = AnalyzerError('rate_limited', 'External monitoring unavailable: Analyzer rate limit (HTTP 429). Wait five minutes before retrying.')
+                    from email.utils import parsedate_to_datetime
+                    retry=next((v for k,v in headers.items() if k.lower()=='retry-after'),None)
+                    try:
+                        wait=float(retry)
+                    except (ValueError,TypeError):
+                        try: wait=parsedate_to_datetime(retry).timestamp()-self.clock()
+                        except (ValueError,TypeError,AttributeError,OverflowError): wait=TTL
+                    if not math.isfinite(wait): wait=TTL
+                    self.blocked_until = self.clock()+max(TTL,wait)
+                    self.blocked_error = AnalyzerError('rate_limited', 'External monitoring unavailable: Analyzer rate limit (HTTP 429). Retry after the provider cooldown (at least five minutes).')
                     raise self.blocked_error
                 if status == 304 and previous:
                     data[name], validators[name] = previous[1][name], old_headers
@@ -222,6 +239,9 @@ class AnalyzerService:
                     history_error = 'Performance history could not be saved. Monitoring snapshot is still available.'
             return {**result, 'data': data, 'fetched_at': at, 'stale': False, 'state': 'available', 'history_error': history_error}
         except AnalyzerError as exc:
+            if exc.state in ('blocked','rate_limited'):
+                with self.connection() as db:
+                    db.execute('INSERT OR REPLACE INTO analyzer_policy VALUES(1,?,?,?)',(self.blocked_until,exc.state,str(exc)))
             return {**result, 'state': exc.state, 'error': str(exc)}
         except (TimeoutError, URLError, OSError):
             return {**result, 'state': 'unavailable', 'error': 'External monitoring unavailable: request timed out or connection failed.'}
