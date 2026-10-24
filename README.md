@@ -54,8 +54,9 @@ sections below them are:
    paths. Command Details switches route overlays without rebuilding the map.
 2. **Repeater Management** — shared repeater selector, add/remove controls,
    remote management and telemetry with voltage and temperature charts.
-3. **Repeater Optimizer** — three independent, initially collapsed subsections:
-   Repeater Statistics, Optimization Analysis and Repeater Network Monitoring.
+3. **Repeater Optimizer** — four independent, initially collapsed subsections:
+   Repeater Performance, Repeater Statistics, Optimization Analysis and Repeater
+   Network Monitoring.
 4. **Room Server** — room identities, membership, messages and bot integration.
 
 Collapsed panels defer their data loading. Existing radio monitoring schedules

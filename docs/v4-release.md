@@ -12,7 +12,7 @@ Branch: `v4.0.0`. Tag: `v4.1.0` (prerelease, not latest stable). V3 main is unch
 - Added equal 24h/3d/7d before/after windows (7d default), measured values, percentage
   differences, plain-English interpretation and warnings for missing/partial data,
   overlapping changes, source differences and unknown historical collector uptime.
-- Successful analyzer refreshes archive bounded 15-minute measurements separately
+- Successful analyzer refreshes archive bounded timestamped measurements separately
   from the five-minute cache. Rolling windows are never added; before/after means
   use contained non-overlapping hourly samples. Existing errors, cooldowns, last
   successful snapshots and no-background-polling behavior remain intact.

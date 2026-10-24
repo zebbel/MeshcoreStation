@@ -26,6 +26,7 @@ def database(path=None):
           relay_1h REAL, relay_24h REAL, neighbors INTEGER, two_way INTEGER, degree REAL,
           PRIMARY KEY(public_key,bucket));
         CREATE INDEX IF NOT EXISTS performance_measurement_at ON measurements(at);
+        CREATE UNIQUE INDEX IF NOT EXISTS performance_measurement_instant ON measurements(public_key,at);
         CREATE TABLE IF NOT EXISTS markers (
           id INTEGER PRIMARY KEY AUTOINCREMENT, public_key TEXT NOT NULL, at REAL NOT NULL,
           description TEXT NOT NULL, source_id TEXT UNIQUE, source_at REAL,
@@ -43,7 +44,7 @@ def number(value):
 
 
 def record_analyzer(key, at, data, path=None):
-    """One latest snapshot per 15-minute slot. Rolling counts are NEVER summed."""
+    """Keep each fresh retrieval; exact cached timestamps deduplicate. Never sum rolling counts."""
     peers = [r for r in data['reach']['neighbourList'] if isinstance(r.get('role'),str) and r['role'].lower() == 'repeater']
     peers = {r.get('pubkey'): r for r in peers if r.get('pubkey')}
     def bidirectional(n):
@@ -52,12 +53,8 @@ def record_analyzer(key, at, data, path=None):
     roles_known=all(isinstance(n.get('role'),str) and n['role'].strip() for n in data['reach']['neighbourList'])
     stat = data['detail']['stat']
     with database(path) as db:
-        db.execute('''INSERT INTO measurements VALUES(?,?,?,?,?,?,?,?)
-          ON CONFLICT(public_key,bucket) DO UPDATE SET at=excluded.at,
-          relay_1h=excluded.relay_1h,relay_24h=excluded.relay_24h,
-          neighbors=excluded.neighbors,two_way=excluded.two_way,degree=excluded.degree
-          WHERE excluded.at>measurements.at''',
-          (key, int(at // 900), at, number(stat.get('relayCount1h')), number(stat.get('relayCount24h')),
+        db.execute('INSERT OR IGNORE INTO measurements VALUES(?,?,?,?,?,?,?,?)',
+          (key, int(at * 1000000), at, number(stat.get('relayCount1h')), number(stat.get('relayCount24h')),
            len(peers) if roles_known else None, sum(bidirectional(p) for p in peers.values()) if roles_known else None, number(data['metrics'].get('degree'))))
         db.execute('DELETE FROM measurements WHERE at<?', (at-RETENTION,))
         db.execute('''DELETE FROM measurements WHERE rowid IN
@@ -281,7 +278,7 @@ def overview(key, days, now=None, marker_id=None, compare_days=7):
     step = 3600 if days==1 else 21600 if days==7 else DAY
     local = passive(key,start,now,step)
     archive = measurements(key,start,now+0.000001)
-    bins = {b['at']:{**b,'relay_1h':None,'relay_24h':None,'neighbors':None,'two_way':None,'analyzer_at':None,'optimizer_neighbors':None} for b in local['bins']}
+    bins = {b['at']:{**b,'relay_1h':None,'relay_24h':None,'neighbors':None,'two_way':None,'analyzer_at':None,'optimizer_neighbors':None,'optimizer_at':None} for b in local['bins']}
     for r in archive:
         at = int(r['at']//step)*step
         if at in bins:
@@ -293,7 +290,9 @@ def overview(key, days, now=None, marker_id=None, compare_days=7):
         latest = dict(latest) if latest else None
     for reading in optimizer_samples(key,start,now):
         at=int(reading['at']//step)*step
-        if at in bins: bins[at]['optimizer_neighbors']=reading['observed']
+        if at in bins:
+            bins[at]['optimizer_neighbors']=reading['observed']
+            bins[at]['optimizer_at']=reading['at']
     neighbor = optimizer_neighbors(key,now)
     result = {'ok':True,'public_key':key,'days':days,'now':now,'start':start,'step':step,
               'local':{k:v for k,v in local.items() if k!='bins'},'analyzer':latest,'optimizer_neighbors':neighbor,

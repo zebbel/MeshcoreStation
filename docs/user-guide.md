@@ -23,7 +23,7 @@ history / settings. Temperature is optional and shares the voltage request. Repo
 templates support placeholders, validation and live preview. Daily reports reuse
 the latest successful sample with its original timestamp.
 
-Repeater Optimizer contains three independent disclosures:
+Repeater Optimizer contains four independent disclosures:
 
 - Repeater Performance: four observed-contribution indicators, 24h/7d/30d charts,
   a local change journal and 24h/3d/7d before/after windows. Saved data loads only

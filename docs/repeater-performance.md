@@ -19,7 +19,7 @@ view rereads local history after a monitoring refresh finishes.
 - **Mesh Contribution:** distinct observed packet identifiers and route patterns,
   alongside all received Companion network packets as context. Packet identifiers
   are not proof of delivered messages. Counts from different stores are not added.
-- **Data Quality:** latest observation time, saved analyzer intervals, missing data
+- **Data Quality:** latest observation time (Recent means within the past hour), saved analyzer intervals, missing data
   and uncertain path matches. Recent observations can still be incomplete.
 
 These are measurements of observed involvement, not arbitrary performance scores,
@@ -94,8 +94,8 @@ conditions can differ between windows. Recommendations are never applied here.
 
 `data/repeater-performance.db` stores markers and necessary analyzer measurements
 (no packet bodies, session tokens or duplicate path histories). Successful complete
-analyzer refreshes save the latest sample per repeater per 15-minute slot, using
-the original retrieval timestamp. Cached reads do not advance it. Snapshots survive
+analyzer refreshes each save a measurement using the original retrieval timestamp.
+Only duplicate timestamps from rereading the same cached response are ignored. Cached reads do not advance it. Snapshots survive
 five-minute cache replacement; failures never become zero-traffic samples. Initial
 opening can import an existing cache snapshot but cannot reconstruct earlier data.
 

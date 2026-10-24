@@ -37,16 +37,16 @@ def packet(at, key=KEY, digest='payload', tracked=False, ambiguous=0):
             db.execute('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,5,1,1,1,?,?)',(at,key[:2],digest))
 
 
-def test_archive_deduplicates_cache_slots_and_never_adds_rolling_counts(stores):
+def test_archive_preserves_each_refresh_and_never_adds_rolling_counts(stores):
     p.record_analyzer(KEY,NOW,DATA);p.record_analyzer(KEY,NOW,DATA)
     changed=copy.deepcopy(DATA);changed['detail']['stat']['relayCount1h']=9
     p.record_analyzer(KEY,NOW+1,changed)
     rows=p.measurements(KEY,NOW-1,NOW+5)
-    assert len(rows)==1 and rows[0]['relay_1h']==9 and rows[0]['relay_24h']==107
+    assert len(rows)==2 and rows[0]['relay_1h']==5 and rows[1]['relay_1h']==9 and rows[0]['relay_24h']==107
     assert rows[0]['two_way']==4
     assert rows[0]['neighbors']==sum(n['role']=='Repeater' for n in DATA['reach']['neighbourList'])
     p.record_analyzer(KEY,NOW+901,DATA)
-    assert len(p.measurements(KEY,NOW-1,NOW+1000))==2
+    assert len(p.measurements(KEY,NOW-1,NOW+1000))==3
     assert p.measurements(OTHER,NOW-1,NOW+1000)==[]
     result=p.overview(KEY,1,NOW+1000)
     assert sum(b['analyzer_at'] is not None for b in result['timeline'])<len(result['timeline'])
@@ -156,7 +156,7 @@ def test_optimizer_neighbor_history_reused(stores):
         db.execute('INSERT INTO neighbors VALUES(1,?,5,10)',(OTHER,))
     data=p.overview(KEY,7,NOW)
     assert data['optimizer_neighbors']['observed']==1
-    assert any(b['optimizer_neighbors']==1 for b in data['timeline'])
+    assert any(b['optimizer_neighbors']==1 and b['optimizer_at']==NOW-100 for b in data['timeline'])
 
 
 def test_api_guards_local_crud_missing_storage_and_windows(stores,monkeypatch):
