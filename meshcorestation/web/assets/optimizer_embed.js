@@ -18,9 +18,10 @@
     window.addEventListener('message',event=>{
         if(event.origin!==location.origin||event.source!==window.parent||event.data?.type!=='meshcorestation-optimizer-theme')return;
         const palette=event.data.palette||{};
-        for(const name of ['--bg','--panel','--text','--muted','--border','--accent','--soft','--green','--red','--shadow','--control-radius','--control-padding']){
+        for(const name of ['--bg','--panel','--text','--muted','--border','--accent','--soft','--green','--red','--shadow','--control-radius','--control-padding','--optimizer-surface']){
             if(typeof palette[name]==='string'&&palette[name].length<200)document.documentElement.style.setProperty(name,palette[name]);
         }
+        if(['light','dark','light dark','only light','only dark'].includes(event.data.color_scheme))document.documentElement.style.colorScheme=event.data.color_scheme;
         schedule();
     });
     schedule();

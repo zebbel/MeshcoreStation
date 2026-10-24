@@ -1,25 +1,22 @@
-# MeshcoreStation 4.0.4
+# MeshcoreStation 4.0.5
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
 
 **V4 development/release branch: `v4.0.0`. V3 remains on `main`.**
 V4 preserves existing station and room databases. The external Analyzer feature
-is **experimental and available on demand without activation**. Offline fixture tests verify formats,
-not live access, service permission, or radio performance.
+is **available on demand without activation**, with live operation confirmed by the operator.
+Availability still depends on the external provider and deployment connectivity.
+Offline fixture tests verify formats and behavior, not access permission or radio performance.
 
-## Changes in 4.0.4
+## Changes in 4.0.5
 
-Observable Relationships now uses green for bidirectional observations, red for
-one observed direction, and gray for unknown direction. Solid lines mean reported
-medium/high confidence; dashed lines mean low confidence. Unknown confidence is
-explicitly dotted. An English legend and named connection popups explain counts,
-direction, confidence, distance and public keys. Colors and styles are independent.
-Relationships are inferred from analyzer observations and do not necessarily represent verified direct radio links.
-
-Existing name resolution, responsive layout, image-free markers and monitoring
-request/cache behavior are preserved. Interface text remains English; repeater
-names and other user or external data keep their original text.
+Repeater Network Monitoring no longer displays outdated Experimental or live-integration
+status labels following operator confirmation that it works. API errors, access
+restrictions, stale-cache notices and analyzer data limitations remain visible.
+Optimization Analysis now matches the Repeater Statistics background across its
+iframe and document, including live light/dark theme changes and responsive resizing.
+Unrelated experimental optimization suggestions are unchanged.
 
 ## Installation and upgrades
 

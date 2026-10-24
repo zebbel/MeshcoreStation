@@ -34,7 +34,7 @@ def client(tmp_path):
 def test_captured_formats_all_eight_and_semantics(client):
     service,calls,_=client
     r=service.snapshot(KEY)
-    assert r['state']=='available' and not r['live_verified'] and r['experimental']
+    assert r['state']=='available' and r['experimental'] is False and 'live_verified' not in r
     assert len(calls)==8
     data=r['data']
     assert data['detail']['stat']['relayCount24h']==107
@@ -136,7 +136,7 @@ def test_available_without_activation_or_fixture_fallback(tmp_path):
     service=a.AnalyzerService(tmp_path/'cache.db',denied)
     r=service.snapshot(KEY)
     assert len(calls)==1
-    assert r['state']=='blocked' and r['data'] is None and not r['live_verified']
+    assert r['state']=='blocked' and r['data'] is None and r['experimental'] is False
 
 
 def test_singleflight_and_per_key_isolation(client):

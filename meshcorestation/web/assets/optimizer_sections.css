@@ -1,5 +1,5 @@
 /* Geometry only. Typography, surfaces, cards and controls share statistics styles. */
-.optimizer-analysis-document { background:var(--panel); }
+.optimizer-analysis-root, .optimizer-analysis-document, .optimizer-analysis-document main { background:var(--optimizer-surface,var(--panel)); }
 .optimizer-analysis-document main { max-width:none; margin:0; padding:0; display:flow-root; min-width:0; }
 .optimizer-analysis-document[data-embedded] h1 { display:none; }
 .optimizer-analysis-document:not([data-embedded]) main { max-width:1100px; margin:auto; padding:24px; }
@@ -16,7 +16,7 @@
 .optimizer-analysis-document #message { white-space:pre-wrap; }
 .optimizer-analysis-document .result { margin:8px 0; }
 #optimization-analysis-inline { min-width:0; }
-#optimization-analysis-inline iframe { border:0; width:100%; display:block; }
+#optimization-analysis-inline iframe { background:var(--panel); border:0; width:100%; display:block; }
 @media(max-width:550px) {
  .optimizer-analysis-document .storage-grid { grid-template-columns:minmax(0,1fr); }
  .optimizer-analysis-document .scope-field,

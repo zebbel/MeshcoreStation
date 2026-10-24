@@ -31,7 +31,7 @@ Repeater Optimizer contains three independent disclosures:
   an administrator session. Connect, then return to the analysis using the button
   in management; read, review and explicitly confirm any recommendation. Disconnect
   when finished. Neighbor radio polling stays opt-in.
-- Repeater Network Monitoring: experimental external evidence, available without activation.
+- Repeater Network Monitoring: external analyzer evidence, available without activation.
   Opening reads the cache; stale or missing snapshots refresh automatically, using a five-minute cache. Refresh Now
   is manual, with no continuous polling. Errors preserve the last successful data.
 
@@ -47,7 +47,8 @@ for those procedures.
 
 The three optimizer subsections share dashboard typography, cards, controls and
 status styling. Analysis grows with its content rather than using an internally
-scrolling fixed-height iframe. Provider access failures remain visible in monitoring.
+scrolling fixed-height iframe. Provider access failures remain visible in monitoring. Analysis uses the same background
+as Repeater Statistics, synchronized across the iframe in light and dark modes.
 
 Repeater identities display names where full-key records are available. Hover or
 open details for technical keys. Identical names get key suffixes; unknown keys

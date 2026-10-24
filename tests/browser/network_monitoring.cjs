@@ -26,7 +26,7 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
        data.reach.neighbourList=peers.map((n,i)=>({...n,...cases[i]}));
       }
       if(selected===other){data.detail.node.id=other;data.detail.node.name='Second Repeater';data.detail.node.lat=49.7;data.metrics.id=other;}
-      return route.fulfill({json:{ok:true,public_key:selected,experimental:true,live_verified:false,state:'available',fetched_at:1792839600,stale:false,data,repeaters:sample.repeaters}});
+      return route.fulfill({json:{ok:true,public_key:selected,experimental:false,state:'available',fetched_at:1792839600,stale:false,data,repeaters:sample.repeaters}});
      }
      if(url.pathname==='/api/repeater-optimizer')return route.fulfill({json:sample});
      return route.continue();
@@ -47,8 +47,26 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
     assert(await frame.locator('main').evaluate(n=>document.documentElement.scrollWidth<=innerWidth+1),'iframe has no horizontal page overflow');
     const fit=await page.locator('#repeater-advisor-frame').evaluate(n=>Math.abs(n.getBoundingClientRect().height-n.contentDocument.querySelector('main').getBoundingClientRect().height));
     assert(fit<=4,'iframe height follows actual rendered content');
+    async function checkAnalysisSurface(){
+     await page.waitForFunction(()=>{const iframe=document.querySelector('#repeater-advisor-frame'),doc=iframe?.contentDocument,reference=document.querySelector('#repeater-statistics-disclosure')?.closest('.history');if(!doc||!reference)return false;const expected=getComputedStyle(reference).backgroundColor;return [doc.documentElement,doc.body,doc.querySelector('main')].every(n=>doc.defaultView.getComputedStyle(n).backgroundColor===expected)&&getComputedStyle(iframe).backgroundColor===expected&&Math.abs(iframe.getBoundingClientRect().height-doc.querySelector('main').getBoundingClientRect().height)<=4;});
+    }
+    await checkAnalysisSurface();
+    await page.emulateMedia({colorScheme:colorScheme==='dark'?'light':'dark'});await checkAnalysisSurface();
+    await page.locator('#optimization-analysis-disclosure').screenshot({path:`${output}/analysis-theme-change-${token}.png`});
+    await page.emulateMedia({colorScheme});await checkAnalysisSurface();
+    await page.evaluate(()=>{document.body.style.setProperty('--panel','rgb(32, 42, 52)');document.body.style.colorScheme='dark';});await checkAnalysisSurface();
+    assert.equal(await frame.locator('html').evaluate(n=>getComputedStyle(n).colorScheme),'dark');
+    await page.evaluate(()=>{document.body.style.removeProperty('--panel');document.body.style.removeProperty('color-scheme');});await checkAnalysisSurface();
+    await page.setViewportSize({width:viewport.width===390?844:390,height:viewport.height});await checkAnalysisSurface();
+    await page.setViewportSize(viewport);await checkAnalysisSurface();
+    await page.locator('#optimization-analysis-disclosure > summary').click();
+    await page.emulateMedia({colorScheme:colorScheme==='dark'?'light':'dark'});
+    await page.locator('#optimization-analysis-disclosure > summary').click();await checkAnalysisSurface();
+    await page.emulateMedia({colorScheme});await checkAnalysisSurface();
     await page.locator('#optimization-analysis-disclosure').screenshot({path:`${output}/analysis-${token}.png`});
     await page.locator('#repeater-network-disclosure > summary').click();
+    assert.equal(await page.locator('#repeater-network-disclosure > summary').innerText(),'Repeater Network Monitoring');
+    assert(!/experimental|live integration unverified/i.test(await page.locator('#repeater-network-disclosure').innerText()));
     const lines=page.locator('.network-map path.network-relationship');await lines.first().waitFor();
     assert.equal(await lines.count(),expectedLines);
     assert.equal(await page.locator('.network-map .leaflet-marker-icon').count(),peers.length+1);

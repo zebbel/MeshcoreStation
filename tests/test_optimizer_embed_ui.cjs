@@ -9,8 +9,9 @@ assert.equal(w.document.body.dataset.embedded,'true');assert.equal(messages.at(-
 height=1200;resize();assert.equal(messages.at(-1).height,1202);
 height=200;resize();assert.equal(messages.at(-1).height,202,'iframe shrinks as well as grows');
 const n=messages.length;resize();assert.equal(messages.length,n,'unchanged size does not produce feedback loops');
-const send=(origin,source,palette)=>w.dispatchEvent(new w.MessageEvent('message',{origin,source,data:{type:'meshcorestation-optimizer-theme',palette}}));
+const send=(origin,source,palette)=>w.dispatchEvent(new w.MessageEvent('message',{origin,source,data:{type:'meshcorestation-optimizer-theme',palette,color_scheme:'dark'}}));
 send('https://elsewhere',parent,{'--accent':'red'});assert.equal(w.document.documentElement.style.getPropertyValue('--accent'),'');
 send('http://localhost',{}, {'--accent':'red'});assert.equal(w.document.documentElement.style.getPropertyValue('--accent'),'');
-send('http://localhost',parent,{'--accent':'#123456','--unrecognized':'red'});assert.equal(w.document.documentElement.style.getPropertyValue('--accent'),'#123456');assert.equal(w.document.documentElement.style.getPropertyValue('--unrecognized'),'');
+send('http://localhost',parent,{'--accent':'#123456','--optimizer-surface':'rgb(21, 30, 42)','--unrecognized':'red'});assert.equal(w.document.documentElement.style.getPropertyValue('--accent'),'#123456');assert.equal(w.document.documentElement.style.getPropertyValue('--unrecognized'),'');
+assert.equal(w.document.documentElement.style.getPropertyValue('--optimizer-surface'),'rgb(21, 30, 42)');assert.equal(w.document.documentElement.style.colorScheme,'dark');
 dom.window.close();console.log('Analysis intrinsic resize, shrink, feedback prevention, theme synchronization and origin checks passed.');

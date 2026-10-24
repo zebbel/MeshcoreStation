@@ -1,4 +1,4 @@
-/* Experimental, on-demand external observations. No interval or background poll. */
+/* Read-only, on-demand external observations. No interval or background poll. */
 (() => {
     let attached=false, controller=null, generation=0, current='', map=null, pendingKey=null, mapRender=0, mapObserver=null, resizeHandler=null, resizeFrame=null, mapIdentityHandler=null;
     const cache=new Map(),$=id=>document.getElementById(id);
@@ -32,7 +32,7 @@
     }
     function status(r){
         const stamp=r.fetched_at?`Last successful retrieval: ${date(r.fetched_at)}. `:'';
-        $('network-status').textContent=`Experimental · live integration unverified. ${r.error||''} ${stamp}${r.data?(r.stale?'Stale saved snapshot.':'Five-minute snapshot cache.'):r.state==='empty'?'No saved snapshot.':''}`;
+        $('network-status').textContent=`${r.error||''} ${stamp}${r.data?(r.stale?'Stale saved snapshot.':'Five-minute snapshot cache.'):r.state==='empty'?'No saved snapshot.':''}`;
         $('network-status').dataset.state=r.state;
     }
     async function drawMap(data,host,id,key){

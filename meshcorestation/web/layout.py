@@ -73,8 +73,8 @@ def build_layout():
                 html.Div(id="optimization-analysis-inline")], className="optimizer-section-body")
             ], id="optimization-analysis-disclosure", className="panel-disclosure managed-repeater-section"),
             html.Details([
-                html.Summary(html.H2("Repeater Network Monitoring · Experimental")),
-                html.Div([html.P("External Analyzer observations depend on participating observers. Missing evidence does not prove poor radio connectivity. Inferred relationships are not verified direct radio links. Loads on opening with a five-minute cache. External access may be restricted; live integration remains unverified.", className="muted"),
+                html.Summary(html.H2("Repeater Network Monitoring")),
+                html.Div([html.P("External Analyzer observations depend on participating observers. Missing evidence does not prove poor radio connectivity. Inferred relationships are not verified direct radio links. Loads on opening with a five-minute cache. External access may be restricted.", className="muted"),
                 html.Div([html.Span(id="network-selected", className="stats-selected"),
                           html.Button("Refresh Now", id="network-refresh")], className="stats-controls"),
                 html.P(id="network-status", className="stats-message", role="status", **{"aria-live": "polite"}),

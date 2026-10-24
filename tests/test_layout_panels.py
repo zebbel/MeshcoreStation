@@ -71,3 +71,13 @@ def test_optimizer_subsections_use_one_shared_gutter_without_double_padding():
         section=next(n for n in nodes if getattr(n,'id',None)==key)
         assert len(section.children)==2
         assert section.children[1].className=='optimizer-section-body'
+
+
+def test_network_monitoring_has_no_obsolete_experimental_status():
+    nodes=list(walk(build_layout()))
+    section=next(n for n in nodes if getattr(n,'id',None)=='repeater-network-disclosure')
+    assert section.children[0].children.children == 'Repeater Network Monitoring'
+    text=str(section.to_plotly_json())
+    assert 'Experimental' not in text
+    assert 'unverified' not in text
+    assert 'External access may be restricted' in text

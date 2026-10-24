@@ -3,6 +3,7 @@ const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert
 const read=name=>fs.readFileSync('meshcorestation/web/assets/'+name,'utf8');
 const base=read('style.css'),reference=read('repeater_statistics.css'),layout=read('optimizer_sections.css'),network=read('network_monitoring.css'),management=read('repeater_management.css');
 const html=fs.readFileSync('meshcorestation/web/repeater_optimizer.html','utf8');
+assert(html.includes('Experimental suggestions can be displayed'),'Unrelated optimization safeguards remain unchanged');
 assert(html.includes('/assets/repeater_statistics.css'));assert(html.includes('/assets/optimizer_sections.css'));assert(!html.includes('<style>'));
 assert(!/height\s*:\s*(?:950px|1100px|66vh|min\(68vh)/.test(network+management+layout));
 assert(!/#[\da-f]{3,8}\b/i.test(network+layout),'Subsections must use dashboard palette variables');

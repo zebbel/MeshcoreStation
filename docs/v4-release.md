@@ -1,38 +1,25 @@
-# MeshcoreStation 4.0.4 — V4 branch prerelease
+# MeshcoreStation 4.0.5 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.0.4` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.0.5` (prerelease, not latest stable). V3 main is unchanged.
 
-Observable Relationships independently encodes direction and analyzer confidence:
-green for bidirectional observations, red for one observed direction, gray for
-unknown direction; solid for medium/high confidence, dashed for low confidence,
-and explicitly dotted for missing/unknown confidence. Incomplete or contradictory
-direction fields stay neutral. Missing observations do not prove impossibility.
+- Removed the Network Monitoring Experimental heading and outdated live-integration
+  status following operator confirmation of working live monitoring. API metadata
+  no longer labels monitoring experimental or supplies an obsolete verification flag.
+- Matched Optimization Analysis to the rendered Repeater Statistics background.
+  The iframe element, document root, body and main content now share that surface;
+  palette and color-scheme synchronization covers light/dark changes and reopening.
+  Content-based resizing, responsive geometry and existing spacing are preserved.
+- Updated current README/help documentation. Experimental optimization suggestions,
+  administrator authentication, confirmation/readback safeguards and configuration
+  controls are unchanged.
 
-An English legend with line samples sits above the canvas without covering map
-controls. Line popups show named endpoints, observed direction, original counts,
-analyzer confidence, distance and expandable public keys. Theme colors, outlined
-strokes, responsive popups and image-free markers remain legible on small screens.
-Relationships are inferred from analyzer observations and do not necessarily represent verified direct radio links.
+Monitoring retains on-demand loading, five-minute caching, manual Refresh Now,
+request validation/timeouts, rate limits, stale-data retention and normal API/access
+errors. Relationships remain inferred observations rather than verified direct
+radio links. No additional requests, polling or radio traffic are introduced.
 
-Interface labels, status/error messages, help and configuration interfaces were
-reviewed for English. Proper names, repeater names and external/user text remain
-unchanged. Existing name resolution, route order/counts/timestamps, administrator
-controls, radio safeguards, five-minute caching, on-demand loading, manual refresh
-and no-background-polling behavior are preserved. No database migration or new
-application dependency is required; the map uses the existing snapshot.
-
-Validation: full Python and JavaScript regression suites, actual bundled Leaflet
-SVG geometry/popups, and real Chromium desktop/mobile light/dark checks. Captured
-fixtures cover realistic relationships; derived cases exercise missing/conflicting
-direction fields and all color/confidence combinations. Browser screenshots are
-reviewed before publication.
-
-Validated: 484 Python tests and all 35 JavaScript suites passed. Real Chromium
-passed desktop (1280px) and mobile (390px) cases in light and dark themes, including
-all direction/confidence combinations, actual SVG strokes, popup values, expanded
-key details, zoom/pan/resize/reopen/switching and simulated tile failures. Open
-popups were also resized across desktop/mobile widths and verified to remain
-inside the map without covering zoom controls. Rendered screenshots were inspected.
-
-Live Analyzer access and physical radio hardware remain unverified. Fixture/browser
-tests establish UI behavior, not provider permission or verified direct RF links.
+Validation includes complete Python and JavaScript regression suites plus real
+Chromium desktop/mobile light/dark checks, including live theme changes, parent
+palette overrides, closed/reopened sections and iframe resizing. Screenshots are
+reviewed before publication. Offline tests establish behavior rather than provider
+permission or guaranteed availability on every installation.

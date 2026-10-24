@@ -1,10 +1,11 @@
-# Repeater Network Monitoring (experimental)
+# Repeater Network Monitoring
 
 The V4 Analyzer client is read-only and available automatically for the managed
 repeater selected in the dashboard. No activation switch or environment setting
 is required. Opening the subsection reads cached data and refreshes stale/missing
 data. The eight Firefox bodies captured on 24 October 2026 verify formats only;
-live deployment integration remains unverified.
+live operation has been confirmed by the operator. Offline tests do not independently
+verify provider access for every installation.
 
 ## External access limitations
 
@@ -57,7 +58,7 @@ in-flight cache write. The cache may be removed while stopped without losing V3 
 The supplied capture has no individual heardBy observers, no direct packets,
 beacons or sensor readings. Neighbor SNR values are null and remain Unknown.
 The UI does not manufacture observers, RSSI or SNR. The generic record view for
-future observer rows is experimental because a nonempty shape was not captured.
+future observer rows has limited fixture coverage because a nonempty shape was not captured.
 The same limitation applies to nonempty direct packet, beacon and sensor arrays.
 
 Coverage depends on participating observers. Missing observations do not prove
@@ -78,6 +79,8 @@ inside their own wrapper only when needed. Historical charts and maps resize
 with the available width. The selected repeater and snapshot provenance stay
 visible. Optimization Analysis resizes its same-origin iframe to its content;
 the main dashboard supplies the single page scrollbar and shared theme colors.
+The iframe element, document root, body and main content use the same rendered
+background as Repeater Statistics, including theme changes while open or closed.
 
 ## Names and relationship maps
 

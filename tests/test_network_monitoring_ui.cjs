@@ -12,7 +12,7 @@ w.L={divIcon:o=>o,map:(host,options)=>{assert.equal(options.maxZoom,19);const m=
 let calls=[],state='initial',deferred=null;
 function result(k=key,cacheOnly=false){
  const empty=state==='empty'||(state==='initial'&&cacheOnly);
- return {ok:true,public_key:k,experimental:true,live_verified:false,state:empty?'empty':state==='initial'?'available':state,
+ return {ok:true,public_key:k,experimental:false,state:empty?'empty':state==='initial'?'available':state,
  error:state==='blocked'?'External monitoring unavailable: HTTP 403 / Cloudflare 1010':null,
  data:empty?null:data,fetched_at:empty?null:1000,stale:empty||state==='stale'||state==='blocked'};
 }
@@ -27,6 +27,7 @@ const select=k=>{w.meshcorestationSelectedRepeater=k;w.document.dispatchEvent(ne
  w.eval(fs.readFileSync('meshcorestation/web/assets/network_monitoring.js','utf8'));await settle();assert.equal(calls.length,0);
  toggle('repeater-optimizer-disclosure',true);await settle();assert.equal(calls.length,0);
  toggle('repeater-network-disclosure',true);await settle();assert(calls[0].includes('cache_only=1'));assert(calls.some(x=>!x.includes('cache_only=1')),'stale data automatically fetched with no activation flag');assert($('network-content').textContent.includes('107'));
+ assert(!/experimental|live integration unverified/i.test($('network-status').textContent));
  state='available';toggle('repeater-network-disclosure',false);await settle();const fresh=calls.length;toggle('repeater-network-disclosure',true);await settle();assert(calls.slice(fresh).every(x=>x.includes('cache_only=1')),'fresh cache reused');
  state='stale';$('network-refresh').click();await settle();assert(calls.at(-1).includes('refresh=1'));
  assert($('network-content').textContent.includes('107'));assert($('network-content').textContent.includes('inferred-only'));assert($('network-content').textContent.includes('Hemsbergturm'));assert($('network-content').textContent.includes('24.10.2026'));assert(!$('network-content').textContent.includes(key));assert($('network-content').querySelector('[title="'+key+'"]'));
