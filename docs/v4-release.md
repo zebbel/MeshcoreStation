@@ -1,7 +1,9 @@
-# MeshcoreStation 4.2.0 — V4 branch prerelease
+# MeshcoreStation 4.2.1 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.2.0` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.2.1` (prerelease, not latest stable). V3 main is unchanged.
 
+- Corrected the detailed graph display to preserve small nonzero betweenness
+  values and updated chart help to match the original hourly series.
 - Added unattended Analyzer collection every 12 hours for managed repeaters.
   Durable schedules, crash leases, one-minute repeater spacing and global provider
   cooldowns handle restarts and connectivity failures without a catch-up burst.

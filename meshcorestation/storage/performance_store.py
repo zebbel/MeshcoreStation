@@ -446,7 +446,7 @@ def overview(key, days, now=None, marker_id=None, compare_days=7):
               'hourly_timeline':[{'at':h,'hourly_at':h,'hourly_relays':next((r['count'] for r in hour_rows if r['at']==h),None)} for h in range(math.ceil(start/3600)*3600,int(now//3600)*3600,3600)],
               'analyzer_buckets':sum(b['analyzer_at'] is not None for b in bins.values()),
               'notes':['Companion values are received packet copies with this repeater in a collision-checked path, not proven direct forwarding or delivery success.',
-                       'Hourly Analyzer values retain original timestamps; longer chart intervals show means of available hours, with coverage shown in details. Reach is the latest snapshot per interval. Missing hours remain unknown; rolling totals are never added.',
+                       'Analyzer forwarding charts preserve original complete hourly buckets at every selected period length. Reach is the latest snapshot per display interval. Missing hours remain unknown; rolling totals are never added.',
                        'Observations from different sources are shown separately, never added into a performance score.']}
     if marker_id is not None:
         marker = next((m for m in journal if m['id']==marker_id),None)

@@ -30,6 +30,8 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  await section.screenshot({path:`${output}/performance-${token}.png`});
  await page.locator('#performance-details > summary').click();
  assert((await page.locator('#performance-details').innerText()).includes('Degree / betweenness / rank'));
+ assert((await page.locator('#performance-details').innerText()).includes('0.000455538'),'small graph metrics stay nonzero');
+ assert(!(await page.locator('#performance-details').innerText()).includes('longer chart intervals show means'));
  await page.locator('#performance-details').screenshot({path:`${output}/performance-details-${token}.png`});
  await page.locator('#performance-details > summary').click();
  await section.locator('.performance-change-line').last().click();await page.locator('#performance-comparison').waitFor();
