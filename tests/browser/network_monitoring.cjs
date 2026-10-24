@@ -74,7 +74,7 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
     const popup=page.locator('.network-connection-popup');await popup.waitFor();
     for(const text of ['DE_HE_HP_RPT1','🐝Heppenheim Nord','weHear: 148','theyHear: 391','Analyzer confidence: high','Distance: 1.5 km','Relationships are inferred from analyzer observations and do not necessarily represent verified direct radio links.'])assert((await popup.innerText()).includes(text));
     await popup.locator('summary').click();assert((await popup.innerText()).includes(key));
-    await section.screenshot({path:`${output}/relationship-popup-${token}.png`});await page.locator('.network-map .leaflet-popup-close-button').click();
+    await section.screenshot({path:`${output}/relationship-popup-${token}.png`});await page.locator('.network-map .leaflet-popup-close-button').click();await popup.waitFor({state:'detached'});
     const before=await lines.first().getAttribute('d');await page.locator('.network-map .leaflet-control-zoom-in').click();
     await page.waitForFunction(d=>document.querySelector('.network-map path.network-relationship')?.getAttribute('d')!==d,before);
     await page.waitForFunction(()=>!document.querySelector('.network-map').classList.contains('leaflet-zoom-anim'));
@@ -93,8 +93,8 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
     combinations=true;await page.locator('#network-refresh').click();await page.locator('.network-map path.network-confidence-unknown').first().waitFor();await section.scrollIntoViewIfNeeded();await verifyStyles();
     for(const direction of ['bidirectional','unidirectional','unknown'])for(const confidence of ['low','unknown'])assert(await page.locator(`.network-map .network-direction-${direction}.network-confidence-${confidence}`).count()>0);
     await section.screenshot({path:`${output}/relationship-combinations-${token}.png`});
-    await clickLine(page.locator('.network-map .network-direction-unidirectional.network-confidence-low').first());await popup.waitFor();assert((await popup.innerText()).includes('Selected repeater → connected repeater (theyHear).'));assert((await popup.innerText()).includes('weHear: 0'));assert((await popup.innerText()).includes('theyHear: 4'));await page.locator('.network-map .leaflet-popup-close-button').click();
-    await clickLine(page.locator('.network-map .network-direction-unknown.network-confidence-unknown').first());await popup.waitFor();assert((await popup.innerText()).includes('Confidence unknown; dotted line.'));await page.locator('.network-map .leaflet-popup-close-button').click();
+    await clickLine(page.locator('.network-map .network-direction-unidirectional.network-confidence-low').first());await popup.waitFor();assert((await popup.innerText()).includes('Selected repeater → connected repeater (theyHear).'));assert((await popup.innerText()).includes('weHear: 0'));assert((await popup.innerText()).includes('theyHear: 4'));await page.locator('.network-map .leaflet-popup-close-button').click();await popup.waitFor({state:'detached'});
+    await clickLine(page.locator('.network-map .network-direction-unknown.network-confidence-unknown').first());await popup.waitFor();assert((await popup.innerText()).includes('Confidence unknown; dotted line.'));await page.locator('.network-map .leaflet-popup-close-button').click();await popup.waitFor({state:'detached'});
     await page.locator('#managed-repeater').selectOption(other);await page.waitForFunction(()=>document.querySelector('#network-selected')?.textContent.includes('Second Repeater'));await lines.first().waitFor();assert.equal(await page.locator('.network-map.leaflet-container').count(),1);
     assert.equal(errors.length,0,errors.join('\n'));await page.close();
    }

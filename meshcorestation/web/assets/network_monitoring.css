@@ -21,5 +21,6 @@
 .network-connection-popup { overflow-wrap:anywhere; }
 #network-content .leaflet-popup-content-wrapper, #network-content .leaflet-popup-tip { background:var(--panel); color:var(--text); }
 #network-content .leaflet-popup-content { margin:14px 18px; }
+#network-content .leaflet-popup-content .network-connection-popup p { margin:6px 0; }
 #network-content .network-map { margin-top:14px; }
 @media(max-width:600px) { .network-map-legend { grid-template-columns:minmax(0,1fr); } }
