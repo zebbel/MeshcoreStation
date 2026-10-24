@@ -9,10 +9,11 @@ const output=process.env.BROWSER_OUTPUT||'browser-results';fs.mkdirSync(output,{
 const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manual',next_poll:null,last_error:''},settings:{retention_days:60,neighbor_days:90,summary_days:365,budget_mb:3072,reserve_mb:4096},statistics:{copies:107,ambiguous:0,matching_copies:93,unscoped:50,active_days:1,partial:true,collector_error:'',first_at:1792839600,scope:{},storage:{bytes:0,free_bytes:20e9}},analysis:{recommendations:[],notes:[]},neighbor_snapshots:[],history:[],comparisons:{},repeaters:[{public_key:key,name:'DE_HE_HP_RPT1'},{public_key:other,name:'Second Repeater'}]};
 (async()=>{
  const browser=await chromium.launch({headless:true});
+ let activePage=null;
  try{
   for(const viewport of [{width:1280,height:960},{width:390,height:844}]){
    for(const colorScheme of ['light','dark']){
-    const page=await browser.newPage({viewport,colorScheme}),errors=[];const token=viewport.width+'-'+colorScheme;
+    const page=await browser.newPage({viewport,colorScheme}),errors=[];const token=viewport.width+'-'+colorScheme;activePage=page;
     page.on('pageerror',e=>errors.push(e.message));
     await page.route('**/*',async route=>{
      const url=new URL(route.request().url());
@@ -30,6 +31,7 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
     await page.waitForFunction(k=>document.querySelector('#managed-repeater')?.value===k,key);
     await page.locator('#repeater-optimizer-disclosure > summary').click();
     await page.locator('#repeater-statistics-disclosure > summary').click();
+    await page.locator('#repeater-statistics-inline .stats-detailed > summary').click();
     await page.locator('.stats-content .stats-metric').first().waitFor();
     const gutter=await page.locator('#repeater-statistics-disclosure .optimizer-section-body').evaluate(n=>({left:getComputedStyle(n).paddingLeft,right:getComputedStyle(n).paddingRight}));
     await page.locator('#repeater-statistics-disclosure').screenshot({path:`${output}/statistics-${token}.png`});
@@ -66,5 +68,5 @@ const sample={ok:true,enabled:true,since:1,profile:{role:'unknown',polling:'manu
    }
   }
   console.log('Real Chromium: desktop/mobile, light/dark, named paths, matched gutters, SVG geometry, divIcon markers, zoom/pan/resize, tile failures, reopen and repeater switching passed.');
- }finally{await browser.close();}
+ }catch(e){if(activePage&&!activePage.isClosed()){await activePage.screenshot({path:output+'/failure.png'});fs.writeFileSync(output+'/failure.html',await activePage.content());}throw e;}finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});
