@@ -30,3 +30,12 @@ missing data, switching/races and local API protections. Full Python/JavaScript
 regression plus Chromium desktop/mobile light/dark visual checks precede publication.
 Browser tests use captured analyzer formats and synthetic local historical records;
 they cannot establish historical coverage or physical radio delivery success.
+
+Validated: 496 Python tests and all 36 JavaScript suites passed. Chromium passed
+both desktop (1280px) and mobile (390px) in light/dark modes, with actual local API
+and database journal CRUD/reload persistence, automatic markers, exact timestamp
+preservation, all history/comparison windows, SVG line geometry/selection, responsive
+chart resizing, table scrolling and stale-selection isolation. Existing maps,
+analysis iframe theme/resizing and monitoring regressions also passed. Screenshots
+were inspected. Removal/re-add tombstones and journal revisions prevent stale
+requests from restoring deleted data; monitoring updates do not interrupt saves.
