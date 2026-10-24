@@ -49,7 +49,8 @@
             await window.meshcorestationLoadMapLibrary({clustering:false});
             if(id!==generation||version!==mapRender||!visible()||key!==current)return;
             const canvas=el('div',null,'map-canvas network-map');host.append(canvas);map=window.L.map(canvas,{maxZoom:19}).setView([center.lat,center.lon],10);
-            const points=[[center.lat,center.lon]],markers=[];
+            const points=[[center.lat,center.lon]],markers=[],connections=[];
+            const popupOptions=()=>({minWidth:120,maxWidth:Math.max(120,Math.min(280,canvas.clientWidth-112)),maxHeight:Math.max(130,canvas.clientHeight-100),autoPanPaddingTopLeft:[58,12],autoPanPaddingBottomRight:[12,12]});
             const popup=(key,inferred)=>{
                 const box=el('div');box.append(identity(key));
                 if(inferred)box.append(el('p',relationships().explanation));
@@ -86,7 +87,7 @@
                 line.bindPopup(()=>{
                     if(!popupBox)popupBox=connectionPopup(n,relationship,()=>{if(line.getPopup()?.isOpen())line.getPopup().update();});
                     names().refresh(popupBox);return popupBox;
-                },{minWidth:120,maxWidth:Math.max(120,Math.min(280,canvas.clientWidth-112)),maxHeight:Math.max(130,canvas.clientHeight-100),autoPanPaddingTopLeft:[58,12],autoPanPaddingBottomRight:[12,12]});
+                },popupOptions());connections.push(line);
             }
             if(points.length>1)map.fitBounds(points,{padding:[20,20],maxZoom:13,animate:false});
             mapIdentityHandler=()=>{for(const m of markers)m.layer.getElement?.()?.setAttribute('title',names().label(m.key));};
@@ -94,7 +95,7 @@
             const activeMap=map;
             resizeHandler=()=>{
                 if(resizeFrame!=null)window.cancelAnimationFrame?.(resizeFrame);
-                resizeFrame=window.requestAnimationFrame(()=>{resizeFrame=null;if(map===activeMap&&version===mapRender&&visible())activeMap.invalidateSize({pan:false});});
+                resizeFrame=window.requestAnimationFrame(()=>{resizeFrame=null;if(map===activeMap&&version===mapRender&&visible()){activeMap.invalidateSize({pan:false});for(const line of connections){const popup=line.getPopup?.();if(popup){Object.assign(popup.options,popupOptions());if(popup.isOpen())popup.update();}}}});
             };
             if(window.ResizeObserver){mapObserver=new ResizeObserver(resizeHandler);mapObserver.observe(canvas);}
             window.addEventListener('resize',resizeHandler);resizeHandler();
