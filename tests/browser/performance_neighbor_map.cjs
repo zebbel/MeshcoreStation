@@ -25,10 +25,12 @@ try{for(const [width,height,colorScheme] of [[1280,960,'light'],[390,844,'dark']
  const popup=map.locator('.leaflet-popup-content');await popup.waitFor();const text=await popup.innerText();for(const word of ['🐝Heppenheim Nord','1.5 km','148','391','high','inferred'])assert(text.includes(word),word);await map.screenshot({path:`${output}/neighbor-popup-${width}-${colorScheme}.png`});await map.locator('.leaflet-popup-close-button').click();
  // Resize and reopen retain one map with visible vector overlays, even without tiles.
  await page.setViewportSize({width:width===390?430:1100,height});await page.waitForFunction(()=>document.querySelectorAll('#performance-neighbor-map .leaflet-container').length===1);assert(await lines().count()>0);
- const canvas=map.locator('.leaflet-container');await canvas.scrollIntoViewIfNeeded();
+ await page.waitForFunction(()=>!document.querySelector('#performance-neighbor-map .leaflet-zoom-anim'));
+ const canvas=map.locator('.leaflet-container');await canvas.evaluate(n=>n.scrollIntoView({block:'center',inline:'nearest'}));
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  const bounds=await canvas.boundingBox();
  const position=()=>map.evaluate(n=>JSON.stringify([...n.querySelectorAll('.leaflet-map-pane,.leaflet-marker-icon,path.network-relationship')].map(e=>[e.getAttribute('style'),e.getAttribute('d')])));
+ const hit=await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('#performance-neighbor-map .leaflet-container'),{x:bounds.x+bounds.width*.25,y:bounds.y+bounds.height*.6});assert(hit,'pan starts inside the visible map');
  const beforePan=await position();await page.mouse.move(bounds.x+bounds.width*.25,bounds.y+bounds.height*.6);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width*.25+60,bounds.y+bounds.height*.6+35,{steps:8});await page.mouse.up();
  await page.waitForFunction(old=>JSON.stringify([...document.querySelectorAll('#performance-neighbor-map .leaflet-map-pane,#performance-neighbor-map .leaflet-marker-icon,#performance-neighbor-map path.network-relationship')].map(e=>[e.getAttribute('style'),e.getAttribute('d')]))!==old,beforePan);
 
