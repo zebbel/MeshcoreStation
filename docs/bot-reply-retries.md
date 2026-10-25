@@ -18,8 +18,14 @@ remains separate and persistent.
 
 ## Timing and radio safety
 
-The delay is `1.2 × (500 + 16 × estimated_airtime_ms) / 1000` seconds, following
-MeshCore's flood timeout and the installed Python client's safety multiplier.
+The protocol timeout remains `1.2 × (500 + 16 × estimated_airtime_ms) / 1000`
+seconds, following MeshCore's flood timeout and the installed Python client's
+safety multiplier. Each wait is `max(protocol timeout, minimum) + random jitter`:
+20 seconds minimum for zero-hop commands, 30 seconds for multi-hop commands,
+plus a fresh uniform 0–5 seconds of jitter. A longer protocol timeout takes
+precedence. Unknown-hop commands still do not retry. Without queue/lock delays,
+multi-hop attempts normally occur around 30–35, 60–70 and 90–105 seconds after
+the original submission. Queue deferrals use the same minimum/jitter calculation.
 There are no fixed 60/120/240-second retry intervals. The packet estimate includes
 UTF-8 sender prefix and reply text, timestamp/type bytes, AES block padding,
 channel hash/MAC, packet header/path-length byte and scoped transport codes.
@@ -35,7 +41,7 @@ retries; the original send behavior remains available.
 Waiting happens asynchronously, outside the send/control locks. Before a retry,
 the same existing locks serialize a fresh local Companion self-info read, queue
 check and scope-select/send/reset sequence. The queue must report empty. A busy
-or unavailable queue defers at the calculated flood interval, at most three times,
+or unavailable queue defers at the calculated retry interval, at most three times,
 then cancels. These are USB/serial queries, not mesh radio requests.
 
 At most 32 reply parts can have pending retry work. Additional retry transmissions

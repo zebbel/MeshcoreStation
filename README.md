@@ -1,4 +1,4 @@
-# MeshcoreStation 4.4.0
+# MeshcoreStation 4.4.1
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -8,6 +8,14 @@ V4 preserves existing station and room databases. The external Analyzer feature
 is **available on demand without activation**, with live operation confirmed by the operator.
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
+
+## Changes in 4.4.1
+
+Reply retries now wait `max(protocol timeout, hop minimum) + random 0–5 seconds`.
+The minimum is 20 seconds for zero-hop commands and 30 seconds for multi-hop
+commands. Longer airtime-based protocol timeouts still take precedence. Jitter
+is drawn separately for every wait. Retry limits, saved text/channel/scope,
+forwarding cancellation and all existing safeguards remain unchanged.
 
 ## Changes in 4.4.0
 

@@ -6,7 +6,7 @@ import pytest
 from meshcore import EventType
 from test_reply_tracking import db,packet,KEY
 from meshcorestation.radio.companion import Companion
-from meshcorestation.radio.reply_retries import timing
+from meshcorestation.radio.reply_retries import timing,retry_delay
 from meshcorestation.storage import reply_store as store
 
 INFO={'name':'Station','public_key':'aa'*32,'radio_freq':869.525,'radio_sf':7,'radio_bw':125.0,'radio_cr':5}
@@ -55,13 +55,14 @@ def test_attempt_limits_saved_text_original_channel_scope_and_unique_timestamps(
         c,sent,scopes,waits=setup(db,hops);secret=b'abcdefghijklmnop'
         c._get_reply_scope=lambda rx:('original scope',secret)
         monkeypatch.setattr('meshcorestation.radio.companion.time.time',lambda:1000)
+        monkeypatch.setattr('meshcorestation.radio.reply_retries.random.uniform',lambda a,b:2.5)
         await c.send_channel_message(0,'saved pong',{})
         assert len(sent)==1 # Scheduled in the background; never blocks command handling.
         await finish(c)
         assert len(sent)==count and {s[:2] for s in sent}=={(0,'saved pong')}
         assert len({s[2] for s in sent})==count
         assert scopes==[secret,None]*count
-        assert waits==[timing(INFO,'saved pong',True)['timeout']]*(count-1)
+        assert waits==[(20 if hops==0 else 30)+2.5]*(count-1)
         row=store.snapshot(db.db,1)['replies'][0]
         assert len(row['attempts'])==count
         assert [a['attempt'] for a in row['attempts']]==list(range(1,count+1))
@@ -288,4 +289,35 @@ def test_scoped_forwarding_must_match_original_scope(db):
         await c.send_channel_message(0,'pong',{});await finish(c)
         assert len(sent)==1
         assert store.snapshot(db.db,1)['replies'][0]['retry_status']=='forwarding observed'
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('hops,protocol,minimum',[(0,2.6,20),(1,2.6,30),(63,2.6,30),(0,45,45),(1,45,45)])
+def test_retry_delay_minimum_protocol_precedence_and_jitter_bounds(monkeypatch,hops,protocol,minimum):
+    for jitter in (0,2.5,5):
+        def draw(low,high):
+            assert (low,high)==(0,5)
+            return jitter
+        monkeypatch.setattr('meshcorestation.radio.reply_retries.random.uniform',draw)
+        assert retry_delay(protocol,hops)==minimum+jitter
+    assert retry_delay(protocol,None) is None
+
+
+def test_multihop_cumulative_timing_and_saved_next_attempt_time(db,monkeypatch):
+    async def run():
+        c,sent,_,waits=setup(db,1)
+        jitter=iter([0,2.5,5]);elapsed=0;attempt_times=[]
+        monkeypatch.setattr('meshcorestation.radio.reply_retries.random.uniform',lambda a,b:next(jitter))
+        monkeypatch.setattr('meshcorestation.radio.reply_retries.time.time',lambda:1000+elapsed)
+        async def wait(job,seconds):
+            nonlocal elapsed
+            row=store.snapshot(db.db,1)['replies'][0]
+            assert row['next_retry_at']==1000+elapsed+seconds
+            assert f'{seconds:.1f}s' in row['retry_detail']
+            waits.append(seconds);elapsed+=seconds;attempt_times.append(elapsed)
+            await asyncio.sleep(0)
+        c.reply_retries.wait=wait
+        await c.send_channel_message(0,'pong',{'route_type':1});await finish(c)
+        assert waits==[30,32.5,35] and attempt_times==[30,62.5,97.5]
+        assert len(sent)==4
     asyncio.run(run())

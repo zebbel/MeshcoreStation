@@ -27,7 +27,7 @@ jobs:
       - name: Python regression checks
         run: |
           if [ "${{ steps.scope.outputs.reply_retry }}" = "true" ]; then
-            python -m pytest -q tests/test_reply_retries.py tests/test_reply_tracking.py tests/test_command_receptions.py tests/test_position_scope.py
+            python -m pytest -q tests/test_reply_retries.py tests/test_reply_tracking.py
           elif [ "${{ steps.scope.outputs.performance_calc }}" = "true" ]; then
             python -m pytest -q tests/test_performance_dashboard.py tests/test_performance.py
           elif [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then

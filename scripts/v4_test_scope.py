@@ -50,12 +50,9 @@ def performance_calculation_scope():
 def reply_retry_scope():
     allowed={'.github/workflows/v4-release.yml','.github/workflows/production-regression.yml',
              'scripts/v4_test_scope.py','meshcorestation/__init__.py','meshcorestation/analyzer.py',
-             'meshcorestation/radio/reply_retries.py','meshcorestation/radio/companion.py',
-             'meshcorestation/radio/channels_control.py','meshcorestation/runtime.py',
-             'meshcorestation/storage/reply_store.py','meshcorestation/web/assets/reply_tracking.js',
-             'tests/test_reply_retries.py','tests/test_reply_tracking_ui.cjs',
-             'README.md','docs/bot-reply-retries.md','docs/user-guide.md','docs/v4-release.md'}
-    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.4.0':
+             'meshcorestation/radio/reply_retries.py','tests/test_reply_retries.py',
+             'README.md','docs/bot-reply-retries.md','docs/v4-release.md'}
+    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.4.1':
         return False
     try:
         paths=set(subprocess.check_output(['git','diff','--name-only','HEAD^','HEAD'],text=True).splitlines())

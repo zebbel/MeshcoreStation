@@ -3,6 +3,7 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass, field
 import math
+import random
 import time
 from meshcore import EventType
 from meshcorestation.storage import reply_store
@@ -39,6 +40,12 @@ def timing(info,message,scoped):
         raise ValueError('Estimated packet airtime exceeds the retry safety limit.')
     # Firmware getEstAirtimeFor truncates to milliseconds; client adds 1.2.
     return {'packet_bytes':size,'airtime':airtime,'timeout':(500+16*int(airtime*1000))/1000*1.2}
+
+
+def retry_delay(protocol_timeout,hops):
+    """A fresh jitter draw per wait; unknown hops never schedule retries."""
+    if type(hops) is not int or not 0<=hops<=63:return None
+    return max(protocol_timeout,20.0 if hops==0 else 30.0)+random.uniform(0.0,5.0)
 
 
 @dataclass
@@ -100,7 +107,7 @@ class ReplyRetries:
             self.state(root,'not scheduled',str(exc));return
         job=Job(root,command,channel,message,scope,scope_key,self.c.tracking_key,hops,stamp,info,values)
         self.jobs[root]=job
-        self.state(root,'pending','Waiting for protocol flood timeout.',time.time()+values['timeout'])
+        self.state(root,'pending','Retry scheduled; waiting to start timer.')
         job.task=asyncio.create_task(self.run(job,maximum),name='reply-retry-'+str(root))
 
     def evidence(self,reply_id):
@@ -138,8 +145,9 @@ class ReplyRetries:
             deferrals=0;attempt=2
             while attempt<=maximum:
                 if stopped():return
-                self.state(job.root,'pending','Waiting for protocol flood timeout.',time.time()+job.timing['timeout'])
-                await self.wait(job,job.timing['timeout'])
+                delay=retry_delay(job.timing['timeout'],job.hops)
+                self.state(job.root,'pending',f'Waiting {delay:.1f}s: protocol timeout with hop minimum and jitter.',time.time()+delay)
+                await self.wait(job,delay)
                 if stopped():return
                 # Same lock order as incoming channel handlers and control writes.
                 async with self.c.control_lock:
