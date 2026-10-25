@@ -32,12 +32,18 @@ try{for(const [width,height,colorScheme] of [[1280,960,'light'],[390,844,'dark']
  await page.waitForFunction(()=>!document.querySelector('#performance-neighbor-map .leaflet-zoom-anim'));
  const canvas=map.locator('.leaflet-container');await canvas.evaluate(n=>n.scrollIntoView({block:'center',inline:'nearest'}));
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
- const bounds=await canvas.boundingBox();
- const position=()=>page.evaluate(()=>{const m=window.__neighborMap,c=m.getCenter();return {lat:c.lat,lng:c.lng};});
- const hit=await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('#performance-neighbor-map .leaflet-container'),{x:bounds.x+bounds.width*.25,y:bounds.y+bounds.height*.6});assert(hit,'pan starts inside the visible map');
- const beforePan=await position();await page.mouse.move(bounds.x+bounds.width*.25,bounds.y+bounds.height*.6);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width*.25+60,bounds.y+bounds.height*.6+35,{steps:8});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.mouse.up();
+ const point=await canvas.evaluate(n=>{
+   const r=n.getBoundingClientRect(),free=(x,y)=>{const e=document.elementFromPoint(x,y);return e?.closest('.leaflet-container')===n&&!e.closest('.leaflet-popup,.leaflet-control,.leaflet-marker-icon');};
+   for(const xf of [.1,.25,.5,.7])for(const yf of [.2,.4,.6,.8]){const x=r.x+r.width*xf,y=r.y+r.height*yf;if(free(x,y)&&free(x+45,y+25))return {x,y};}
+   throw Error('No clear map background available for drag input');
+ });
+ const position=()=>page.evaluate(()=>{const c=window.__neighborMap.getCenter();return {lat:c.lat,lng:c.lng};});
+ const beforePan=await position(),beforeDrags=await page.evaluate(()=>window.__neighborEvents.filter(e=>e==='dragstart').length);
+ await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+45,point.y+25,{steps:8});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.mouse.up();
+
  const afterPan=await position();
  if(afterPan.lat===beforePan.lat&&afterPan.lng===beforePan.lng)console.log('Pan diagnostics',await page.evaluate(()=>({events:window.__neighborEvents,down:window.__neighborDown,enabled:window.__neighborMap.dragging.enabled(),globalDragging:!!L.Draggable._dragging,pane:window.__neighborMap._mapPane.className})));
+ assert(await page.evaluate(old=>window.__neighborEvents.filter(e=>e==='dragstart').length>old,beforeDrags),'native Leaflet drag event');
  assert.notDeepEqual(afterPan,beforePan,'native mouse dragging changes the map center');
 
 
