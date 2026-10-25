@@ -12,7 +12,8 @@ def comparable_companion(key,start,end,step):
     """Both counts from the SAME network_observations rows, never tracked copies.
 
     A zero means no collision-checked matching paths among received rows, not
-    proven zero forwarding. Ambiguous paths invalidate the involvement bucket.
+    proven zero forwarding. Ambiguous matches are excluded, not allowed to
+    erase confirmed matches. Such counts are lower bounds, not reliable trends.
     Empty/partial buckets cannot become an indexed baseline.
     """
     first=int(start//step)*step
@@ -20,7 +21,7 @@ def comparable_companion(key,start,end,step):
               'complete':at>=start and at+step<=end,'repeater_index':None,'mesh_index':None}
           for at in range(first,math.ceil(end/step)*step,step)}
     result={'timeline':list(bins.values()),'baseline':None,'source':'Companion network path observations',
-            'error':None,'available':0,'expected':sum(b['complete'] for b in bins.values())}
+            'error':None,'available':0,'ambiguous':0,'uncertain_buckets':0,'expected':sum(b['complete'] for b in bins.values())}
     if not passive_stats.STATS_PATH.exists():
         return result
     try:
@@ -39,21 +40,23 @@ def comparable_companion(key,start,end,step):
                 (step,step,*args(good),*args(bad),start,end)).fetchall()
             health=db.execute('SELECT error,trimmed_at FROM health WHERE id=1').fetchone()
         for at,total,involved,ambiguous in rows:
-            bins[at].update(network=total,copies=involved if not ambiguous else None,ambiguous=ambiguous)
+            bins[at].update(network=total,copies=involved,ambiguous=ambiguous)
         if health:
             result['error']=health[0] or None
             result['trimmed_at']=health[1]
     except (OSError,sqlite3.Error):
         result['error']='Comparable Companion history unavailable.'
         return result
+    result['ambiguous']=sum(b['ambiguous'] or 0 for b in bins.values())
+    result['uncertain_buckets']=sum(bool(b['ambiguous']) for b in bins.values())
     baseline=next((b for b in bins.values() if b['complete'] and b['copies'] and b['network']),None)
     if baseline:
         result['baseline']={'at':baseline['at'],'copies':baseline['copies'],'network':baseline['network']}
         for b in bins.values():
-            if b['at']>=baseline['at'] and b['complete'] and b['copies'] is not None and b['network'] is not None:
-                b['repeater_index']=100*b['copies']/baseline['copies']
+            if b['at']>=baseline['at'] and b['complete'] and b['network'] is not None:
+                b['repeater_index']=100*b['copies']/baseline['copies'] if b['copies'] is not None else None
                 b['mesh_index']=100*b['network']/baseline['network']
-    result['available']=sum(b['complete'] and b['copies'] is not None and b['network'] is not None for b in bins.values())
+    result['available']=sum(b['complete'] and b['copies'] is not None and b['network'] is not None and not b['ambiguous'] for b in bins.values())
     return result
 
 
@@ -78,10 +81,12 @@ def measured_change(before,after):
 
 def assess(series,fields,start,end,split,step,now,kind):
     expected=[max(0,int(math.floor((stop-begin)/step))) for begin,stop in ((start,split),(split,end))]
-    groups=[[r for r in series if begin<=r['at'] and r['at']+step<=stop and all(r.get(f) is not None for f in fields)]
+    groups=[[r for r in series if begin<=r['at'] and r['at']+step<=stop and all(r.get(f) is not None for f in fields) and (kind!='companion' or not r.get('ambiguous'))]
             for begin,stop in ((start,split),(split,end))]
     coverage={'available':[len(g) for g in groups],'expected':expected}
     result={'status':'Insufficient Data','coverage':coverage,'changes':{},'explanation':'Missing or partial observations prevent a supported comparison.'}
+    if kind=='companion' and any(r.get('ambiguous') for r in series):
+        result['explanation']='Ambiguous hash-prefix matches were excluded. Confirmed repeater counts are lower bounds; uncertain coverage prevents a reliable relative trend.'
     if end>now or not all(expected) or any(len(g)!=n for g,n in zip(groups,expected)):
         return result
     result['status']='Observed change'

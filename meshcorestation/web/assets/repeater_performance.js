@@ -19,7 +19,7 @@
         if(!rows.some(p=>series.some(s=>p[s[0]]!=null)))box.append(node('p','Insufficient Data — no comparable saved observations in this window.','stats-message'));
         const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('class','stats-chart performance-chart');svg.setAttribute('viewBox',`0 0 ${width} 250`);svg.setAttribute('role','group');svg.setAttribute('aria-label',title);
         const add=(tag,attrs,text)=>{const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!=null)e.textContent=text;svg.append(e);return e;};
-        const integerAxis=series.every(s=>['neighbors','two_way','pairs','sole_pairs','hourly_relays'].includes(s[0]));
+        const integerAxis=series.every(s=>['neighbors','two_way','pairs','sole_pairs','hourly_relays','copies','network'].includes(s[0]));
         const begin=view.start,end=view.end,maximum=Math.max(1,...rows.flatMap(p=>series.map(s=>p[s[0]]??0))),ticks=integerAxis?Math.min(Math.ceil(maximum),width<600?2:4):(width<600?2:4),scale=integerAxis?Math.ceil(maximum/ticks)*ticks:maximum,x=t=>56+plot*(t-begin)/(end-begin),y=v=>190-160*v/scale;
         add('path',{d:`M56 25V190H${width-20}`,fill:'none',stroke:'var(--border)'});
         for(let i=0;i<=ticks;i++){
@@ -31,7 +31,7 @@
         for(const [field,label,color] of series){let path='',active=false;
             for(const p of rows){const v=p[field];if(v==null){active=false;continue;}const stamp=p.stamp??p.at,at=Math.max(begin,Math.min(end,stamp));path+=(active?'L':'M')+x(at)+' '+y(v);active=true;
                 const dot=add('circle',{cx:x(at),cy:y(v),r:rows.length>48?2:3,fill:color,'data-series':field,'data-value':v,'data-at':stamp});const tip=document.createElementNS(ns,'title');tip.textContent=`${date(stamp)} · ${label}: ${fmt(v)}`;
-                if(field.endsWith('_index'))tip.textContent+=` · Companion raw copies: repeater ${fmt(p.copies)}, mesh ${fmt(p.network)}`;dot.append(tip);
+                if(field.endsWith('_index'))tip.textContent+=` · Companion raw copies: repeater ${fmt(p.copies)}, mesh ${fmt(p.network)}`;if(id.endsWith('-relative'))tip.textContent+=` · Ambiguous path copies excluded: ${fmt(p.ambiguous)}`;dot.append(tip);
             }
             add('path',{d:path,fill:'none',stroke:color,'stroke-width':2.5,class:'performance-data-line','data-series':field});
         }
@@ -42,7 +42,7 @@
         }
         box.append(svg,node('h4','What does this mean?'),node('p',explanation,'muted'));
         const detail=node('details');detail.append(node('summary','Show measured values'));
-        detail.append(table(['Observation time',...series.map(s=>s[1]),...(series[0][0].endsWith('_index')?['Repeater copies','Mesh copies']:[])],rows.map(p=>[date(p.stamp??p.at),...series.map(s=>fmt(p[s[0]])),...(series[0][0].endsWith('_index')?[fmt(p.copies),fmt(p.network)]:[])])));box.append(detail);return box;
+        detail.append(table(['Observation time',...series.map(s=>s[1]),...(series[0][0].endsWith('_index')?['Confirmed repeater copies','Mesh copies']:[]),...(id.endsWith('-relative')?['Ambiguous path copies (excluded)']:[])],rows.map(p=>[date(p.stamp??p.at),...series.map(s=>fmt(p[s[0]])),...(series[0][0].endsWith('_index')?[fmt(p.copies),fmt(p.network)]:[]),...(id.endsWith('-relative')?[fmt(p.ambiguous)]:[])]))); box.append(detail);return box;
     }
     function localInput(at){const d=new Date(at*1000);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,19);}
     function editor(host,data){
@@ -78,13 +78,15 @@
     function charts(data,comparison=false){
         const v=comparison?data.comparison.dashboard:data.dashboard,prefix=comparison?'comparison':'performance';
         const baseline=v.companion.baseline;
+        const relativeSeries=baseline?series.relative:[['copies','Confirmed repeater path copies','var(--accent)'],['network','Companion-observed mesh copies','var(--green)']];
+        const uncertainty=v.companion.ambiguous?` ${fmt(v.companion.ambiguous)} ambiguous path copies excluded in ${fmt(v.companion.uncertain_buckets)} bucket(s). Confirmed repeater counts are lower bounds; uncertain coverage prevents reliable trend conclusions.`:'';
         const explanations={
             forwarding:'Peaks mean more observed forwarding; quiet recorded hours mean fewer events. Blank hours have no measurements. Changes may reflect traffic or observer coverage, not delivery quality.',
-            relative:baseline?`Both Companion lines start at 100 in the same complete bucket (${date(baseline.at)}). A faster-rising repeater line means greater involvement relative to observed mesh traffic. Sources share the same reception stream; coverage and routing can still change.`:'Insufficient Data for an index: a complete Companion bucket with positive repeater and mesh counts is required. Analyzer counts are never divided by Companion traffic.',
+            relative:(baseline?`Both Companion lines start at 100 in the same complete bucket (${date(baseline.at)}). With complete unambiguous coverage, a faster-rising repeater line means greater involvement relative to observed mesh traffic. Sources share the same reception stream; coverage and routing can still change.`:'Insufficient Data for an index: a complete Companion bucket with positive confirmed repeater and mesh counts is required. Showing recorded Companion counts independently instead; no normalized repeater comparison is claimed. Analyzer counts are never divided by Companion traffic.')+uncertainty,
             connectivity:'These are sampled Analyzer observations of neighbors and bidirectional relationships. A relationship is inferred, not a verified direct radio link. Blank collection intervals remain gaps.',
             routing:'Analyzer rolling 24-hour pair counts describe observed path involvement. Sole-observed pairs had no alternative in the Analyzer observations; this does not prove an exclusive route or successful delivery.'
         };
-        return Object.keys(series).map(domain=>chart((comparison?'Before/after — ':'')+domainTitles[domain],{start:v.start,end:v.end,markers:data.markers,timeline:domain==='forwarding'?v.forwarding:domain==='relative'?v.companion.timeline:v.snapshots},series[domain],`${prefix}-${domain}`,explanations[domain]));
+        return Object.keys(series).map(domain=>chart((comparison?'Before/after — ':'')+domainTitles[domain],{start:v.start,end:v.end,markers:data.markers,timeline:domain==='forwarding'?v.forwarding:domain==='relative'?v.companion.timeline:v.snapshots},domain==='relative'?relativeSeries:series[domain],`${prefix}-${domain}`,explanations[domain]));
     }
     const fieldLabels={hourly_relays:'Mean hourly relay events',copies:'Mean repeater path copies per bucket',network:'Mean observed mesh copies per bucket',neighbors:'Mean observed neighbors',two_way:'Mean bidirectional relationships',pairs:'Mean communication pairs',sole_pairs:'Mean sole-observed pairs'};
     function assessment(view,id,title){

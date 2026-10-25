@@ -70,7 +70,7 @@ def test_partial_zero_and_ambiguous_baselines_are_not_invented(stores,monkeypatc
     monkeypatch.setattr(passive_stats,'known_repeaters',lambda:[{'public_key':KEY},{'public_key':KEY[:2]+'ff'*31}])
     r=comparable_companion(KEY,start,NOW,3600)
     assert r['baseline'] is None and all(b['repeater_index'] is None for b in r['timeline'])
-    assert r['timeline'][1]['copies'] is None and r['timeline'][1]['ambiguous']==2
+    assert r['timeline'][1]['copies']==0 and r['timeline'][1]['ambiguous']==2
 
 
 def test_complete_four_domain_assessment_and_mesh_context(stores):
@@ -173,3 +173,56 @@ def test_missing_companion_bucket_never_becomes_zero_or_reliable_change(stores):
     assert v['assessment']['relative']['status']=='Insufficient Data'
     assert v['assessment']['relative']['coverage']=={'available':[12,11],'expected':[12,12]}
     assert v['assessment']['relative']['changes']=={}
+
+
+@pytest.mark.parametrize('step',[3600,21600,86400])
+def test_mixed_hash_sizes_keep_confirmed_matches_exclude_ambiguous_and_preserve_rows(stores,monkeypatch,step):
+    start=int(NOW//step)*step-2*step
+    collision=KEY[:2]+'ff'*31
+    monkeypatch.setattr(passive_stats,'known_repeaters',lambda:[{'public_key':KEY},{'public_key':collision},{'public_key':OTHER}])
+    with sqlite3.connect(passive_stats.STATS_PATH) as db:
+        for i,(size,route) in enumerate([(1,KEY[:2]),(2,KEY[:4]+'|'+KEY[:4]),(3,KEY[:6]),(1,OTHER[:2])]):
+            db.execute('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,5,1,?, ?,?,?)',(start+10+i,len(route.split('|')),size,route,str(i)))
+        original=db.execute('SELECT * FROM network_observations ORDER BY id').fetchall()
+    # Deliberately incompatible tracked observations cannot enter these counts.
+    packet(start+5,tracked=True)
+    result=comparable_companion(KEY,start,start+2*step,step)
+    b=result['timeline'][0]
+    assert (b['copies'],b['network'],b['ambiguous'])==(2,4,1)
+    assert result['baseline']=={'at':start,'copies':2,'network':4}
+    assert (b['repeater_index'],b['mesh_index'])==(100,100)
+    assert result['ambiguous']==1 and result['uncertain_buckets']==1
+    assert result['available']==0 and result['expected']==2
+    assert result['timeline'][1]['copies'] is None and result['timeline'][1]['network'] is None
+    with sqlite3.connect(passive_stats.STATS_PATH) as db:
+        assert db.execute('SELECT * FROM network_observations ORDER BY id').fetchall()==original
+
+
+def test_ambiguous_buckets_do_not_support_relative_assessment(stores,monkeypatch):
+    start=NOW-86400
+    for h in range(24):companion_bucket(start+h*3600,1,3)
+    # A single prefix collision must not erase distinct two-byte confirmations.
+    with sqlite3.connect(passive_stats.STATS_PATH) as db:
+        db.execute('UPDATE network_observations SET hash_size=2,route=? WHERE route=?',(KEY[:4],KEY[:2]))
+    packet(start+13*3600+100) # One ambiguous short match in the second half.
+    monkeypatch.setattr(passive_stats,'known_repeaters',lambda:[{'public_key':KEY},{'public_key':KEY[:2]+'ff'*31},{'public_key':OTHER}])
+    v=dashboard(KEY,start,NOW,3600)
+    assert v['companion']['timeline'][13]['copies']==1
+    assert v['companion']['timeline'][13]['network']==4
+    assert v['companion']['timeline'][13]['repeater_index']==100
+    a=v['assessment']['relative']
+    assert a['status']=='Insufficient Data' and a['changes']=={}
+    assert a['coverage']=={'available':[12,11],'expected':[12,12]}
+    assert 'lower bounds' in a['explanation']
+
+
+def test_mesh_counts_survive_ambiguous_only_repeater_and_zero_baseline(stores,monkeypatch):
+    start=NOW-3*3600
+    companion_bucket(start,1,4);companion_bucket(start+2*3600,2,6)
+    monkeypatch.setattr(passive_stats,'known_repeaters',lambda:[{'public_key':KEY},{'public_key':KEY[:2]+'ff'*31},{'public_key':OTHER}])
+    r=comparable_companion(KEY,start,NOW,3600)
+    assert r['baseline'] is None
+    assert [b['network'] for b in r['timeline']]==[4,None,6]
+    assert [b['copies'] for b in r['timeline']]==[0,None,0]
+    assert r['ambiguous']==3 and r['uncertain_buckets']==2
+    assert all(b['repeater_index'] is None for b in r['timeline'])

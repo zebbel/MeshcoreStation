@@ -30,5 +30,23 @@ def neighbor_map_scope():
     return bool(paths) and paths<=ALLOWED
 
 
+def performance_calculation_scope():
+    # Only this read-only calculation/chart correction can skip map/browser work.
+    allowed={'.github/workflows/v4-release.yml','.github/workflows/production-regression.yml',
+             'scripts/v4_test_scope.py','meshcorestation/__init__.py','meshcorestation/analyzer.py',
+             'meshcorestation/storage/performance_view.py',
+             'meshcorestation/web/assets/repeater_performance.js',
+             'tests/test_performance_dashboard.py','tests/test_performance_ui.cjs',
+             'README.md','docs/repeater-performance.md','docs/v4-release.md'}
+    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.3.4':
+        return False
+    try:
+        paths=set(subprocess.check_output(['git','diff','--name-only','HEAD^','HEAD'],text=True).splitlines())
+    except subprocess.CalledProcessError:
+        return False
+    return bool(paths) and paths<=allowed
+
+
 if __name__=='__main__':
     print('neighbor_map='+str(neighbor_map_scope()).lower())
+    print('performance_calc='+str(performance_calculation_scope()).lower())

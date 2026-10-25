@@ -1,4 +1,4 @@
-# MeshcoreStation 4.3.3
+# MeshcoreStation 4.3.4
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -8,6 +8,15 @@ V4 preserves existing station and room databases. The external Analyzer feature
 is **available on demand without activation**, with live operation confirmed by the operator.
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
+
+## Changes in 4.3.4
+
+Repeater vs. Mesh Activity retains confirmed Companion path matches even when
+other matches in the same bucket have ambiguous hash prefixes. Ambiguous matches
+are excluded and reported separately; affected counts are lower bounds and do
+not support reliable trend assessments. Without a positive shared index baseline,
+the chart displays raw Companion counts, so mesh history remains visible.
+No Analyzer counts are mixed in and existing observations are unchanged.
 
 ## Changes in 4.3.3
 

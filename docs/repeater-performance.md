@@ -97,11 +97,20 @@ Repeater vs. Mesh Activity derives **both** series from the same
 `network_observations` Companion stream, with the same time boundaries and existing
 collision-aware path matching. It never divides Analyzer counts by Companion
 traffic or mixes the managed Statistics stream into this chart. Each line starts
-at index 100 in the first complete bucket with positive repeater and mesh counts:
+at index 100 in the first complete bucket with positive confirmed repeater and mesh counts:
 `100 × current count / that series' baseline count`. Hover/details preserve raw
-counts. A recorded zero after the baseline is a valid zero involvement count among
-observed paths; missing buckets stay gaps. A zero/unknown baseline has no index.
-Ambiguous short hashes invalidate the involvement bucket instead of guessing.
+counts and show excluded ambiguous path copies. Confirmed matches are retained
+when other hash-prefix matches in the same bucket are ambiguous. Ambiguous matches
+are excluded; affected repeater counts are lower bounds, not reliable evidence
+of improvement or decline. Coverage counts exclude uncertain buckets and relative
+assessments withhold conclusions when required buckets are uncertain.
+
+Without a positive shared baseline, the chart shows **Confirmed repeater path
+copies** and **Companion-observed mesh copies** as raw counts, with integer axes,
+instead of hiding valid mesh history. No normalized comparison is claimed. Zero
+confirmed matches means none could be confirmed among received paths; it does not
+prove no forwarding, particularly when ambiguous matches were excluded. Missing
+buckets remain gaps. Partial buckets cannot establish an index or reliable trend.
 
 Companion buckets are hourly (24h), six-hourly (7d) or daily (30d). Partial boundary
 buckets cannot establish an index. If Optimization Analysis did not save the
