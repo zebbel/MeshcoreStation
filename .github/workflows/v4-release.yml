@@ -49,7 +49,7 @@ jobs:
             for file in tests/*.cjs; do node "$file" || exit 1; done
           fi
       - run: npx playwright install --with-deps chromium
-      - name: Focused real-browser neighbor map checks
+      - name: Focused native Leaflet interaction checks
         run: |
           PYTHONPATH=. python tests/browser/serve.py > browser-server.log 2>&1 &
           server_pid=$!

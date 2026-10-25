@@ -3,7 +3,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
 const key='769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff',other='ab'.repeat(32),output=process.env.BROWSER_OUTPUT||'browser-results';fs.mkdirSync(output,{recursive:true});
 (async()=>{const browser=await chromium.launch({headless:true});let page;
 try{for(const [width,height,colorScheme] of [[1280,960,'light'],[390,844,'dark']]){
- page=await browser.newPage({viewport:{width,height},colorScheme});const requests=[],errors=[];page.on('request',r=>requests.push(r.url()));page.on('pageerror',e=>errors.push(e.message));
+ page=await browser.newPage({viewport:{width,height},colorScheme});
+ await page.addInitScript(()=>{
+   let loader;
+   Object.defineProperty(window,'meshcorestationLoadMapLibrary',{configurable:true,get:()=>loader,set(fn){loader=async(...args)=>{const result=await fn(...args);if(!L.__neighborTestWrapped){const original=L.map;L.map=function(...args){const m=original.apply(this,args);if(args[0]?.classList?.contains('performance-neighbor-canvas')){window.__neighborMap=m;window.__neighborEvents=[];m.on('dragstart drag dragend moveend',e=>window.__neighborEvents.push(e.type));m.getContainer().addEventListener('mousedown',e=>window.__neighborDown={which:e.which,button:e.button,target:e.target.tagName},true);}return m;};L.__neighborTestWrapped=true;}return result;};}});
+ });const requests=[],errors=[];page.on('request',r=>requests.push(r.url()));page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
  await page.goto('http://127.0.0.1:8050');await page.locator('#repeater-management-disclosure > summary').click();await page.waitForFunction(k=>document.querySelector('#managed-repeater')?.value===k,key);
  await page.locator('#repeater-optimizer-disclosure > summary').click();await page.locator('#repeater-performance-disclosure > summary').click();
@@ -29,10 +33,13 @@ try{for(const [width,height,colorScheme] of [[1280,960,'light'],[390,844,'dark']
  const canvas=map.locator('.leaflet-container');await canvas.evaluate(n=>n.scrollIntoView({block:'center',inline:'nearest'}));
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  const bounds=await canvas.boundingBox();
- const position=()=>map.evaluate(n=>JSON.stringify([...n.querySelectorAll('.leaflet-map-pane,.leaflet-marker-icon,path.network-relationship')].map(e=>[e.getAttribute('style'),e.getAttribute('d')])));
+ const position=()=>page.evaluate(()=>{const m=window.__neighborMap,c=m.getCenter();return {lat:c.lat,lng:c.lng};});
  const hit=await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('#performance-neighbor-map .leaflet-container'),{x:bounds.x+bounds.width*.25,y:bounds.y+bounds.height*.6});assert(hit,'pan starts inside the visible map');
- const beforePan=await position();await page.mouse.move(bounds.x+bounds.width*.25,bounds.y+bounds.height*.6);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width*.25+60,bounds.y+bounds.height*.6+35,{steps:8});await page.mouse.up();
- await page.waitForFunction(old=>JSON.stringify([...document.querySelectorAll('#performance-neighbor-map .leaflet-map-pane,#performance-neighbor-map .leaflet-marker-icon,#performance-neighbor-map path.network-relationship')].map(e=>[e.getAttribute('style'),e.getAttribute('d')]))!==old,beforePan);
+ const beforePan=await position();await page.mouse.move(bounds.x+bounds.width*.25,bounds.y+bounds.height*.6);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width*.25+60,bounds.y+bounds.height*.6+35,{steps:8});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.mouse.up();
+ const afterPan=await position();
+ if(afterPan.lat===beforePan.lat&&afterPan.lng===beforePan.lng)console.log('Pan diagnostics',await page.evaluate(()=>({events:window.__neighborEvents,down:window.__neighborDown,enabled:window.__neighborMap.dragging.enabled(),globalDragging:!!L.Draggable._dragging,pane:window.__neighborMap._mapPane.className})));
+ assert.notDeepEqual(afterPan,beforePan,'native mouse dragging changes the map center');
+
 
  await page.locator('#repeater-performance-disclosure > summary').click();await page.locator('#repeater-performance-disclosure > summary').click();await map.locator('.leaflet-marker-icon').first().waitFor();assert.equal(await map.locator('.leaflet-container').count(),1);
  const response=page.waitForResponse(r=>r.url().includes('/api/repeater-performance')&&r.url().includes(other));await page.locator('#managed-repeater').selectOption(other);await response;await page.waitForFunction(()=>document.querySelector('#performance-content')?.getAttribute('aria-busy')==='false');assert.equal(await map.locator('.leaflet-marker-icon').count(),0);assert((await map.innerText()).includes('No saved Analyzer relationship snapshot'));
