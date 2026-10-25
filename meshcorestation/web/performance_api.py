@@ -7,6 +7,23 @@ from meshcorestation.storage import performance_store as store, optimizer_store
 from meshcorestation.web.http import control_request_error, json_response
 
 
+def saved_neighbor_map(cached):
+    """Project the existing successful reach cache; never fetch or widen its period."""
+    result={'available':False,'fetched_at':None,'hours':24,'center':None,'neighbors':[]}
+    if not cached:
+        return result
+    data=cached[1]
+    if not isinstance(data,dict) or not isinstance(data.get('detail'),dict) or not isinstance(data.get('reach'),dict):
+        return result
+    center=data['detail'].get('node');neighbors=data['reach'].get('neighbourList')
+    if not isinstance(center,dict) or not isinstance(neighbors,list) or any(not isinstance(n,dict) for n in neighbors):
+        return result
+    fields=('pubkey','name','role','lat','lon','distanceKm','weHear','theyHear','twoWay','confidence')
+    return {**result,'available':True,'fetched_at':cached[0],
+            'center':{k:center.get(k) for k in ('id','name','role','lat','lon')},
+            'neighbors':[{k:n.get(k) for k in fields} for n in neighbors]}
+
+
 def register_performance_routes(server):
     @server.route('/api/repeater-performance', methods=['GET','POST'])
     def performance():
@@ -41,7 +58,7 @@ def register_performance_routes(server):
                 store.record_analyzer(key,cached[0],cached[1])
             result=store.overview(key,days,marker_id=marker_id,compare_days=compare_days)
             from meshcorestation.web.repeater_names import known_repeaters
-            return json_response({**result,'repeaters':known_repeaters()})
+            return json_response({**result,'repeaters':known_repeaters(),'neighbor_map':saved_neighbor_map(cached)})
         except (ValueError,TypeError,OverflowError,KeyError) as exc:
             return json_response({'ok':False,'error':str(exc)},400)
         except (OSError,sqlite3.Error):

@@ -13,12 +13,12 @@ try{for(const viewport of [{width:1280,height:960},{width:390,height:844}])for(c
  const order=await page.locator('#repeater-optimizer-disclosure > details').evaluateAll(nodes=>nodes.map(n=>n.id));assert.equal(order[0],'repeater-performance-disclosure');
  const initialResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/repeater-performance'&&r.request().method()==='GET');
  await page.locator('#repeater-performance-disclosure > summary').click();const stored=await (await initialResponse).json();await page.getByText('Saved observations loaded.',{exact:false}).first().waitFor();
- assert.equal(await page.locator('#performance-selected').innerText(),'DE_HE_HP_RPT1');assert.equal(await page.locator('#performance-content .stats-metric').count(),4);
+ assert.equal(await page.locator('#performance-selected').innerText(),'DE_HE_HP_RPT1');assert.equal(await page.locator('#performance-contribution .stats-metric').count(),4);
  const section=page.locator('#repeater-performance-disclosure');
- const exactOrder=['performance-contribution','performance-forwarding','performance-relative','performance-connectivity','performance-routing','performance-assessment','performance-changes','performance-details'];
+ const exactOrder=['performance-contribution','performance-forwarding','performance-relative','performance-connectivity','performance-neighbor-map','performance-routing','performance-assessment','performance-changes','performance-details'];
  assert.deepEqual(await page.locator('#performance-content').evaluate(n=>[...n.children].filter(n=>n.tagName==='SECTION'||n.tagName==='DETAILS').map(n=>n.id)),exactOrder);
  assert.equal(await page.locator('#performance-details').getAttribute('open'),null);
- const cards=section.locator('.stats-metric');
+ const cards=section.locator('#performance-contribution .stats-metric');
  assert.deepEqual(await cards.locator('strong').allTextContents(),['107','4 / 14','31','2']);
  assert.equal(stored.dashboard.cards.sole_pairs,2);
  assert.deepEqual(await page.locator('#performance-assessment article h4').allTextContents(),['Forwarding Activity','Repeater vs. Mesh Activity','Network Connectivity','Routing Contribution']);

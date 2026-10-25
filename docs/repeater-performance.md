@@ -39,7 +39,8 @@ A future collection time is a schedule, not a guarantee of success.
    Communication Pairs Served and Sole-Observed Route Pairs.
 2. **Forwarding Activity** — Analyzer complete hourly relay events.
 3. **Repeater vs. Mesh Activity** — two indexed Companion lines.
-4. **Network Connectivity** — observed neighbors and bidirectional relationships.
+4. **Network Connectivity** — observed neighbors and bidirectional relationships,
+   followed immediately by the Neighbor Communication Map.
 5. **Routing Contribution** — communication pairs and sole-observed route pairs.
 6. **Performance Assessment** — measured changes, coverage and interpretation.
 7. **Performance Changes** — expandable journal and before/after analysis.
@@ -193,3 +194,34 @@ their own retention limits and are read in place. Cached snapshots can seed
 history after upgrade using original timestamps, but do not fabricate older data.
 History-write failures preserve monitoring and show an error. HTTP failures do
 not create zero-valued samples. Live availability remains provider-dependent.
+
+## Neighbor Communication Map
+
+The geographical map follows the Network Connectivity chart. It reads the last
+successful Analyzer snapshot already saved by Network Monitoring/the 12-hour
+collector, through the existing Performance request. It never refreshes Analyzer,
+starts polling or sends mesh radio traffic. The reach endpoint supplies a 24-hour
+window; its retrieval time is explicit. The 7-day/30-day history selector does not
+widen this map because historical per-neighbor relationships are not stored.
+Older/unavailable snapshots are identified; no snapshot means unavailable counts,
+not zero neighbors.
+
+The selected repeater is blue. Green lines indicate observations in both
+directions; red lines require positive observations in one direction and an
+explicit zero in the other. Missing/conflicting evidence stays gray. One-way
+counts use this evidence, never total minus two-way. Only Analyzer-identified
+repeater neighbors are included; full keys are deduplicated. Contradictory
+duplicates remain unknown rather than confirmed.
+
+Low-confidence lines are dashed and hidden initially. Show low-confidence links
+reveals them; markers and statistics include those neighbors throughout. Unknown
+confidence is explicitly dotted. Medium/high confidence uses solid lines.
+Popups show names, distance when reported, weHear/theyHear, confidence and public
+keys. The weHear count means the selected repeater hears that neighbor; theyHear
+means that neighbor hears the selected repeater. Missing observations do not prove
+communication in the other direction is impossible.
+
+Neighbors lacking valid coordinates are listed beneath the map. If selected
+coordinates are absent, located neighbors can still be shown without invented
+connection lines. Missing background tiles leave valid markers/overlays visible.
+Relationships are inferred from analyzer observations and do not necessarily represent verified direct radio links.

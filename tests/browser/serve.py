@@ -55,4 +55,12 @@ with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory
     performance_store.marker_change(key,'create',{'description':'Fixture antenna replacement','at':now-2*86400})
     with advisor_history.database() as db:
         db.execute("INSERT INTO changes VALUES(12345,?,?,'flood.max','10','8','8','verified')",(now-2*86400+3600,key))
+    # A complete successful saved response powers Performance's cache-only map.
+    from meshcorestation.analyzer import service
+    cached=dict(sample)
+    for name,file in {'neighbors':'node_neighbors.json','clock':'clock_skew_24h.json','direct':'direct_packets_24h_empty.json','beacons':'channel_beacons_720h_empty.json','sensors':'channel_sensors_720h_empty.json'}.items():
+        cached[name]=json.loads((root/file).read_text())
+    cached['detail']['stat'].update(pairsServed=31,pairsSole=2)
+    with service.connection() as db:
+        db.execute('INSERT OR REPLACE INTO analyzer_cache VALUES(?,?,?,?)',(key,now,json.dumps(cached),'{}'))
     create_app().server.run(host='127.0.0.1',port=8050,debug=False,use_reloader=False)

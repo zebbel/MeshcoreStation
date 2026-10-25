@@ -44,3 +44,11 @@
  .performance-assessment { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 24px; }
  .performance-assessment > :is(h3,p) { grid-column:1 / -1; }
 }
+
+#performance-neighbor-map .performance-neighbor-canvas { height:clamp(300px,45vw,440px); }
+#performance-neighbor-map .performance-neighbor-selected { background:#2469d8; border-width:3px; }
+.performance-neighbor-filter { display:flex; align-items:center; gap:8px; margin-block:14px; }
+.performance-neighbor-filter input { width:auto; }
+.performance-neighbor-missing li { margin-block:10px; }
+#performance-neighbor-map .leaflet-popup-content { margin:14px 18px; }
+#performance-neighbor-map .leaflet-popup-content p { margin-block:6px; }

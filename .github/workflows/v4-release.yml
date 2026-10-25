@@ -18,19 +18,36 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install -r requirements.txt pytest
-      - run: python -m pytest -q
+      - name: Select affected release checks
+        id: scope
+        run: python -m scripts.v4_test_scope >> "$GITHUB_OUTPUT"
+      - name: Python regression checks
+        run: |
+          if [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then
+            python -m pytest -q tests/test_performance_neighbor_map.py tests/test_performance.py
+          else
+            python -m pytest -q
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - run: npm install --no-save --package-lock=false jsdom playwright@1.56.1
-      - name: Complete UI regression
+      - name: UI regression checks
         run: |
-          for file in tests/*.cjs; do node "$file" || exit 1; done
+          if [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then
+            node tests/test_network_relationships_ui.cjs
+            node tests/test_performance_neighbor_map_ui.cjs
+            node tests/test_performance_ui.cjs
+          else
+            for file in tests/*.cjs; do node "$file" || exit 1; done
+          fi
       - run: npx playwright install --with-deps chromium
       - name: Real browser maps, performance and responsive layout regression
         run: |
@@ -38,8 +55,12 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           for attempt in {1..30}; do curl -fsS http://127.0.0.1:8050/ > /dev/null && break; sleep 1; done
-          node tests/browser/network_monitoring.cjs
-          node tests/browser/repeater_performance.cjs
+          if [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then
+            node tests/browser/performance_neighbor_map.cjs
+          else
+            node tests/browser/network_monitoring.cjs
+            node tests/browser/repeater_performance.cjs
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -50,7 +71,7 @@ jobs:
           retention-days: 14
       - run: python -m scripts.check_install
       - name: Verify release version
-        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.3.0"'
+        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.3.1"'
   publish:
     needs: validate
     runs-on: ubuntu-latest
@@ -62,4 +83,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v4.3.0 --target "$GITHUB_SHA" --title "MeshcoreStation 4.3.0 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false
+          gh release create v4.3.1 --target "$GITHUB_SHA" --title "MeshcoreStation 4.3.1 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false

@@ -13,17 +13,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: requirements.txt
       - run: python -m pip install -r requirements.txt pytest
-      - run: python -m pytest -q
+      - name: Select affected release checks
+        id: scope
+        run: python -m scripts.v4_test_scope >> "$GITHUB_OUTPUT"
+      - name: Python regression checks
+        run: |
+          if [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then
+            python -m pytest -q tests/test_performance_neighbor_map.py tests/test_performance.py
+          else
+            python -m pytest -q
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - run: npm install --no-save --package-lock=false jsdom
-      - name: Complete browser regression suite
+      - name: UI regression checks
         run: |
-          for file in tests/*.cjs; do node "$file"; done
+          if [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then
+            node tests/test_network_relationships_ui.cjs
+            node tests/test_performance_neighbor_map_ui.cjs
+            node tests/test_performance_ui.cjs
+          else
+            for file in tests/*.cjs; do node "$file" || exit 1; done
+          fi

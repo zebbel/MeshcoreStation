@@ -1,4 +1,4 @@
-# MeshcoreStation 4.3.0
+# MeshcoreStation 4.3.1
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -9,7 +9,15 @@ is **available on demand without activation**, with live operation confirmed by 
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
 
-## Changes in 4.3.0
+## Changes in 4.3.1
+
+Repeater Performance adds a Neighbor Communication Map immediately after Network
+Connectivity. It reuses the saved 24-hour Analyzer reach snapshot, shows observed
+two-way/one-way/unknown counts, and hides low-confidence links until requested.
+Blue marks the selected repeater; green/red lines show observed directionality.
+Neighbor popups include evidence and confidence; neighbors without coordinates
+remain listed. Existing charts, assessment, journal and collection are preserved.
+
 
 Repeater Performance now displays four numerical Mesh Contribution cards, followed
 by Forwarding Activity, Repeater vs. Mesh Activity, Network Connectivity and Routing
