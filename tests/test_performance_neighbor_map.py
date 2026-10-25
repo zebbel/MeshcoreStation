@@ -119,3 +119,26 @@ def test_refresh_history_write_failure_keeps_old_history_and_reports_warning(sto
     assert response.json['dashboard']['cards']['relay_24h']==107
     assert service.cached(KEY)[1]['detail']['stat']['relayCount24h']==222
     assert len(p.measurements(KEY,first['fetched_at']-1,clock[0]+1))==1
+
+
+def test_auto_refresh_reuses_cache_then_updates_expired_history(stores,monkeypatch):
+    client,service,data,clock,mode,calls=refresh_client(stores,monkeypatch)
+    headers={'X-Meshcore-Control':'1'}
+    url=f'/api/repeater-performance?public_key={KEY}&refresh=auto'
+    # Empty history: local reads do not block on Analyzer; follow-up auto collects.
+    saved=client.get(f'/api/repeater-performance?public_key={KEY}',headers=headers).json
+    assert not calls and saved['days']==1
+    assert client.get(url,headers=headers).json['analyzer_refresh']['state']=='available'
+    assert len(calls)==8
+    clock[0]+=299
+    assert client.get(url,headers=headers).json['analyzer_refresh']['state']=='cached'
+    assert len(calls)==8
+    data['detail']['stat']['relayCount24h']=222
+    clock[0]+=1
+    fresh=client.get(url,headers=headers).json
+    assert len(calls)==16 and fresh['dashboard']['cards']['relay_24h']==222
+    clock[0]+=300;mode[0]=403
+    failed=client.get(url,headers=headers).json
+    assert failed['analyzer_refresh']['error'] and failed['dashboard']['cards']['relay_24h']==222
+    count=len(calls)
+    assert client.get(url,headers=headers).json['analyzer_refresh']['error'] and len(calls)==count

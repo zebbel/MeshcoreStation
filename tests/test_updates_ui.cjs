@@ -5,6 +5,7 @@ const dom = new JSDOM('<html><body><dialog id="companion-dialog"><div class="dia
 const w = dom.window;
 w.AbortSignal.timeout = () => undefined;
 w.confirm = () => true;
+w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
 let checkedBranch = 'main';
 let phase = '', checked = false, installed = false, tick;
 const requests = [];
@@ -54,6 +55,10 @@ w.eval(fs.readFileSync('meshcorestation/web/assets/updates.js', 'utf8'));
     phase = 'complete'; await tick(); await settle();
     assert(!panel.querySelector('.update-reload').hidden);
     assert.equal(requests.filter(b => b?.action === 'install').length,1);
+    w.meshcorestationOpenInstalledUpdate({ok:true,branch:'main',version:'4.3.3',revision:'a'.repeat(40),ready:true,check:{branch:'main',latest:'b'.repeat(40),available:true,latest_version:'4.3.4'},status:{}});
+    assert.equal(panel.querySelector('.update-branch').value,'main','footer handoff restores installed branch after another branch was selected');
+    w.confirm=()=>false;panel.querySelector('.update-install').click();await settle();
+    assert.equal(requests.filter(b=>b?.action==='install').length,1,'footer handoff preserves explicit installation confirmation');
     dom.window.close();
     console.log('Updates UI check/install/poll/reconnect checks passed.');
 })().catch(error => { console.error(error); process.exit(1); });

@@ -3,6 +3,17 @@
 MeshcoreStation 4.0.0 uses `v4.0.0`; V3 stays on `main`. Do not merge the
 V4 branch into main without separate authorization.
 
+## Fixed dashboard footer
+
+The footer shows © current year zebbel, installed version and Git branch, and
+connected Companion firmware/build (or unavailable). On each page load one
+asynchronous GitHub check targets only the installed branch. **Up to date** means
+that revision matches; **Update available** opens the existing updater on that
+same branch. Review and confirm installation there. No automatic installation or
+branch switch occurs. GitHub/service errors leave the dashboard usable and show
+an unavailable status. Footer space adapts to wrapping and mobile safe areas.
+Firmware display reads already-known device information without radio commands.
+
 ## Update from the dashboard
 
 1. Open **Settings → Updates / version**.

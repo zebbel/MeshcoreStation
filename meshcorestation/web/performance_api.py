@@ -45,19 +45,19 @@ def register_performance_routes(server):
             if set(request.args)-{'public_key','days','marker_id','compare_days','refresh'}:
                 raise ValueError('Unsupported performance parameter.')
             key=optimizer_store.valid_key(request.args.get('public_key'))
-            if request.args.get('refresh','0') not in ('0','1'):
+            if request.args.get('refresh','0') not in ('0','1','auto'):
                 raise ValueError('Invalid refresh option.')
-            refresh=request.args.get('refresh')=='1'
-            days=int(request.args.get('days',7));compare_days=int(request.args.get('compare_days',7))
+            refresh=request.args.get('refresh','0')
+            days=int(request.args.get('days',1));compare_days=int(request.args.get('compare_days',7))
             if days not in (1,7,30) or compare_days not in (1,3,7):
                 raise ValueError('Choose a supported observation window.')
             marker_id=int(request.args['marker_id']) if 'marker_id' in request.args else None
             if marker_id is not None and marker_id<=0:
                 raise ValueError('Choose a valid change marker.')
-            # Match Network Monitoring's explicit Refresh Now behavior. Normal
-            # view/period reads still only inspect the five-minute shared cache.
+            # Saved reads return immediately. Opening then requests auto mode,
+            # which reuses the shared five-minute cache; manual refresh forces it.
             from meshcorestation.analyzer import service
-            attempt=service.snapshot(key,force=True) if refresh else None
+            attempt=service.snapshot(key,force=refresh=='1') if refresh!='0' else None
             refresh_status={k:attempt.get(k) for k in ('state','fetched_at','stale','error','history_error')} if attempt else None
             cached=service.cached(key)
             if cached and not (attempt and attempt.get('history_error')) and time.time()-store.RETENTION<=cached[0]<=time.time():

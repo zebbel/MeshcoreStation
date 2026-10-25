@@ -64,9 +64,9 @@ def build_layout():
             html.Details([
                 html.Summary(html.H2("Repeater Performance")),
                 html.Div([
-                    html.P("Analyzer history collects automatically every 12 hours while the station service runs. Opening this dashboard reads saved observations. Refresh saved data requests fresh Analyzer measurements; it never sends radio commands.", className="muted"),
+                    html.P("Analyzer history collects automatically every 12 hours while the station service runs. Opening shows saved observations first, then refreshes Analyzer measurements if the shared five-minute cache has expired. Refresh saved data always requests fresh measurements; it never sends radio commands.", className="muted"),
                     html.Div([html.Span(id="performance-selected", className="stats-selected"),
-                        html.Label(["History", html.Select([html.Option("24 hours",value="1"),html.Option("7 days",value="7",selected=True),html.Option("30 days",value="30")],id="performance-days")]),
+                        html.Label(["History", html.Select([html.Option("24 hours",value="1",selected=True),html.Option("7 days",value="7"),html.Option("30 days",value="30")],id="performance-days")]),
                         html.Button("Refresh saved data",id="performance-refresh",title="Request fresh Analyzer data using the same cache, timeout and cooldown protections as Network Monitoring Refresh Now.")],className="stats-controls"),
                     html.P(id="performance-status",className="stats-message",role="status",**{"aria-live":"polite"}),
                     html.Div(id="performance-content")
@@ -100,5 +100,6 @@ def build_layout():
         ], id="room-server-disclosure", className="panel-disclosure"), className="history"),
         popup([html.Div([html.Div([html.P("COMMAND DETAILS", className="eyebrow"), html.H2("Received command", id="detail-title")]), html.Button("×", id="close-details", **{"aria-label": "Close details"})], className="dialog-header"), html.P("Reply text is recorded by the bot; it is not proof of delivery.", className="muted"), html.Section([html.H3("Packet route"), html.Div(id="route-summary", className="route-summary", **{"aria-live": "polite"}), html.Div(id="route-paths", className="route-paths", role="group", **{"aria-label": "Reception paths"}), html.Div(id="route-map", className="map-canvas", role="region", **{"aria-label": "Packet route map"}), html.Div(id="route-notes", className="map-notes")], id="route-section", hidden=True), html.Dl(id="detail-fields")], id="details-dialog", **{"aria-labelledby": "detail-title"}),
         popup([html.Div([html.H2("Known repeaters", id="repeaters-title"), html.Button("×", id="close-repeaters", **{"aria-label": "Close repeater map"})], className="dialog-header"), html.Div(id="repeater-notes", className="map-notes", **{"aria-live": "polite"}), html.Div(id="repeater-map", className="map-canvas", role="region", **{"aria-label": "Known repeaters map"})], id="repeaters-dialog", **{"aria-labelledby": "repeaters-title"}),
+        html.Footer([html.Span(id="footer-copyright"), html.Span("Installed version / branch unavailable",id="footer-version"), html.Span("Companion firmware unavailable",id="footer-firmware"), html.Span("Checking for updates…",id="footer-update",role="status",**{"aria-live":"polite"}), html.Button("Update available",id="footer-update-button",hidden=True,type="button")],id="dashboard-footer"),
         dcc.Interval(id="refresh", interval=5000), dcc.Interval(id="history-refresh", interval=5000, disabled=True), dcc.Store(id="window-size", data=PAGE_SIZE), dcc.Store(id="last-render", data=None), dcc.Store(id="history-visible", data=False)
     ], className="shell")

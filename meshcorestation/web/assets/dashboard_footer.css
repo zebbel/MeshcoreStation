@@ -1,0 +1,8 @@
+:root { --dashboard-footer-height: 130px; }
+body { padding-bottom: calc(var(--dashboard-footer-height) + 16px); }
+#dashboard-footer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 900; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 20px; padding: 10px 16px max(10px,env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; box-sizing: border-box; }
+#dashboard-footer span { overflow-wrap: anywhere; min-width: 0; }
+#dashboard-footer button { font: inherit; }
+#dashboard-footer [hidden] { display: none !important; }
+@media(max-width:600px) { #dashboard-footer { gap: 6px 12px; } }
+html { scroll-padding-bottom: calc(var(--dashboard-footer-height) + 16px); }

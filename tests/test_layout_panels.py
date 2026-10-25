@@ -81,3 +81,12 @@ def test_network_monitoring_has_no_obsolete_experimental_status():
     assert 'Experimental' not in text
     assert 'unverified' not in text
     assert 'External access may be restricted' in text
+
+
+def test_footer_and_optimizer_24h_default():
+    nodes=list(walk(build_layout()))
+    footer=next(n for n in nodes if getattr(n,'id',None)=='dashboard-footer')
+    assert isinstance(footer,html.Footer)
+    assert {'footer-version','footer-firmware','footer-update-button'} <= {getattr(n,'id',None) for n in walk(footer)}
+    period=next(n for n in nodes if getattr(n,'id',None)=='performance-days')
+    assert [(o.value,getattr(o,'selected',False)) for o in period.children]==[('1',True),('7',False),('30',False)]

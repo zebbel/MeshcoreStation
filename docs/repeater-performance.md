@@ -3,7 +3,7 @@
 Open Repeater Optimizer → Repeater Performance above Repeater Statistics. All
 subsections share the managed repeater selection, readable names and dashboard
 appearance. The overview answers: Is it active? How does it contribute? Is its
-observed activity changing? Choose 24 hours, 7 days or 30 days.
+observed activity changing? History starts at 24 hours; choose 7 days or 30 days when needed.
 
 ## Automatic history collection
 
@@ -13,15 +13,18 @@ It starts after the application initializes its databases and stops with the
 service. No additional radio commands, subscriptions or transmissions are made.
 The existing HTTPS client, validation, five-minute cache and request lock are
 shared with Network Monitoring. Manual Refresh Now and loading on opening remain
-available; the browser itself does not poll. Opening Performance, switching its
-period or using its journal reads local storage. **Refresh saved data** explicitly
+available; the browser itself does not poll. Opening Performance or switching repeater displays local saved observations first,
+then requests an automatic Analyzer refresh using the shared five-minute cache.
+Fresh cache entries are reused; expired or missing entries are collected through
+the existing request lock and provider cooldowns. Period changes and journal
+reads remain local and preserve the selected history period. **Refresh saved data** explicitly
 requests a fresh Analyzer snapshot, following Network Monitoring's Refresh Now
 behavior: it can refresh within the normal five-minute read-cache lifetime, but
 cannot bypass request locking, timeouts, HTTP 403 restrictions, provider rate
 limits or Retry-After cooldowns. Successful responses update the shared cache,
 historical measurements, cards, charts and neighbor map. Progress disables the
 button until the request finishes; failures show a message and preserve saved
-observations. No automatic browser refresh or radio command is added. Closing or
+observations. There is no continuous browser polling or additional radio command. Closing or
 switching repeaters cancels/ignores obsolete browser responses; an already sent
 server request may finish within its existing timeout.
 

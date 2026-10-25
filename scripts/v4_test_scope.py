@@ -1,4 +1,4 @@
-"""Limit this isolated map release's CI checks; unrelated changes keep full checks."""
+"""Limit this isolated dashboard release's CI checks; unrelated changes keep full checks."""
 import os
 import subprocess
 from meshcorestation import __version__
@@ -13,12 +13,15 @@ ALLOWED={
  'tests/test_performance_neighbor_map.py','tests/test_performance_neighbor_map_ui.cjs',
  'tests/test_performance_ui.cjs','tests/browser/serve.py',
  'tests/browser/performance_neighbor_map.cjs','tests/browser/repeater_performance.cjs',
- 'scripts/v4_test_scope.py'
+ 'scripts/v4_test_scope.py','docs/web-version-switching.md',
+ 'meshcorestation/web/optimizer_api.py','meshcorestation/web/repeater_optimizer.html',
+ 'meshcorestation/web/assets/dashboard_footer.js','meshcorestation/web/assets/dashboard_footer.css',
+ 'meshcorestation/web/assets/updates.js','tests/test_dashboard_footer.cjs','tests/test_layout_panels.py','tests/test_updates_ui.cjs'
 }
 
 
 def neighbor_map_scope():
-    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.3.2':
+    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.3.3':
         return False
     try:
         paths=set(subprocess.check_output(['git','diff','--name-only','HEAD^','HEAD'],text=True).splitlines())

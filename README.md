@@ -1,4 +1,4 @@
-# MeshcoreStation 4.3.2
+# MeshcoreStation 4.3.3
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -9,13 +9,18 @@ is **available on demand without activation**, with live operation confirmed by 
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
 
-## Changes in 4.3.2
+## Changes in 4.3.3
 
-Performance's Refresh saved data now explicitly refreshes Analyzer measurements
-using the existing manual-refresh protections, saves cache/history and redraws
-cards, charts and the neighbor map. Failures keep saved observations and show an
-error. The low-confidence checkbox now filters both markers and lines (and the
-unlocated-neighbor list), immediately and without another API request.
+A fixed dashboard footer shows the current year, installed version/branch and
+connected Companion firmware/build. One asynchronous GitHub check uses only the
+installed branch; **Update available** opens the existing confirmed updater.
+Unavailable services are reported without installing or switching automatically.
+
+Optimizer history defaults to **24 hours**; 7/30-day choices and before/after
+settings remain available. Performance shows saved data immediately on opening or
+repeater switching, then reuses the shared five-minute cache or refreshes expired
+Analyzer data. **Refresh saved data** still explicitly forces fresh measurements.
+Failures retain observations, and low-confidence filtering remains entirely local.
 
 
 Repeater Performance adds a Neighbor Communication Map immediately after Network

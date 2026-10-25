@@ -103,10 +103,10 @@ def register_optimizer_routes(server):
                     raise ValueError('Invalid current settings.')
                 if data.get('since',state['since'])!=state['since']:
                     current={}
-                days=data.get('days',7)
+                days=data.get('days',1)
             else:
                 key=optimizer_store.valid_key(request.args.get('public_key'))
-                days=int(request.args.get('days',7))
+                days=int(request.args.get('days',1))
                 current={}
             if type(days) is not int or days not in (1,7,14,30,60):
                 raise ValueError('Choose 1, 7, 14, 30, 60 days.')

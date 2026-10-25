@@ -112,6 +112,15 @@
         panel.querySelector('.update-reload').addEventListener('click', () => location.reload());
         api().then(result => { render(result); if (!busy) refreshBranches(); }).catch(error => message(error.message));
     }
+    // Footer checks only the installed branch. Installing still uses the existing
+    // confirmation, backup/rollback worker and restart flow in this panel.
+    window.meshcorestationOpenInstalledUpdate = result => {
+        attach(); if (!panel) throw Error('Update settings are not ready.');
+        pageBranch=result.branch; selectedBranch=result.branch; render(result);
+        const dialog=document.getElementById('companion-dialog');
+        if (!dialog.open) dialog.showModal();
+        panel.scrollIntoView?.({block:'start'});
+    };
     new MutationObserver(attach).observe(document.documentElement, {childList: true, subtree: true});
     attach();
 })();
