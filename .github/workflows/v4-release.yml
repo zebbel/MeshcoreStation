@@ -49,7 +49,7 @@ jobs:
             for file in tests/*.cjs; do node "$file" || exit 1; done
           fi
       - run: npx playwright install --with-deps chromium
-      - name: Real browser maps, performance and responsive layout regression
+      - name: Real browser neighbor interaction and responsive layout checks
         run: |
           PYTHONPATH=. python tests/browser/serve.py > browser-server.log 2>&1 &
           server_pid=$!
