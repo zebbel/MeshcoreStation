@@ -50,7 +50,7 @@ class NoRedirect(HTTPRedirectHandler):
 def transport(url, headers, timeout):
     """Fixed-host caller; reject redirects, limit body and socket wait."""
     req = Request(url, headers={'Accept': 'application/json',
-                               'User-Agent': 'MeshcoreStation/4.3.4 (read-only analyzer client)', **headers})
+                               'User-Agent': 'MeshcoreStation/4.4.0 (read-only analyzer client)', **headers})
     try:
         with build_opener(NoRedirect()).open(req, timeout=timeout) as response:
             deadline = time.monotonic() + timeout

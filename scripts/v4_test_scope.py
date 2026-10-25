@@ -47,6 +47,24 @@ def performance_calculation_scope():
     return bool(paths) and paths<=allowed
 
 
+def reply_retry_scope():
+    allowed={'.github/workflows/v4-release.yml','.github/workflows/production-regression.yml',
+             'scripts/v4_test_scope.py','meshcorestation/__init__.py','meshcorestation/analyzer.py',
+             'meshcorestation/radio/reply_retries.py','meshcorestation/radio/companion.py',
+             'meshcorestation/radio/channels_control.py','meshcorestation/runtime.py',
+             'meshcorestation/storage/reply_store.py','meshcorestation/web/assets/reply_tracking.js',
+             'tests/test_reply_retries.py','tests/test_reply_tracking_ui.cjs',
+             'README.md','docs/bot-reply-retries.md','docs/user-guide.md','docs/v4-release.md'}
+    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.4.0':
+        return False
+    try:
+        paths=set(subprocess.check_output(['git','diff','--name-only','HEAD^','HEAD'],text=True).splitlines())
+    except subprocess.CalledProcessError:
+        return False
+    return bool(paths) and paths<=allowed
+
+
 if __name__=='__main__':
     print('neighbor_map='+str(neighbor_map_scope()).lower())
     print('performance_calc='+str(performance_calculation_scope()).lower())
+    print('reply_retry='+str(reply_retry_scope()).lower())

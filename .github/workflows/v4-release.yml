@@ -30,7 +30,9 @@ jobs:
         run: python -m scripts.v4_test_scope >> "$GITHUB_OUTPUT"
       - name: Python regression checks
         run: |
-          if [ "${{ steps.scope.outputs.performance_calc }}" = "true" ]; then
+          if [ "${{ steps.scope.outputs.reply_retry }}" = "true" ]; then
+            python -m pytest -q tests/test_reply_retries.py tests/test_reply_tracking.py tests/test_command_receptions.py tests/test_position_scope.py
+          elif [ "${{ steps.scope.outputs.performance_calc }}" = "true" ]; then
             python -m pytest -q tests/test_performance_dashboard.py tests/test_performance.py
           elif [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then
             python -m pytest -q tests/test_performance_neighbor_map.py tests/test_performance.py tests/test_layout_panels.py tests/test_updater.py tests/test_optimizer.py
@@ -41,14 +43,16 @@ jobs:
         with:
           node-version: '24'
       - run: |
-          if [ "${{ steps.scope.outputs.performance_calc }}" = "true" ]; then
+          if [ "${{ steps.scope.outputs.performance_calc }}" = "true" ] || [ "${{ steps.scope.outputs.reply_retry }}" = "true" ]; then
             npm install --no-save --package-lock=false jsdom
           else
             npm install --no-save --package-lock=false jsdom playwright@1.56.1
           fi
       - name: UI regression checks
         run: |
-          if [ "${{ steps.scope.outputs.performance_calc }}" = "true" ]; then
+          if [ "${{ steps.scope.outputs.reply_retry }}" = "true" ]; then
+            node tests/test_reply_tracking_ui.cjs
+          elif [ "${{ steps.scope.outputs.performance_calc }}" = "true" ]; then
             node tests/test_performance_ui.cjs
           elif [ "${{ steps.scope.outputs.neighbor_map }}" = "true" ]; then
             node tests/test_network_relationships_ui.cjs
@@ -61,10 +65,10 @@ jobs:
           else
             for file in tests/*.cjs; do node "$file" || exit 1; done
           fi
-      - if: steps.scope.outputs.performance_calc != 'true'
+      - if: steps.scope.outputs.performance_calc != 'true' && steps.scope.outputs.reply_retry != 'true'
         run: npx playwright install --with-deps chromium
       - name: Focused neighbor map visual and interaction checks
-        if: steps.scope.outputs.performance_calc != 'true'
+        if: steps.scope.outputs.performance_calc != 'true' && steps.scope.outputs.reply_retry != 'true'
         run: |
           PYTHONPATH=. python tests/browser/serve.py > browser-server.log 2>&1 &
           server_pid=$!
@@ -77,7 +81,7 @@ jobs:
             node tests/browser/repeater_performance.cjs
           fi
       - uses: actions/upload-artifact@v4
-        if: always() && steps.scope.outputs.performance_calc != 'true'
+        if: always() && steps.scope.outputs.performance_calc != 'true' && steps.scope.outputs.reply_retry != 'true'
         with:
           name: v4-browser-verification
           path: |
@@ -86,7 +90,7 @@ jobs:
           retention-days: 14
       - run: python -m scripts.check_install
       - name: Verify release version
-        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.3.4"'
+        run: python -c 'from meshcorestation import __version__; assert __version__ == "4.4.0"'
   publish:
     needs: validate
     runs-on: ubuntu-latest
@@ -98,4 +102,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v4.3.4 --target "$GITHUB_SHA" --title "MeshcoreStation 4.3.4 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false
+          gh release create v4.4.0 --target "$GITHUB_SHA" --title "MeshcoreStation 4.4.0 — V4 branch" --notes-file docs/v4-release.md --prerelease --latest=false

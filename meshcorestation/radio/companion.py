@@ -35,6 +35,10 @@ class Companion:
         self.control_lock = asyncio.Lock()
         self.room_bot_id = None
         self.room_bot_name = None
+        self.active_command_hops = None
+        self._reply_timestamp = 0
+        from meshcorestation.radio.reply_retries import ReplyRetries
+        self.reply_retries = ReplyRetries(self)
 
 ################################################
 # CONNECTION FUNCTIONS
@@ -92,6 +96,7 @@ class Companion:
         return True
 
     async def disconnect(self):
+        await self.reply_retries.close()
         if self.neighbor_poller is not None:
             await self.neighbor_poller.close()
             self.neighbor_poller=None
@@ -117,6 +122,7 @@ class Companion:
 ################################################
 
     async def send_channel_message(self, channel, message, matched_rx):
+        if self.reply_retries.closed:return False
         try:
             scope_name, scope_key = self._get_reply_scope(matched_rx)
         except Exception as exc:
@@ -128,19 +134,38 @@ class Companion:
             scope_key = None
             message = "scope not known"
 
+        result,reply_id=await self._transmit_reply(channel,message,scope_name,scope_key,self.active_command_id)
+        if reply_id is not None:
+            try:
+                row=self.database.db.execute('SELECT timestamp FROM command_replies WHERE id=?',(reply_id,)).fetchone()
+                if scope_name=='unscoped (unknown request scope)':
+                    from meshcorestation.storage import reply_store
+                    reply_store.retry_state(self.database.db,reply_id,'not scheduled','Original request scope unknown; retries disabled.')
+                else:
+                    self.reply_retries.schedule(reply_id,self.active_command_id,channel,message,scope_name,scope_key,row[0],self.active_command_hops)
+            except Exception as exc:
+                self.logger.warning('Reply retry scheduling unavailable: %s',exc)
+        return result
+
+    async def _transmit_reply(self,channel,message,scope_name,scope_key,command_id,*,stamp=None,parent=None,attempt=1):
         async with self.reply_lock:
+            if self.reply_retries.closed:return False,None
             reply_id = None
             from meshcorestation.storage import reply_store
             try:
-                stamp = int(time.time())
-                if self.active_command_id is not None and isinstance(self.tracking_key, bytes):
+                stamp = max(int(time.time()) if stamp is None else stamp,self._reply_timestamp+1)
+                if not 0<=stamp<=0xffffffff:return False,None
+                self._reply_timestamp=stamp
+                if command_id is not None and isinstance(self.tracking_key, bytes):
                     name = self.mc.self_info.get('name') or self.mc.self_info.get('adv_name')
                     if name:
                         try:
-                            reply_id = reply_store.begin(self.database.db,self.active_command_id,message,
-                                name,self.tracking_key,stamp,scope_name,scope_key)
+                            reply_id = reply_store.begin(self.database.db,command_id,message,
+                                name,self.tracking_key,stamp,scope_name,scope_key,parent=parent,attempt=attempt)
                         except Exception as exc:
                             self.logger.warning('Reply tracking unavailable: %s',exc)
+                if parent is not None and reply_id is None:
+                    return False,None
                 result = await self.mc.commands.set_flood_scope("*" if scope_key is None else scope_key)
 
                 if result is None or result.type != EventType.OK:
@@ -150,7 +175,7 @@ class Companion:
                         except Exception as exc:
                             self.logger.warning('Reply result could not be recorded: %s',exc)
                     self.logger.warning("Reply skipped: could not select scope %s", scope_name)
-                    return False
+                    return False,reply_id
 
                 result = await self.mc.commands.send_chan_msg(channel, message, timestamp=stamp)
 
@@ -162,11 +187,16 @@ class Companion:
                         self.logger.warning('Reply send result could not be recorded: %s',exc)
                 if result is None or result.type != EventType.OK:
                     self.logger.warning("Reply send failed: %s", getattr(result, "payload", None))
-                    return False
+                    return False,reply_id
 
                 self.logger.info(f"Reply sent | scope: {scope_name}")
-                return scope_name
+                return scope_name,reply_id
 
+            except asyncio.CancelledError:
+                if reply_id is not None:
+                    try:reply_store.finish(self.database.db,reply_id,'uncertain','Session ended before the submission result was known.')
+                    except Exception:pass
+                raise
             except Exception as exc:
                 if reply_id is not None:
                     try:
@@ -174,7 +204,7 @@ class Companion:
                     except Exception:
                         pass
                 self.logger.warning("Scoped reply failed: %s %s", type(exc).__name__, exc)
-                return False
+                return False,reply_id
 
             finally:
                 try:
@@ -291,6 +321,7 @@ class Companion:
             scope = evidence[1] if evidence else 'unidentified' if matched_rx and matched_rx.get('route_type') in (0, 3) else None
             reception_store.bind(self.database.db, identity, command_id, scope)
             self.active_command_id = command_id
+            self.active_command_hops = hops
             from meshcorestation.commands.delivery import ReplyDelivery
             delivery = ReplyDelivery()
             scope_name = 'no reply'
@@ -310,6 +341,7 @@ class Companion:
                 raise
             finally:
                 self.active_command_id = None
+                self.active_command_hops = None
                 positions = self.database.get_companion_positions_by_name(message_data.get('name'))
                 position = positions[0] if len(positions)==1 else {}
                 with self.database.db:
@@ -331,7 +363,8 @@ class Companion:
         if rx.get("payload_type") == 5 and isinstance(getattr(self, "tracking_key", None), bytes):
             try:
                 from meshcorestation.storage.reply_store import observe
-                observe(self.database.db,rx,self.tracking_key,self.database.get_scopes() if rx.get("route_type")==0 else [])
+                observed=observe(self.database.db,rx,self.tracking_key,self.database.get_scopes() if rx.get("route_type")==0 else [])
+                if observed is not None:self.reply_retries.evidence(observed)
             except Exception as exc:
                 self.logger.warning('Reply observation could not be recorded: %s',exc)
         

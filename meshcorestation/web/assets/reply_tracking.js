@@ -23,17 +23,26 @@
             data.replies.forEach((reply,i)=>{
                 const item=node('article'),title=node('h4','Reply '+(i+1));
                 const labels={accepted:'Accepted by companion',rejected:'Rejected by companion',uncertain:'Send result uncertain',submitting:'Submission started; result not recorded yet'};
-                item.append(title,node('p',(labels[reply.send_status]||reply.send_status)+' · '+reply.scope),node('pre',reply.message));
-                if(reply.detail)item.append(node('p',reply.detail));
-                if(!reply.observations.length){
-                    const listening=Date.now()/1000<reply.created_at+data.window_seconds;
-                    item.append(node('p',listening?'Forwarding not confirmed — listening for matching copies (up to 5 minutes).':'Forwarding not confirmed — no matching repeater copy recorded.'));
-                }
-                reply.observations.forEach(observation=>{
-                    const route=observation.route.map(h=> (h.name||h.prefix)+' ['+h.prefix+'] · '+h.status).join(' → ');
-                    item.append(node('p',window.meshcorestationFormatDate(observation.seen_at)+' · '+observation.latency.toFixed(1)+'s after submission'),
-                        node('p',route),
-                        node('small','Received at this station: RSSI '+(observation.rssi??'--')+' dBm · SNR '+(observation.snr??'--')+' dB'));
+                item.append(title,node('p','Channel reply · '+reply.scope),node('pre',reply.message));
+                item.append(node('p','Retry status: '+(reply.retry_status||'legacy record')+(reply.retry_detail?' — '+reply.retry_detail:'')));
+                if(reply.next_retry_at)item.append(node('p','Next attempt no earlier than '+window.meshcorestationFormatDate(reply.next_retry_at)));
+                const maximum=reply.max_attempts;
+                (reply.attempts||[reply]).forEach((reply,index)=>{
+                    item.append(node('h5','Attempt '+(reply.attempt||index+1)+(maximum?' / '+maximum:'')),
+                        node('p',labels[reply.send_status]||reply.send_status),
+                        node('p','Submitted '+window.meshcorestationFormatDate(reply.created_at)+(Number.isInteger(reply.timestamp)?' · Packet timestamp '+reply.timestamp+' ('+window.meshcorestationFormatDate(reply.timestamp)+')':'')));
+
+                    if(reply.detail)item.append(node('p',reply.detail));
+                    if(!reply.observations.length){
+                        const listening=Date.now()/1000<reply.created_at+data.window_seconds;
+                        item.append(node('p',listening?'Forwarding not confirmed — listening for matching copies (up to 5 minutes).':'Forwarding not confirmed — no matching repeater copy recorded.'));
+                    }
+                    reply.observations.forEach(observation=>{
+                        const route=observation.route.map(h=> (h.name||h.prefix)+' ['+h.prefix+'] · '+h.status).join(' → ');
+                        item.append(node('p',window.meshcorestationFormatDate(observation.seen_at)+' · '+observation.latency.toFixed(1)+'s after submission'),
+                            node('p',route),
+                            node('small','Received at this station: RSSI '+(observation.rssi??'--')+' dBm · SNR '+(observation.snr??'--')+' dB'));
+                    });
                 });
                 box.append(item);
             });

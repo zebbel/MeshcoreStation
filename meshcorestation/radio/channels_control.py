@@ -104,6 +104,7 @@ async def handle_channels(companion, request):
         # Caller holds control_lock, so an in-flight reply completes before switching.
         companion.database.set_bot_channel(name)
         companion.channel_idx = index
+        companion.tracking_key = secret
         companion.channel_name = name
         companion.channel_hash = hashlib.sha256(secret).digest()[:1].hex()
         companion.recent_rx_logs.clear()

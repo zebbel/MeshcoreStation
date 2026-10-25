@@ -8,7 +8,11 @@ Expand Command History to see commands oldest first, filter them or load older
 entries. Command Details lists distinct reception paths and their available RSSI,
 SNR and time. Selecting a path changes route lines, arrows, hops and distance while
 keeping the same map. Unknown or ambiguous prefixes remain labeled. Recorded
-replies are not proof of delivery.
+replies are not proof of delivery. Outgoing replies groups original sends and
+protocol-timed retries, with timestamps, Companion acceptance, forwarding evidence
+and the final retry status. Commands execute once; retries resend only saved text.
+See [Channel-command reply retries](bot-reply-retries.md) for limits and safety
+behavior. Receiver delivery remains unconfirmed.
 
 In Repeater Management, add repeaters from the map and choose one in the dropdown.
 The selection drives telemetry and all four optimizer subsections. Removing a

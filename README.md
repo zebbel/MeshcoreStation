@@ -1,4 +1,4 @@
-# MeshcoreStation 4.3.4
+# MeshcoreStation 4.4.0
 
 MeshcoreStation combines a MeshCore command bot, repeater management and telemetry,
 local network analysis, and a room server in one Raspberry Pi dashboard.
@@ -8,6 +8,18 @@ V4 preserves existing station and room databases. The external Analyzer feature
 is **available on demand without activation**, with live operation confirmed by the operator.
 Availability still depends on the external provider and deployment connectivity.
 Offline fixture tests verify formats and behavior, not access permission or radio performance.
+
+## Changes in 4.4.0
+
+Channel-command replies now retry their saved text asynchronously using MeshCore's
+radio-airtime-based flood timeout with the Python client's 1.2 safety multiplier.
+Zero-hop commands allow one retry; multi-hop commands allow up to three; unknown
+hop counts do not retry. Matching forwarding evidence stops multi-hop retries.
+Each part retains its channel/scope and uses distinct packet timestamps. Queue,
+connection, configuration, pending-task and extra-airtime safeguards bound retries.
+Outgoing replies shows each attempt and its result; receiver delivery remains
+unconfirmed. Commands execute only once and stored history is preserved.
+See [Channel-command reply retries](docs/bot-reply-retries.md).
 
 ## Changes in 4.3.4
 

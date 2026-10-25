@@ -33,6 +33,7 @@ class Runtime:
             room = payload.get('room')
             if type(room) is not int or room < 1:
                 raise ValueError('Select a room.')
+            if self.companion is not None:self.companion.reply_retries.cancel('Bot destination changed; pending retries cancelled.')
             service.set_bot(room)
             if self.companion is not None:
                 self.companion.room_bot_id = room
@@ -63,6 +64,8 @@ class Runtime:
                 if payload.get('operation') == 'room_restart':
                     started = await self.start_rooms()
                     return {'ok': started, 'error': '' if started else 'Room worker could not start; check station logs.'}
+                if payload.get('operation') in {'name','position','tx_power','radio','path_hash_size','default_scope','add_channel','delete_channel','set_bot_channel'}:
+                    companion.reply_retries.cancel('Companion configuration change requested; pending retries cancelled.')
                 result = await control.execute(payload)
                 if payload.get('operation') == 'set_bot_channel' and result.get('ok'):
                     from meshcorestation.config import DATA_DIR
@@ -81,6 +84,7 @@ class Runtime:
     async def close_session(self):
         # Block new requests before canceling in-flight work and closing the radio.
         self.control = None
+        if self.companion is not None:await self.companion.reply_retries.close()
         for task in tuple(self.requests):
             task.cancel()
         await asyncio.gather(*tuple(self.requests), return_exceptions=True)
@@ -205,6 +209,8 @@ class Runtime:
         self.logger.set_log_level()
         while True:
             connected = self.companion.mc.connection_manager.is_connected
+            if not connected:
+                self.companion.reply_retries.cancel('Companion disconnected; pending retries cancelled.')
             bridge.status = ('Running', 'MeshcoreStation companion connected', 'running') if connected else ('Reconnecting', 'Companion connection lost', 'unknown')
             await asyncio.sleep(1)
 

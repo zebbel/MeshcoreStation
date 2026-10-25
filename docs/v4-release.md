@@ -1,25 +1,30 @@
-# MeshcoreStation 4.3.4 — V4 branch prerelease
+# MeshcoreStation 4.4.0 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.3.4` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.4.0` (prerelease, not latest stable). V3 main is unchanged.
 
-- Fixed Repeater vs. Mesh Activity discarding confirmed path observations whenever
-  another match in the bucket had an ambiguous hash prefix. Confirmed counts are
-  retained; ambiguous matches remain excluded and are reported in explanations,
-  hover values and measured-value tables. Counts with uncertainty are lower bounds.
-- Relative assessments exclude uncertain buckets and withhold trend conclusions
-  for incomplete required coverage. Positive shared baselines still normalize both
-  Companion series to 100 using their own counts from the same bucket/stream.
-- Without a shared positive baseline, display raw confirmed repeater and mesh
-  Companion counts independently, with integer axes and missing buckets as gaps.
-  Analyzer counts are never combined with Companion traffic. Stored observations,
-  timestamps, history and all existing V4 collection/refresh behavior are unchanged.
+- Channel-command replies retry saved text, never the command/action. Each part
+  permits original + one retry for zero-hop requests, original + up to three for
+  multi-hop requests, and original only for unknown hop counts.
+- Delays use `1.2 × (500 ms + 16 × estimated packet airtime)` with actual reported
+  SF/BW/CR and group packet framing, encryption padding and optional scope bytes.
+  No fixed long-delay retry schedule. Every submission has a distinct timestamp.
+- Multi-hop pending retries stop on authenticated matching forwarding evidence
+  from any attempt. Channel, text, timestamp, scope and nonempty path must match;
+  zero-path copies, unrelated messages and invalid authentication do not cancel.
+- Preserved original channel/scope, serial/control/reply locks and split behavior.
+  Local queue/connection/readback checks, bounded deferrals, 32 pending parts,
+  ten-second packet-airtime limit and 60 seconds extra retry airtime per rolling
+  session hour bound load. Missing identity/radio data disables retries.
+- Disconnect/shutdown/configuration changes cancel pending work; restart does not
+  resume old retries. Existing databases receive additive metadata only. Outgoing
+  replies groups all attempts with timestamps, acceptance, forwarding evidence,
+  next scheduled time and final status. Receiver delivery remains unconfirmed.
+- Existing V4.3.4 Performance, cache refresh, footer, maps and other UI behavior
+  remain. No private-message command handler or firmware changes were introduced.
 
-Focused calculation/chart tests reproduce mixed unambiguous/ambiguous hash sizes,
-exclude unrelated tracked copies, verify normalization and independent mesh
-history, preserve original rows, and withhold unsupported relative assessments.
-Essential installation/version/publication checks remain. This isolated read-only
-calculation release does not run unrelated browser/screenshot or map suites.
-
-The deployed Companion database was not supplied in this workspace. The failure
-path is reproduced against stored-format observations; no assertion is made about
-the number of affected buckets in the operator's deployment.
+Focused validation covers protocol timing, hop limits, saved-text/channel/scope
+retention, unique timestamps, authenticated forwarding, cancellation/races, queue
+and airtime limits, split parts, command deduplication, legacy storage and reply UI.
+Essential installation/version/release checks remain; no unrelated browser or
+screenshot suites are added. Tests use a simulated Companion, not live RF delivery.
+See [Reply retry details](bot-reply-retries.md) for PHY assumptions and limitations.
