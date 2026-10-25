@@ -1,4 +1,4 @@
-"""On-demand local performance reads and annotations; no radio/remote requests."""
+"""Local performance reads and annotations, with explicit manual Analyzer refresh. No radio requests."""
 import json
 import time
 import sqlite3
@@ -42,23 +42,29 @@ def register_performance_routes(server):
                 key=optimizer_store.valid_key(data.get('public_key'))
                 ident=store.marker_change(key,data.get('action'),data)
                 return json_response({'ok':True,'public_key':key,'id':ident})
-            if set(request.args)-{'public_key','days','marker_id','compare_days'}:
+            if set(request.args)-{'public_key','days','marker_id','compare_days','refresh'}:
                 raise ValueError('Unsupported performance parameter.')
             key=optimizer_store.valid_key(request.args.get('public_key'))
+            if request.args.get('refresh','0') not in ('0','1'):
+                raise ValueError('Invalid refresh option.')
+            refresh=request.args.get('refresh')=='1'
             days=int(request.args.get('days',7));compare_days=int(request.args.get('compare_days',7))
             if days not in (1,7,30) or compare_days not in (1,3,7):
                 raise ValueError('Choose a supported observation window.')
             marker_id=int(request.args['marker_id']) if 'marker_id' in request.args else None
             if marker_id is not None and marker_id<=0:
                 raise ValueError('Choose a valid change marker.')
-            # Seed an already saved snapshot after an upgrade; never fetch remotely here.
+            # Match Network Monitoring's explicit Refresh Now behavior. Normal
+            # view/period reads still only inspect the five-minute shared cache.
             from meshcorestation.analyzer import service
+            attempt=service.snapshot(key,force=True) if refresh else None
+            refresh_status={k:attempt.get(k) for k in ('state','fetched_at','stale','error','history_error')} if attempt else None
             cached=service.cached(key)
-            if cached and time.time()-store.RETENTION<=cached[0]<=time.time():
+            if cached and not (attempt and attempt.get('history_error')) and time.time()-store.RETENTION<=cached[0]<=time.time():
                 store.record_analyzer(key,cached[0],cached[1])
             result=store.overview(key,days,marker_id=marker_id,compare_days=compare_days)
             from meshcorestation.web.repeater_names import known_repeaters
-            return json_response({**result,'repeaters':known_repeaters(),'neighbor_map':saved_neighbor_map(cached)})
+            return json_response({**result,'repeaters':known_repeaters(),'neighbor_map':saved_neighbor_map(cached),'analyzer_refresh':refresh_status})
         except (ValueError,TypeError,OverflowError,KeyError) as exc:
             return json_response({'ok':False,'error':str(exc)},400)
         except (OSError,sqlite3.Error):

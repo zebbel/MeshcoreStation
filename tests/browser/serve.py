@@ -63,4 +63,21 @@ with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory
     cached['detail']['stat'].update(pairsServed=31,pairsSole=2)
     with service.connection() as db:
         db.execute('INSERT OR REPLACE INTO analyzer_cache VALUES(?,?,?,?)',(key,now,json.dumps(cached),'{}'))
+    # Manual refresh exercises the real Analyzer client/validation/storage, with
+    # fixture transport only. Browser tests must never contact the live provider.
+    from meshcorestation.analyzer import ENDPOINTS,HOST
+    refresh_number=[0]
+    def fixture_fetch(url,headers,timeout):
+        name=next(name for name,path in ENDPOINTS.items() if url==HOST+path.format(key=key))
+        if name=='detail':refresh_number[0]+=1
+        payload=copy.deepcopy(cached[name])
+        if name=='detail':
+            payload['stat']['relayCount24h']=107+refresh_number[0]
+            payload['relayTimeline'][-1]['count']=77
+            end=int(time.time()//3600)*3600
+            for i,row in enumerate(payload['relayTimeline']):
+                row['bucket']=datetime.fromtimestamp(end-(len(payload['relayTimeline'])-i)*3600,timezone.utc).isoformat()
+        if name=='reach':payload['neighbourList'][0]['weHear']=148+refresh_number[0]
+        return 200,{},json.dumps(payload).encode()
+    service.fetch=fixture_fetch
     create_app().server.run(host='127.0.0.1',port=8050,debug=False,use_reloader=False)

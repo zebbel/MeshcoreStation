@@ -1,29 +1,26 @@
-# MeshcoreStation 4.3.1 — V4 branch prerelease
+# MeshcoreStation 4.3.2 — V4 branch prerelease
 
-Branch: `v4.0.0`. Tag: `v4.3.1` (prerelease, not latest stable). V3 main is unchanged.
+Branch: `v4.0.0`. Tag: `v4.3.2` (prerelease, not latest stable). V3 main is unchanged.
 
-Added Neighbor Communication Map directly after Performance's Network Connectivity
-chart. It reuses the saved Analyzer reach snapshot and shared Leaflet loader,
-repeater names, dashboard styles and direction/confidence interpretation.
+- Refresh saved data in Repeater Performance now explicitly requests fresh Analyzer
+  measurements through the existing manual Refresh Now client. Success saves the
+  shared cache/history and updates cards, charts and the Neighbor Communication
+  Map. Progress disables duplicate button clicks. Failed requests retain saved
+  values and display meaningful errors, including HTTP 403 and rate limits.
+- Ordinary opening, period changes and journal reads stay local. The five-minute
+  cache for normal reads, explicit manual-refresh behavior, request timeouts,
+  single-flight lock and persisted provider cooldowns remain intact. No polling,
+  radio commands or access-control bypass is introduced.
+- Low-confidence filtering now removes markers as well as lines, and hides related
+  unlocated-neighbor entries. Checking restores them immediately without fetching
+  Analyzer data. Snapshot statistics continue to describe all reported neighbors.
+- Preserved the working native Leaflet drag check: it waits for zoom readiness,
+  picks clear map background outside popups/controls/markers, and verifies both a
+  real drag event and changed map center. Refresh/reopen tests wait for their
+  request and render completion instead of relying on timing or workflow retries.
 
-- Blue selected repeater; geographical neighbor markers; green two-way, red
-  one-way, gray insufficient/conflicting evidence. One-way counts are derived
-  from actual directional observations, not subtraction.
-- Dashed low-confidence links are hidden initially, with a checkbox to show them.
-  Markers/statistics still include those neighbors. Unknown confidence is dotted.
-- Neighbor popups contain names, distances, directional counts, confidence and
-  public-key details. Unlocated neighbors remain in a list below the map.
-- Explicit saved 24-hour window/timestamp: longer Performance periods cannot
-  reconstruct historical neighbor maps. Relationships are inferred, not verified
-  direct radio links. Unavailable snapshots do not become zero activity.
-
-Existing overview, four line charts, traffic comparisons, assessment, journal,
-technical statistics, automatic collection, cache and radio/security protections
-remain intact. No additional Analyzer refresh, polling or radio traffic is added.
-
-Validation is intentionally targeted: Performance/API and new map unit tests,
-shared direction/confidence checks, installation smoke check, and two real Chromium
-cases (desktop light/mobile dark) covering vector lines, markers/popups, filtering,
-missing coordinates, zoom/pan, resize/reopen and repeater switching. No extended
-regression matrix is required for this isolated change. Other CI changes retain
-full checks unless this exact release and the reviewed file scope match.
+Targeted validation covers successful refresh persistence, five-minute cached
+reads versus explicit refresh, HTTP failures/timeouts/malformed data, cooldowns,
+retained values, refresh progress/duplicate-click prevention, immediate filtering
+and existing Performance/journal behavior. Existing essential browser validation
+remains enabled for desktop light/mobile dark; unrelated workflows are unchanged.

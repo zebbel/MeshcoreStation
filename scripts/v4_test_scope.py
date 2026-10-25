@@ -7,7 +7,7 @@ ALLOWED={
  '.github/workflows/v4-release.yml','.github/workflows/production-regression.yml',
  'README.md','docs/repeater-performance.md','docs/v4-release.md',
  'meshcorestation/__init__.py','meshcorestation/analyzer.py',
- 'meshcorestation/web/performance_api.py',
+ 'meshcorestation/web/performance_api.py','meshcorestation/web/layout.py',
  'meshcorestation/web/assets/ad_neighbor_communication_map.js',
  'meshcorestation/web/assets/repeater_performance.js','meshcorestation/web/assets/repeater_performance.css',
  'tests/test_performance_neighbor_map.py','tests/test_performance_neighbor_map_ui.cjs',
@@ -18,7 +18,7 @@ ALLOWED={
 
 
 def neighbor_map_scope():
-    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.3.1':
+    if os.environ.get('GITHUB_REF')!='refs/heads/v4.0.0' or os.environ.get('GITHUB_EVENT_NAME')!='push' or __version__!='4.3.2':
         return False
     try:
         paths=set(subprocess.check_output(['git','diff','--name-only','HEAD^','HEAD'],text=True).splitlines())

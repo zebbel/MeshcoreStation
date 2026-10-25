@@ -64,10 +64,10 @@ def build_layout():
             html.Details([
                 html.Summary(html.H2("Repeater Performance")),
                 html.Div([
-                    html.P("Analyzer history collects automatically every 12 hours while the station service runs. This dashboard reads saved observations and does not send radio commands.", className="muted"),
+                    html.P("Analyzer history collects automatically every 12 hours while the station service runs. Opening this dashboard reads saved observations. Refresh saved data requests fresh Analyzer measurements; it never sends radio commands.", className="muted"),
                     html.Div([html.Span(id="performance-selected", className="stats-selected"),
                         html.Label(["History", html.Select([html.Option("24 hours",value="1"),html.Option("7 days",value="7",selected=True),html.Option("30 days",value="30")],id="performance-days")]),
-                        html.Button("Refresh saved data",id="performance-refresh")],className="stats-controls"),
+                        html.Button("Refresh saved data",id="performance-refresh",title="Request fresh Analyzer data using the same cache, timeout and cooldown protections as Network Monitoring Refresh Now.")],className="stats-controls"),
                     html.P(id="performance-status",className="stats-message",role="status",**{"aria-live":"polite"}),
                     html.Div(id="performance-content")
                 ],className="optimizer-section-body")
