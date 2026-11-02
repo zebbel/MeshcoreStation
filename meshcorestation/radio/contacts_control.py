@@ -40,9 +40,13 @@ async def read_contacts(companion):
     result = await companion.mc.commands.get_contacts(lastmod=0)
     if result is None or result.type != EventType.CONTACTS or not isinstance(result.payload, dict):
         raise RuntimeError("Could not read contacts from the companion; refresh before retrying")
-    contacts = [{**contact_view(contact), "details": details(contact, companion.database)} for contact in result.payload.values()]
+    contacts = [contact_view(contact) for contact in result.payload.values()]
     if len({contact["public_key"] for contact in contacts}) != len(contacts):
         raise RuntimeError("Duplicate keys in contact response; refresh before retrying")
+    from types import SimpleNamespace
+    for item in result.payload.values():
+        if item.get('type')==2:companion.database.add_new_repeater(SimpleNamespace(payload=item),observed=False)
+    contacts = [{**contact_view(contact), "details": details(contact, companion.database)} for contact in result.payload.values()]
     contacts.sort(key=lambda contact: (contact["name"].casefold(), contact["public_key"]))
     return {"public_key": identity, "contacts": contacts}
 

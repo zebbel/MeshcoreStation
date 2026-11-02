@@ -167,9 +167,10 @@
         $('command-editor-form').addEventListener('submit', apply); $('command-editor-form').addEventListener('input', schedulePreview);
     }
     function attach() {
-        const open = $('open-commands'); if (!open || open.dataset.commandsBound) return;
-        open.dataset.commandsBound = 'true';
-        open.addEventListener('click', () => { if (!dialog) create(); if (!dialog.open) { dialog.showModal(); load(); } });
+        for(const id of ['open-commands','open-commands-history']){
+            const open=$(id);if(!open||open.dataset.commandsBound)continue;
+            open.dataset.commandsBound='true';open.addEventListener('click',()=>{if(!dialog)create();if(!dialog.open){dialog.showModal();load();}});
+        }
     }
     new MutationObserver(attach).observe(document.documentElement, {childList: true, subtree: true}); attach();
 })();

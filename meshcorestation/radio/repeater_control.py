@@ -7,8 +7,8 @@ from meshcorestation.radio.neighbor_names import with_neighbor_names
 from meshcorestation.radio.repeater_fields import FIELDS, validate, parse_value
 from meshcorestation.radio.repeater_transport import RepeaterTransport, TIMEOUT
 
-
 class RepeaterControl:
+
     def __init__(self, companion):
         self.companion = companion
         self.transport = RepeaterTransport(companion)
@@ -17,20 +17,13 @@ class RepeaterControl:
     @staticmethod
     def clock_timestamp(login):
         stamp = login.get('server_timestamp')
-        # Do not substitute the Pi's clock when older firmware omits this field.
-        return stamp if type(stamp) is int and 0 <= stamp <= 0xFFFFFFFF else None
+        return stamp if type(stamp) is int and 0 <= stamp <= 4294967295 else None
 
     async def execute(self, request):
-        # Session tokens never go into the database or application logs.
         now = time.monotonic()
         self.sessions = {k: v for k, v in self.sessions.items() if v['expires'] > now}
-        action, key = request.get('action'), request.get('public_key', '')
-        optimizer_started = time.time()
-        if request.get('optimizer') is True or action == 'advisor_write':
-            from meshcorestation.storage import optimizer_store
-            if not optimizer_store.status()['enabled']:
-                raise ValueError('Repeater Optimizer is disabled. Enable it in Settings.')
-        if not isinstance(key, str) or not re.fullmatch(r'[0-9a-f]{64}', key):
+        action, key = (request.get('action'), request.get('public_key', ''))
+        if not isinstance(key, str) or not re.fullmatch('[0-9a-f]{64}', key):
             raise ValueError('Invalid repeater key.')
         if action == 'logout':
             self.sessions.pop(request.get('session', ''), None)
@@ -38,28 +31,25 @@ class RepeaterControl:
         contact = await self.transport.contact(key)
         if action == 'login':
             password = request.get('password', '')
-            if not isinstance(password, str) or len(password.encode()) > 15 or re.search(r'[\x00-\x1f\x7f]', password):
+            if not isinstance(password, str) or len(password.encode()) > 15 or re.search('[\\x00-\\x1f\\x7f]', password):
                 raise ValueError('Password must be at most 15 UTF-8 bytes without control characters.')
             login = await self.transport.login(contact, password)
             token = secrets.token_urlsafe(32)
             if len(self.sessions) >= 16:
                 self.sessions.pop(next(iter(self.sessions)))
-            self.sessions[token] = {'key': key, 'expires': now + 900,
-                                    'admin': login.get('is_admin') is True, 'values': {}}
+            self.sessions[token] = {'key': key, 'expires': now + 900, 'admin': login.get('is_admin') is True, 'values': {}}
             return {'ok': True, 'session': token, 'admin': login.get('is_admin') is True, 'contact': self.identity(contact), 'fields': FIELDS}
         token = request.get('session', '')
         session = self.sessions.get(token)
         if not session or session['key'] != key:
             return {'ok': False, 'expired': True, 'error': 'Management session expired. Connect again.'}
         session['expires'] = now + 900
-        # Blank login asks for the companion's current ACL rights. It does not
-        # overwrite an admin login with guest credentials, including after monitoring.
         login = await self.transport.login(contact, '')
         admin = login.get('is_admin') is True
         commands = self.companion.mc.commands
         try:
             if action in {'status', 'telemetry', 'neighbors', 'acl'}:
-                if action == 'acl' and not admin:
+                if action == 'acl' and (not admin):
                     raise ValueError('Administrator access is required.')
                 if action == 'status':
                     data = await commands.req_status_sync(contact, timeout=TIMEOUT)
@@ -76,21 +66,13 @@ class RepeaterControl:
                     raise ValueError('No response. The repeater may be unreachable or this feature may be unsupported.')
                 saved_snapshot = None
                 if action == 'neighbors':
-                    from meshcorestation.storage import optimizer_store
-                    optimizer_store.initialize()
-                    # This read was explicitly requested in management.
-                    saved_snapshot = optimizer_store.save_neighbors(key,data,'manual',started_at=neighbor_started)
                     data = with_neighbor_names(self.companion.database.db, data)
-                return {'ok': True, 'data': data, 'neighbor_snapshot': saved_snapshot,
-                        'sampled_at': time.time(), 'admin': admin,
-                        'contact': self.identity(contact), 'firmware_level': login.get('fw_ver_level'),
-                        'repeater_time': self.clock_timestamp(login)}
+                return {'ok': True, 'data': data, 'neighbor_snapshot': saved_snapshot, 'sampled_at': time.time(), 'admin': admin, 'contact': self.identity(contact), 'firmware_level': login.get('fw_ver_level'), 'repeater_time': self.clock_timestamp(login)}
             if not admin:
                 raise ValueError('Administrator access is required to read or change configurations.')
             if action == 'console':
                 command = request.get('command')
-                if (not isinstance(command, str) or not command.strip()
-                        or len(command.encode()) > 147 or re.search(r'[\x00-\x1f\x7f]', command)):
+                if not isinstance(command, str) or not command.strip() or len(command.encode()) > 147 or re.search('[\\x00-\\x1f\\x7f]', command):
                     raise ValueError('Enter one command, at most 147 UTF-8 bytes, without control characters.')
                 if request.get('confirm') is not True:
                     raise ValueError('Confirm sending the console command.')
@@ -98,11 +80,10 @@ class RepeaterControl:
                 no_reply = command in {'reboot', 'clkreboot', 'poweroff', 'shutdown'}
                 session['values'].clear()
                 reply = await self.transport.cli(contact, command, expect_reply=not no_reply)
-                secret = re.match(r'^(?:password(?: |$)|(?:get|set) (?:guest\.password|bridge\.secret|prv\.key)(?: |$))', command)
+                secret = re.match('^(?:password(?: |$)|(?:get|set) (?:guest\\.password|bridge\\.secret|prv\\.key)(?: |$))', command)
                 if no_reply:
                     self.sessions.pop(token, None)
-                return {'ok': True, 'reply': 'Sensitive command response hidden.' if secret else reply,
-                        'expired': no_reply, 'admin': admin}
+                return {'ok': True, 'reply': 'Sensitive command response hidden.' if secret else reply, 'expired': no_reply, 'admin': admin}
             if action == 'read':
                 field = request.get('field')
                 if field not in FIELDS or FIELDS[field]['kind'] == 'password':
@@ -110,13 +91,10 @@ class RepeaterControl:
                 value = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
                 session['values'][field] = value
                 return {'ok': True, 'field': field, 'value': value}
-            if action in {'write', 'advisor_write'}:
+            if action == 'write':
                 field = request.get('field')
                 if field not in FIELDS:
                     raise ValueError('Unknown field.')
-                if action == 'advisor_write':
-                    if field not in {'flood.max', 'flood.max.unscoped'}:
-                        raise ValueError('Unsupported advisor field.')
                 value = validate(field, request.get('value'))
                 if request.get('confirm') is not True:
                     raise ValueError('Review and confirm the change first.')
@@ -128,32 +106,22 @@ class RepeaterControl:
                     if current != request['expected']:
                         session['values'].pop(field, None)
                         raise ValueError('This setting changed on the repeater. Read the section again.')
-                if action == 'advisor_write':
-                    state=optimizer_store.status()
-                    if not state['enabled'] or optimizer_started < state['since']:
-                        raise ValueError('Optimizer was disabled or reset. Reload and review fresh data before applying.')
                 prefix = FIELDS[field].get('write', 'set ' + field)
-                history_id = None
-                if action == 'advisor_write':
-                    from meshcorestation.storage import advisor_history
-                    history_id = advisor_history.begin(key, field, current, value)
+                audit_id=self.audit(key,field,None if secret else current,None,'unconfirmed')
                 try:
                     reply = await self.transport.cli(contact, prefix + ' ' + value)
-                    # Admin password replies echo the password; never send that echo to HTTP.
                     accepted = reply.lower().startswith(('ok', '(ok')) or (field in {'gps', 'powersaving'} and reply.lower().startswith(('on', 'off'))) or (field == 'admin_password' and reply.startswith('password now:'))
                     if not accepted:
                         raise ValueError('Repeater rejected the change.' if secret else 'Repeater reply: ' + reply[:200])
                     if secret:
+                        self.audit(key,field,None,None,'acknowledged; secret not stored',audit_id)
                         return {'ok': True, 'field': field, 'value': '', 'message': 'Password change acknowledged.'}
                     session['values'].pop(field, None)
                     actual = parse_value(field, await self.transport.cli(contact, FIELDS[field].get('read', 'get ' + field)))
                     session['values'][field] = actual
-                    if history_id is not None:
-                        advisor_history.finish(history_id, actual, 'verified' if actual == value else 'different value returned')
-                    return {'ok': True, 'field': field, 'value': actual, 'message': 'Saved and read back.' if actual == value else 'Repeater returned a different value. Review the applied value.', 'reboot_required': 'reboot' in reply.lower()}
+                    self.audit(key,field,current,actual,'verified' if actual==value else 'different readback',audit_id)
+                    return {'ok': actual==value, 'error': None if actual==value else 'Readback differs from the requested value; read the section again.', 'field': field, 'value': actual, 'message': 'Saved and read back.' if actual == value else 'Repeater returned a different value. Review the applied value.', 'reboot_required': 'reboot' in reply.lower()}
                 except Exception:
-                    if history_id is not None:
-                        advisor_history.finish(history_id, None, 'unconfirmed; read before retrying')
                     raise
             if action == 'action':
                 name = request.get('name')
@@ -184,8 +152,8 @@ class RepeaterControl:
                     raise ValueError('Region changed, but persistence could not be confirmed: ' + saved[:160])
                 return {'ok': True, 'message': 'Region change acknowledged and saved. Read regions to review.'}
             if action == 'permission':
-                target, permission = request.get('target', ''), request.get('permission')
-                if not isinstance(target, str) or not re.fullmatch('[0-9a-fA-F]{64}', target) or permission not in ('0', '1', '2', '3') or request.get('confirm') is not True:
+                target, permission = (request.get('target', ''), request.get('permission'))
+                if not isinstance(target, str) or not re.fullmatch('[0-9a-fA-F]{64}', target) or permission not in ('0', '1', '2', '3') or (request.get('confirm') is not True):
                     raise ValueError('Enter a full companion public key and confirm its permission change.')
                 reply = await self.transport.cli(contact, 'setperm ' + target + (' ' + permission))
                 if not reply.lower().startswith('ok'):
@@ -198,11 +166,19 @@ class RepeaterControl:
 
     @staticmethod
     def region_name(value):
-        if not isinstance(value, str) or not re.fullmatch(r'\*|#?[A-Za-z0-9_-]{1,30}', value):
+        if not isinstance(value, str) or not re.fullmatch('\\*|#?[A-Za-z0-9_-]{1,30}', value):
             raise ValueError('Use a region name of 1–30 letters, digits, hyphens or underscores, or *.')
-        # Hashtags affect region keys: preserve the actual wire name exactly.
         return value
 
     @staticmethod
     def identity(contact):
         return {k: contact.get(k) for k in ('public_key', 'adv_name', 'out_path_len')}
+
+    def audit(self,key,field,before,after,status,ident=None):
+        owner=getattr(self.companion,'database',None)
+        if owner is None:return None
+        with owner.db:
+            if ident is None:
+                return owner.db.execute('INSERT INTO management_audit(public_key,at,field,before_value,after_value,status) VALUES(?,?,?,?,?,?)',(key,time.time(),field,before,after,status)).lastrowid
+            owner.db.execute('UPDATE management_audit SET after_value=?,status=? WHERE id=?',(after,status,ident))
+        return ident

@@ -9,8 +9,6 @@ from meshcorestation.storage.database import Database
 from meshcorestation.storage.voltage_store import initialize
 from meshcorestation.runtime import Runtime
 from meshcorestation.web_server import WebServer
-from meshcorestation.storage.passive_stats import collector
-from meshcorestation.analyzer_collector import collector as analyzer_collector
 
 
 async def run():
@@ -30,12 +28,6 @@ async def run():
             loop.add_signal_handler(sig, stop.set)
         try:
             initialize(database.db)
-            try:
-                collector.start()
-            except Exception as exc:
-                collector.error=str(exc)
-                logging.warning("Passive statistics unavailable: %s", exc)
-            analyzer_collector.start()
             web = WebServer()
             web.start()
             logging.info('MeshcoreStation serving on http://%s:%s', HOST, PORT)
@@ -56,8 +48,6 @@ async def run():
                 await asyncio.gather(task, return_exceptions=True)
             if web is not None:
                 await asyncio.to_thread(web.close)
-            await asyncio.to_thread(analyzer_collector.close)
-            await asyncio.to_thread(collector.close)
             database.close()
             for sig in (signal.SIGINT, signal.SIGTERM):
                 loop.remove_signal_handler(sig)

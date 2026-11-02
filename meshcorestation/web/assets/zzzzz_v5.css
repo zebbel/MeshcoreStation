@@ -1,0 +1,37 @@
+
+.cards {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;}
+.v5-card {display:flex;flex-direction:column;min-width:0;gap:12px;}
+.v5-card .eyebrow,.v5-card .metric,.v5-card h2 {margin:0;}
+.v5-card > .info-button,.v5-card-actions {margin-top:auto;}
+.v5-card-actions {display:flex;gap:8px;}
+.v5-card-actions button {flex:1;min-width:0;}
+.v5-card button {padding:12px;}
+.v5-section-body {padding:22px 26px;min-width:0;}
+.v5-subsection,#command-history-disclosure {border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden;}
+.panel-disclosure > summary {cursor:pointer;padding:22px 26px;color:var(--accent);}
+.panel-disclosure > summary h2 {display:inline;color:var(--text);font-size:20px;}
+.panel-disclosure[open] > summary {border-bottom:1px solid var(--border);}
+#command-history-disclosure .toolbar,#command-history-disclosure .list-tools,#command-history-disclosure .updated {padding-left:18px;padding-right:18px;}
+#command-history-disclosure #command-scroll {margin:0 18px;}
+#bot-settings-disclosure .companion-grid {display:block;}
+#bot-settings-disclosure #scope-settings {margin-top:18px;}
+#station-settings-dialog {width:min(900px,calc(100vw - 24px));}
+@media(max-width:800px){.cards {grid-template-columns:1fr;}.v5-section-body {padding:18px 16px;}.panel-disclosure > summary {padding:20px 16px;}}
+.meshcore-mark {background:transparent;overflow:hidden;flex:0 0 50px;}
+.meshcore-mark img {display:block;width:100%;height:100%;object-fit:contain;}
+.meshcore-mark img[hidden] {display:none;}
+.meshcore-mark:has(#brand-fallback:not([hidden])) {background:var(--accent);}
+.v5-card {min-height:240px;}
+.command-history-summary {position:relative;padding-right:155px!important;}
+.command-history-summary .history-latest {display:inline-block;margin-left:30px;vertical-align:middle;}
+.history-latest .eyebrow {font-size:11px;margin:0 0 4px;}
+.history-latest-command {font-size:20px;font-weight:600;}
+.command-history-summary > button {position:absolute;right:26px;top:50%;transform:translateY(-50%);}
+.battery-reading {font-size:20px;font-weight:600;overflow-wrap:anywhere;}
+.battery-chart {overflow-x:auto;}
+.battery-chart svg {display:block;width:100%;min-width:360px;}
+.battery-chart text {font:12px system-ui;fill:var(--muted);}
+#battery-overview-error {color:var(--red);}
+@media(max-width:700px){.command-history-summary .history-latest {display:block;margin:12px 0 0;}.command-history-summary > button {right:16px;top:28px;transform:none;}.v5-card {min-height:210px;}}
+
+#station-settings-dialog {padding:0;overflow:hidden;}

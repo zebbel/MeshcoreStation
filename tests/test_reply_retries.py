@@ -241,14 +241,6 @@ def test_cancel_inflight_submission_records_uncertainty_and_resets_scope(db):
     asyncio.run(run())
 
 
-def test_additive_schema_migration_preserves_old_reply(db):
-    root=store.begin(db.db,1,'old reply','Station',KEY,123,'unscoped',None,now=123)
-    store.finish(db.db,root,'accepted')
-    with db.db:db.db.execute('ALTER TABLE command_replies DROP COLUMN retry_status')
-    store.initialize(db.db)
-    row=store.snapshot(db.db,1)['replies'][0]
-    assert row['message']=='old reply' and row['timestamp']==123 and row['send_status']=='accepted'
-    assert row['retry_status']=='legacy' and len(row['attempts'])==1
 
 
 def test_closed_session_cannot_schedule_new_work(db):

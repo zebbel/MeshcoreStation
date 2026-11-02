@@ -1,3 +1,4 @@
+from meshcorestation.storage.connection import connect as open_database
 """Serial configuration remains accessible when the companion is offline."""
 import json
 import sqlite3
@@ -14,14 +15,12 @@ def ports():
 def runtime_request(request):
     try:
         available = ports()
-        with closing(sqlite3.connect(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
+        with closing(open_database(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
             with db:
                 initialize(db)
             if request.method == 'GET':
                 return {'ok': True, 'settings': read_settings(db), 'ports': available}, 200
             from meshcorestation.bridge import bridge
-            if bridge.runtime and bridge.runtime.firmware.state.get('busy'):
-                return {'ok': False, 'error': 'Wait for the companion firmware update to finish.'}, 409
             if request.mimetype != 'application/json':
                 return {'ok': False, 'error': 'Expected JSON.'}, 415
             raw = request.stream.read(4097)

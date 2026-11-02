@@ -8,3 +8,7 @@ __pycache__/
 *.pyc
 
 .updates/
+pytest-of-root/
+browser-evidence/
+browser-server.log
+node_modules/

@@ -35,6 +35,7 @@ def register_callbacks(app):
     def refresh_overview(tick):
         # Keep the visible cards independent of slower history/filter reads.
         status, detail, status_class = bot_status()
+        status = "Connected" if status == "Running" else status
         try:
             summary = overview()
         except (sqlite3.Error, OSError) as exc:
@@ -47,7 +48,7 @@ def register_callbacks(app):
         latest_detail = (f"{latest.get('sender') or 'Unknown sender'} · {timestamp(latest.get('recv_time'))}"
                          if latest else "Waiting for the first saved command")
         return (status, "metric " + status_class, detail, f"{summary['repeaters']:,}",
-                "Recorded by your bot", latest_text, latest_detail, "")
+                "Saved locally; available while disconnected.", latest_text, latest_detail, "")
 
     @app.callback(
         Output("command-filter", "options"), Output("command-rows", "children"),
@@ -77,3 +78,19 @@ def register_callbacks(app):
                 len(data["rows"]) >= data["total"],
                 "Updated " + timestamp(datetime.now(TIMEZONE).timestamp()),
                 signature, zone_label)
+
+    @app.callback(Output('bot-runtime-status','children'),Output('bot-channel-status','children'),Output('footer-firmware','children'),Input('refresh','n_intervals'))
+    def refresh_bot_state(tick):
+        from meshcorestation.bridge import bridge
+        from meshcorestation.config import DB_PATH
+        from meshcorestation.storage.connection import connect
+        from contextlib import closing
+        try:
+            with closing(connect(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
+                channel=db.execute('SELECT channel_name FROM bot_settings WHERE id=1').fetchone()[0]
+        except (sqlite3.Error,OSError):return 'Bot configuration unavailable','Saved channel could not be read.','Companion firmware unavailable'
+        running=bridge.status[0]=='Running'
+        runtime=bridge.runtime
+        parts=[runtime.device_info.get(k) for k in ('ver','fw_build')] if runtime and running else []
+        firmware='Companion firmware '+' · '.join(str(v) for v in parts if v) if any(parts) else 'Companion firmware unavailable'
+        return ('Running' if running and channel else 'No Bot channel selected' if running else 'Disconnected'),('Bot channel: '+channel if channel else 'Select the Bot channel in Companion Channels.'),firmware

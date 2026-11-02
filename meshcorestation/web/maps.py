@@ -1,3 +1,4 @@
+from meshcorestation.storage.connection import connect as open_database
 """Map payloads; historical sender snapshots and current repeater/bot positions."""
 import math
 from meshcorestation.geometry import distance_km
@@ -19,7 +20,7 @@ def point(row, role, label, prefix="", order=None):
 
 
 def connection():
-    db = sqlite3.connect(data.DB_PATH.as_uri() + "?mode=ro", uri=True, timeout=2)
+    db = open_database(data.DB_PATH.as_uri() + "?mode=ro", uri=True, timeout=2)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA query_only=ON")
     db.execute("BEGIN")

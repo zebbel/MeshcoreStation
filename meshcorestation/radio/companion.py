@@ -9,7 +9,6 @@ from meshcore import MeshCore, EventType
 from meshcorestation.radio.clock import synchronize_clock
 from meshcorestation.radio.bot import Bot
 from meshcorestation.radio.repeater_sync import RepeaterSync
-from meshcorestation.radio.neighbor_poller import NeighborPoller
 
 BAUDRATE = 115200
 MAX_RECENT_RX_LOGS = 20
@@ -20,7 +19,6 @@ class Companion:
         self.logger = logger
         self.mc = None
         self.repeater_sync = None
-        self.neighbor_poller = None
         self.database = database
         settings = database.get_bot_settings()
         self.serial_port = settings["serial_port"]
@@ -33,8 +31,6 @@ class Companion:
         self.tracking_key = None
         self.reply_lock = asyncio.Lock()
         self.control_lock = asyncio.Lock()
-        self.room_bot_id = None
-        self.room_bot_name = None
         self.active_command_hops = None
         self._reply_timestamp = 0
         from meshcorestation.radio.reply_retries import ReplyRetries
@@ -97,9 +93,6 @@ class Companion:
 
     async def disconnect(self):
         await self.reply_retries.close()
-        if self.neighbor_poller is not None:
-            await self.neighbor_poller.close()
-            self.neighbor_poller=None
         if self.repeater_sync is not None:
             await self.repeater_sync.close()
             self.repeater_sync = None
@@ -108,13 +101,11 @@ class Companion:
             self.logger.info("Serial connection closed.")
 
     async def subscribe(self):
-        self.mc.subscribe(EventType.NEW_CONTACT, self.database.add_new_repeater)
+        self.mc.subscribe(EventType.NEW_CONTACT, lambda event: self.database.add_new_repeater(event,observed=False))
         self.mc.subscribe(EventType.RX_LOG_DATA, self._handle_rx_log)
         self.mc.subscribe(EventType.CHANNEL_MSG_RECV, self._handle_channel_message)
         self.repeater_sync = RepeaterSync(self)
         self.repeater_sync.start()
-        self.neighbor_poller = NeighborPoller(self)
-        self.neighbor_poller.start()
         await self.mc.start_auto_message_fetching()
 
 ################################################
@@ -293,8 +284,6 @@ class Companion:
             await self._process_channel_message(event)
 
     async def _process_channel_message(self, event):
-        if self.room_bot_id is not None:
-            return
         if self.channel_idx is None:
             return
         message_data = dict(event.payload or {})
@@ -358,8 +347,17 @@ class Companion:
 
     def _handle_rx_log(self, event):
         rx = event.payload or {}
-        from meshcorestation.storage.passive_stats import collector
-        collector.submit(rx)
+        # Contact snapshots/notifications are not counted as received advertisements.
+        # Count only a complete actual RX advert decoded by the pinned client.
+        payload=rx.get('pkt_payload')
+        if (rx.get('payload_type')==4 and rx.get('adv_type')==2 and isinstance(payload,bytes)
+                and 101<=len(payload)<=256 and payload[:32].hex()==rx.get('adv_key')
+                and payload[100]&15==2):
+            from types import SimpleNamespace
+            self.database.add_new_repeater(SimpleNamespace(payload={
+                'type':2,'public_key':rx['adv_key'],'adv_name':rx.get('adv_name'),
+                'adv_lat':rx.get('adv_lat'),'adv_lon':rx.get('adv_lon'),
+                'flags':rx.get('adv_flags'),'last_advert':rx.get('adv_timestamp')}),observed=True)
         if rx.get("payload_type") == 5 and isinstance(getattr(self, "tracking_key", None), bytes):
             try:
                 from meshcorestation.storage.reply_store import observe
@@ -375,7 +373,7 @@ class Companion:
                 if evidence:
                     identity, scope, text = evidence
                     _, message = self._parse_channel_message(text)
-                    if self.room_bot_id is None and self.bot.match_command(message) is not None:
+                    if self.bot.match_command(message) is not None:
                         reception_store.record(self.database.db, identity, rx, scope)
             except Exception as exc:
                 self.logger.warning('Command reception could not be recorded: %s', exc)
@@ -455,18 +453,6 @@ class Companion:
 ################################################
 # TELEMETRY FUNCTIONS
 ################################################
-
-    async def room_sender_name(self, public_key):
-        if not isinstance(public_key, str):
-            return 'room-user'
-        result = await self.mc.commands.get_contacts()
-        if result.type == EventType.CONTACTS:
-            key = public_key.lower()
-            matches = [contact for contact in (result.payload or {}).values()
-                       if str(contact.get('public_key', '')).lower() == key]
-            if len(matches) == 1:
-                return matches[0].get('adv_name') or key[:12]
-        return public_key[:12]
 
     async def get_sender_contact(self, contact_name):
         result = await self.mc.commands.get_contacts()

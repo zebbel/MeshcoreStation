@@ -1,5 +1,6 @@
 """Application-wide display controls, also bootstrapped into standalone pages."""
 import html
+import sqlite3
 import json
 from flask import request
 from meshcorestation import display
@@ -22,7 +23,7 @@ def register_display_routes(server):
             return json_response({'ok':True, 'settings':value, 'timezone':TIMEZONE.key})
         except (TypeError, ValueError) as error:
             return json_response({'ok':False,'error':str(error)},400)
-        except OSError:
+        except (OSError,sqlite3.Error):
             return json_response({'ok':False,'error':'Could not save display settings.'},503)
 
     @server.after_request

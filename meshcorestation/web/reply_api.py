@@ -1,3 +1,4 @@
+from meshcorestation.storage.connection import connect as open_database
 """Read-only outgoing reply evidence for command details."""
 import sqlite3
 from contextlib import closing
@@ -13,7 +14,7 @@ def register_reply_routes(server):
         if control_request_error():
             return jsonify(error='Open command details from this dashboard.'),403
         try:
-            with closing(sqlite3.connect(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
+            with closing(open_database(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
                 db.row_factory=sqlite3.Row
                 if not db.execute('SELECT 1 FROM logger WHERE id=?',(command_id,)).fetchone():
                     return jsonify(error='Command not found.'),404

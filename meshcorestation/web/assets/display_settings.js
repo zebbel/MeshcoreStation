@@ -1,7 +1,7 @@
 (() => {
     let attached=false;
     function attach(){
-        const dialog=document.getElementById('companion-dialog');if(!dialog||attached)return;attached=true;
+        const dialog=document.getElementById('station-settings-dialog');if(!dialog||attached)return;attached=true;
         const panel=document.createElement('section');panel.id='display-settings';panel.className='companion-section';panel.style.marginTop='20px';
         panel.innerHTML='<h3>Date and time display</h3><p class="muted">Applies throughout MeshcoreStation. Timezones and report schedules are configured separately.</p><form><div class="companion-fields"><label>Date format<select id="display-date"><option value="german">German · DD.MM.YYYY</option><option value="iso">ISO · YYYY-MM-DD</option><option value="us">US · MM/DD/YYYY</option></select></label><label>Clock<select id="display-hours"><option value="24">24 hours</option><option value="12">12 hours · AM/PM</option></select></label></div><p class="display-preview"></p><button type="submit">Save and reload</button><p class="display-message" role="status"></p></form>';
         (dialog.querySelector('.dialog-body')||dialog).append(panel);

@@ -2,7 +2,6 @@
 import asyncio
 import re
 import time
-from collections import Counter
 from types import SimpleNamespace
 from meshcore import EventType
 
@@ -11,7 +10,6 @@ class RepeaterSync:
     def __init__(self, companion):
         self.companion = companion
         self.pending = asyncio.Event()
-        self.adverts = Counter()
         self.task = None
         self.subscriptions = []
 
@@ -30,7 +28,6 @@ class RepeaterSync:
     def advertisement(self, event):
         key = (event.payload or {}).get('public_key')
         if isinstance(key, str) and re.fullmatch('[0-9a-fA-F]{64}', key):
-            self.adverts[key.lower()] += 1
             self.pending.set()
 
     def start(self):
@@ -46,12 +43,6 @@ class RepeaterSync:
             if result is None or result.type != EventType.CONTACTS or not isinstance(result.payload, dict):
                 raise RuntimeError('Could not read saved repeater contacts')
             self.import_contacts(result)
-            # Apply notifications after import so previously missing rows count too.
-            db = self.companion.database.db
-            with db:
-                for key, count in self.adverts.items():
-                    db.execute('UPDATE repeaters SET last_seen=?,advert_count=advert_count+? WHERE public_key=?', (int(time.time()), count, key))
-            self.adverts.clear()
 
     async def run(self):
         while True:

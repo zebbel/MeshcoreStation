@@ -1,3 +1,4 @@
+from meshcorestation.storage.connection import connect as open_database
 """Command editor snapshots, conflict-checked saves and radio-free previews."""
 import json
 import sqlite3
@@ -9,7 +10,7 @@ from meshcorestation.commands.templates import render, example_data, public_cata
 
 def commands_request(request):
     try:
-        with closing(sqlite3.connect(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
+        with closing(open_database(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
             before = snapshot(db)
             if request.method == 'GET':
                 return {**before, 'placeholders': public_catalog(), 'max_commands': MAX_COMMANDS, 'max_template_bytes': MAX_TEMPLATE_BYTES}, 200

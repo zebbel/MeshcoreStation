@@ -71,7 +71,7 @@
         el('scope-cancel').addEventListener('click', () => { if (discard()) reset(); });
     }
     function attach() {
-        const parent=el('companion-dialog');
+        const parent=el('bot-settings-disclosure');
         if(!parent || dialog)return;
         create(parent);
         if(parent.open)load();

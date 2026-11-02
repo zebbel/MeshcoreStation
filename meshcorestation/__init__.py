@@ -1,2 +1,2 @@
-"""MeshcoreStation: one application for the radio bot and dashboard."""
-__version__ = "4.4.1"
+"""MeshcoreStation V5 — Companion, channel bot and repeater management."""
+__version__ = "5.0.0"

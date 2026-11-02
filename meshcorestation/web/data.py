@@ -1,3 +1,4 @@
+from meshcorestation.storage.connection import connect as open_database
 """Short-lived, read-only connections to the bot's existing SQLite database."""
 import os
 import sqlite3
@@ -27,7 +28,7 @@ def bot_status():
 
 
 def snapshot(command=None, limit=PAGE_SIZE):
-    with closing(sqlite3.connect(DB_PATH.as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
+    with closing(open_database(DB_PATH.as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA query_only=ON")
         db.execute("BEGIN")
@@ -42,7 +43,7 @@ def snapshot(command=None, limit=PAGE_SIZE):
 
 def overview():
     """Small, indexed dashboard summary; never fetch the history table to render cards."""
-    with closing(sqlite3.connect(DB_PATH.as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
+    with closing(open_database(DB_PATH.as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA query_only=ON")
         count = db.execute("SELECT COUNT(*) FROM repeaters").fetchone()[0]

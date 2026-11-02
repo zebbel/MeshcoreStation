@@ -5,7 +5,7 @@ import json
 import math
 import time
 from Crypto.Cipher import AES
-from meshcorestation.storage.passive_stats import normalize
+from meshcorestation.radio.packet import normalize
 
 WINDOW = 300
 
@@ -16,7 +16,10 @@ def initialize(db):
           id INTEGER PRIMARY KEY, command_id INTEGER NOT NULL REFERENCES logger(id) ON DELETE CASCADE,
           created_at REAL NOT NULL, timestamp INTEGER NOT NULL, channel_key_hash TEXT NOT NULL,
           raw_text TEXT NOT NULL, message TEXT NOT NULL, scope TEXT NOT NULL,
-          scope_key_hash TEXT, send_status TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
+          scope_key_hash TEXT, send_status TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '',
+          parent_reply_id INTEGER, attempt_no INTEGER NOT NULL DEFAULT 1,hop_count INTEGER,
+          max_attempts INTEGER NOT NULL DEFAULT 1,retry_status TEXT NOT NULL DEFAULT 'legacy',
+          retry_detail TEXT NOT NULL DEFAULT '',next_retry_at REAL);
         CREATE INDEX IF NOT EXISTS reply_command ON command_replies(command_id,id);
         CREATE INDEX IF NOT EXISTS reply_created ON command_replies(created_at);
         CREATE TABLE IF NOT EXISTS reply_observations (
@@ -26,12 +29,6 @@ def initialize(db):
           UNIQUE(reply_id,digest,path));
     """)
 
-    columns={r[1] for r in db.execute('PRAGMA table_info(command_replies)')}
-    for name,definition in {'parent_reply_id':'INTEGER','attempt_no':'INTEGER NOT NULL DEFAULT 1',
-          'hop_count':'INTEGER','max_attempts':'INTEGER NOT NULL DEFAULT 1',
-          'retry_status':"TEXT NOT NULL DEFAULT 'legacy'",'retry_detail':"TEXT NOT NULL DEFAULT ''",
-          'next_retry_at':'REAL'}.items():
-        if name not in columns:db.execute('ALTER TABLE command_replies ADD COLUMN '+name+' '+definition)
     db.execute('CREATE INDEX IF NOT EXISTS reply_parent ON command_replies(parent_reply_id)')
 
 

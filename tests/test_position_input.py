@@ -28,13 +28,3 @@ def test_message_input_never_requests_telemetry(arguments,contact,success):
         else:bot.database.save_companion_position.assert_not_called()
         assert not bot.position_update_running
     asyncio.run(scenario())
-
-def test_position_template_migration_is_scoped_and_idempotent():
-    db=sqlite3.connect(':memory:')
-    command_store.initialize(db,legacy=True)
-    db.execute("UPDATE bot_commands SET reply='Hi @{sender_name}: {result}',failure_reply='@{sender_name}: failed' WHERE action='position'")
-    command_store.initialize(db);command_store.initialize(db)
-    commands=command_store.read(db);position=next(c for c in commands if c['action']=='position')
-    assert position['reply']=='Hi @[{sender_name}]: {result}'
-    assert position['failure_reply']=='@[{sender_name}]: failed'
-    assert next(c for c in commands if c['trigger']=='status')['reply'].startswith('@{sender_name}')

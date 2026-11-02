@@ -11,3 +11,5 @@ HOST = os.getenv('MESHCORESTATION_HOST', '0.0.0.0')
 PORT = int(os.getenv('MESHCORESTATION_PORT', '80'))
 if not 1 <= PORT <= 65535:
     raise ValueError('MESHCORESTATION_PORT must be between 1 and 65535')
+
+KNOWN_DB_PATH = DATA_DIR / 'knownRepeaters.db'

@@ -174,22 +174,8 @@ class VoltageMonitor:
             parts = split_reply(message)
             target = cfg.get('report_target', 'bot')
             if target == 'bot':
-                target = f'room:{c.room_bot_id}' if c.room_bot_id is not None else f'channel:{c.channel_name}'
-            if target.startswith('room:'):
-                worker = getattr(c, 'room_worker', None)
-                if worker is None or not worker.status()['running']:
-                    raise ValueError('Room worker offline.')
-                room_id = int(target[5:])
-                room = worker.service.config(room_id)
-                destination = 'Room: ' + room['name']
-                if not room['enabled']:
-                    raise ValueError('Selected room disabled.')
-                if config(self.db, cfg['public_key'])['revision'] != cfg['revision']:
-                    raise ValueError('Report settings changed.')
-                for part in parts:
-                    worker.service.local_post(room_id, part)
-                state, detail = 'queued', message + ' (Room queued; delivery unconfirmed.)'
-            elif target.startswith('channel:'):
+                target = f'channel:{c.channel_name}'
+            if target.startswith('channel:'):
                 from meshcorestation.radio.channels_control import read_channels
                 info, slots = await read_channels(c)
                 matches = [item for item in info['channels'] if item['name'] == target[8:]]

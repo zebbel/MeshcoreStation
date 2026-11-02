@@ -1,83 +1,39 @@
-"""Disposable local HTTP app for browser regressions; never starts a radio."""
-import logging
-import tempfile
-import os
+"""Local review fixture: synthetic observations, in-memory hardware; never RF."""
+import asyncio,logging,os,sys,tempfile
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+os.environ.setdefault('MESHCORESTATION_HOST','127.0.0.1')
+os.environ.setdefault('MESHCORESTATION_PORT','8050')
 
-# Before any application imports, keep every database outside the checkout.
-with tempfile.TemporaryDirectory(prefix='meshcorestation-browser-') as directory:
-    os.environ['MESHCORESTATION_DATA_DIR']=directory
+async def run():
     from meshcorestation.storage.database import Database
-    from meshcorestation.storage import voltage_store, passive_stats
-    from meshcorestation.web.app import create_app
-    key='769b90b4dd327d7bc9cc651fb8d2f8a4a217957cd36feac6b3216b5acedc36ff'
-    other='ab'*32
-    owner=Database(logging.getLogger('browser-test'));voltage_store.initialize(owner.db)
-    with owner.db:
-        for public_key,name in ((key,'DE_HE_HP_RPT1'),(other,'Second Repeater')):
-            owner.db.execute('INSERT INTO repeaters(public_key,name,adv_type,first_seen,last_seen) VALUES (?,?,2,0,0)',(public_key,name))
-            voltage_store.ensure_repeater(owner.db,public_key)
-    owner.close();passive_stats.initialize();passive_stats.track(key);passive_stats.track(other)
-    # Historical, synthetic local observations and real Analyzer response shapes.
-    # This disposable test app has no companion/radio worker or external caller.
-    import time, json, copy
-    from datetime import datetime, timezone
-    from contextlib import closing
-    from meshcorestation.storage import performance_store, optimizer_store, advisor_history
-    optimizer_store.initialize()
-    now=time.time()
-    root=Path('tests/fixtures/analyzer/responses')
-    sample={name:json.loads((root/file).read_text()) for name,file in {
-        'detail':'node_detail_24h.json','reach':'node_reach_1d.json','metrics':'graph_metrics.json'}.items()}
-    for hour in range(0,31*24,6):
-        if 72<hour<96: continue # An intentional observation gap.
-        at=now-hour*3600
-        snapshot=copy.deepcopy(sample)
-        snapshot['detail']['stat'].update(pairsServed=31 if hour<48 else 21,pairsSole=2 if hour<48 else 1)
-        end=int(at//3600)*3600
-        snapshot['detail']['relayTimeline']=[{'bucket':datetime.fromtimestamp(h,timezone.utc).isoformat(),'count':5 if hour<48 else 3} for h in range(end-24*3600,end,3600) if not 72<(now-h)/3600<96]
-        performance_store.record_analyzer(key,at,snapshot)
-    with performance_store.database() as db:
-        db.execute("INSERT INTO collection_schedule VALUES(?,?,?,?,?,?)",(key,now+43200,now,now,'available',None))
-    with closing(passive_stats.connect()) as db,db:
-        for hour in range(31*24):
-            if 72<hour<96: continue
-            at=now-hour*3600-10
-            for i in range(1 if hour>48 else 2):
-                route=json.dumps([{'key':key,'name':'DE_HE_HP_RPT1','status':'matched'}])
-                db.execute("INSERT INTO observations(target,at,digest,kind,scoped,ambiguous,first_hop,middle_hop,last_hop,route,previous,following) VALUES(?,?,?,5,1,0,1,0,0,?,'[]','[]')",(key,at,'payload-'+str(hour)+'-'+str(i),route))
-                db.execute('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,5,1,1,1,?,?)',(at,key[:2],'payload-'+str(hour)+'-'+str(i)))
-        for hour in range(31*24):
-            if 72<hour<96: continue
-            at=now-hour*3600-10
-            for i in range(3):
-                db.execute('INSERT INTO network_observations(at,kind,scoped,path_len,hash_size,route,digest) VALUES(?,5,1,1,1,?,?)',(at,other[:2],'other-'+str(hour)+'-'+str(i)))
-    performance_store.marker_change(key,'create',{'description':'Fixture antenna replacement','at':now-2*86400})
-    with advisor_history.database() as db:
-        db.execute("INSERT INTO changes VALUES(12345,?,?,'flood.max','10','8','8','verified')",(now-2*86400+3600,key))
-    # A complete successful saved response powers Performance's cache-only map.
-    from meshcorestation.analyzer import service
-    cached=dict(sample)
-    for name,file in {'neighbors':'node_neighbors.json','clock':'clock_skew_24h.json','direct':'direct_packets_24h_empty.json','beacons':'channel_beacons_720h_empty.json','sensors':'channel_sensors_720h_empty.json'}.items():
-        cached[name]=json.loads((root/file).read_text())
-    cached['detail']['stat'].update(pairsServed=31,pairsSole=2)
-    with service.connection() as db:
-        db.execute('INSERT OR REPLACE INTO analyzer_cache VALUES(?,?,?,?)',(key,now,json.dumps(cached),'{}'))
-    # Manual refresh exercises the real Analyzer client/validation/storage, with
-    # fixture transport only. Browser tests must never contact the live provider.
-    from meshcorestation.analyzer import ENDPOINTS,HOST
-    refresh_number=[0]
-    def fixture_fetch(url,headers,timeout):
-        name=next(name for name,path in ENDPOINTS.items() if url==HOST+path.format(key=key))
-        if name=='detail':refresh_number[0]+=1
-        payload=copy.deepcopy(cached[name])
-        if name=='detail':
-            payload['stat']['relayCount24h']=107+refresh_number[0]
-            payload['relayTimeline'][-1]['count']=77
-            end=int(time.time()//3600)*3600
-            for i,row in enumerate(payload['relayTimeline']):
-                row['bucket']=datetime.fromtimestamp(end-(len(payload['relayTimeline'])-i)*3600,timezone.utc).isoformat()
-        if name=='reach':payload['neighbourList'][0]['weHear']=148+refresh_number[0]
-        return 200,{},json.dumps(payload).encode()
-    service.fetch=fixture_fetch
-    create_app().server.run(host='127.0.0.1',port=8050,debug=False,use_reloader=False)
+    from meshcorestation.storage.voltage_store import ensure_repeater
+    from meshcorestation.radio.companion import Companion
+    from meshcorestation.radio.companion_control import CompanionControl
+    from meshcorestation.runtime import Runtime
+    from meshcorestation.bridge import bridge
+    from meshcorestation.web_server import WebServer
+    from meshcorestation.web import bot_runtime
+    from meshcorestation import updater
+    from fake_companion import FakeMeshCore,KEY
+    from types import SimpleNamespace as NS
+    db=Database(logging.getLogger('fixture'));c=Companion(logging.getLogger('fixture'),db)
+    c.mc=FakeMeshCore();c.mc.channels[1]=('Alternate Bot',bytes.fromhex('34'*16));c.channel_idx=0;c.channel_name='Bot';c.tracking_key=c.mc.channels[0][1]
+    db.set_bot_channel('Bot')
+    for contact in c.mc.contacts.values():db.add_new_repeater(NS(payload=contact),observed=False)
+    with db.db:ensure_repeater(db.db,KEY)
+    for i in range(205):db.add_logger({'message':'ping' if i%2 else 'status','name':'Fixture Sender','recv_time':2000000000+i},None,'unscoped','Fixture reply')
+    runtime=Runtime(logging.getLogger('fixture'),db);runtime.companion=c;runtime.control=CompanionControl(c)
+    runtime.device_info={'ver':'fixture','fw_build':'SIMULATED — no radio','model':'Fixture Companion'}
+    bridge.attach(runtime);bridge.status=('Running','Fixture Companion connected — simulated hardware','running')
+    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.0.0','checked_at':2000000000}
+    updater.ready=lambda:False
+    bot_runtime.ports=lambda:[{'device':'/dev/fixture','description':'Simulated Companion'}]
+    web=WebServer();web.start()
+    try:await asyncio.Event().wait()
+    finally:web.close();await c.disconnect();bridge.detach();db.close()
+
+if __name__=='__main__':
+    with tempfile.TemporaryDirectory(prefix='meshcorestation-v5-browser-',dir=os.environ.get('TMPDIR')) as directory:
+        os.environ['MESHCORESTATION_DATA_DIR']=directory
+        asyncio.run(run())

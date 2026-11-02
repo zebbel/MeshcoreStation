@@ -1,12 +1,11 @@
 """Persistent display preferences; timezone and scheduler configuration stay separate."""
-import json
+import sqlite3
 import os
 import threading
 from functools import lru_cache
 from datetime import datetime
 from meshcorestation.config import DATA_DIR, TIMEZONE
 
-FILE = DATA_DIR / 'display-settings.json'
 DEFAULTS = {'date_format': 'german', 'hour_format': '24'}
 LOCK = threading.Lock()
 
@@ -19,25 +18,24 @@ def validate(value):
     return dict(value)
 
 
-@lru_cache(maxsize=8)
-def _load(path, modified):
-    return validate(json.loads(path.read_text(encoding='utf-8')))
-
-
 def settings():
+    from meshcorestation.storage.connection import connect
+    from meshcorestation.config import DB_PATH
+    from contextlib import closing
     try:
-        return dict(_load(FILE, FILE.stat().st_mtime_ns))
-    except (OSError, ValueError, TypeError):
-        return dict(DEFAULTS)
+        with closing(connect(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
+            row=db.execute('SELECT date_format,hour_format FROM application_preferences WHERE id=1').fetchone()
+            return validate(dict(row))
+    except (OSError,ValueError,TypeError,sqlite3.Error):return dict(DEFAULTS)
 
 
 def save(value):
-    value = validate(value)
-    with LOCK:
-        FILE.parent.mkdir(parents=True, exist_ok=True)
-        temporary = FILE.with_suffix('.tmp')
-        temporary.write_text(json.dumps(value), encoding='utf-8')
-        os.replace(temporary, FILE)
+    value=validate(value)
+    from meshcorestation.storage.connection import connect
+    from meshcorestation.config import DB_PATH
+    from contextlib import closing
+    with LOCK,closing(connect(DB_PATH.as_uri()+'?mode=rw',uri=True,timeout=2)) as db,db:
+        db.execute('UPDATE application_preferences SET date_format=?,hour_format=? WHERE id=1',(value['date_format'],value['hour_format']))
     return value
 
 

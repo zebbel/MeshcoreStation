@@ -22,13 +22,7 @@ const submit=id=>$(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelab
 (async()=>{
  w.meshcorestationManageRepeater({public_key:key,name:'Hill',type:2});submit('repeater-login-form');await settle();
  $('repeater-tab-console').click();assert.equal($('repeater-console').hidden,false);assert.equal($('repeater-status').hidden,true);
-assert.equal($('repeater-tab-advisor').hidden,false);
-$('repeater-tab-advisor').click();assert.equal($('repeater-advisor').hidden,false);
-assert.equal($('repeater-advisor-frame').getAttribute('src'),'/repeater-optimizer');
-$('repeater-tab-console').click();
- const frame=$('repeater-advisor-frame'), iframeMessages=[];
- frame.contentWindow.postMessage=data=>iframeMessages.push(data);
- const previousRequests=posts.length;
+assert.equal($('repeater-tab-advisor'),null);
  $('repeater-tab-status').click();
  const neighborsPanel=[...$('repeater-extras').querySelectorAll('details')]
     .find(x=>x.querySelector('summary')?.textContent.includes('Neighbors'));
@@ -36,11 +30,7 @@ $('repeater-tab-console').click();
  neighborsPanel.open=true;
  neighborsPanel.dispatchEvent(new w.Event('toggle'));
  await settle();
- assert($('repeater-neighbors-message').textContent.includes('Snapshot #23: 1 of 1 returned entries saved'));
- $('repeater-tab-advisor').click();
- assert.equal(iframeMessages.at(-1).type,'meshcorestation-optimizer-refresh');
- assert.equal(posts.filter(p=>p.action==='neighbors').length,1,'Only the explicitly opened Status neighbors panel may poll the repeater');
- assert.equal(posts.length,previousRequests+1,'Returning to Optimizer must not send another request');
+ assert($('repeater-neighbors-message').textContent.includes('Neighbors received'));
  $('repeater-tab-console').click();
  $('repeater-console-commands').click();assert.equal($('repeater-command-dialog').open,true);
  const before=posts.length;
@@ -63,7 +53,7 @@ $('repeater-tab-console').click();
  $('repeater-close').click();assert.equal($('repeater-console-log').textContent,'');
  admin=false;w.meshcorestationManageRepeater({public_key:key,name:'Hill',type:2});submit('repeater-login-form');await settle();
  assert.equal($('repeater-console-command').disabled,true);
-assert.equal($('repeater-tab-advisor').hidden,true);
+assert.equal($('repeater-tab-advisor'),null);
  $('repeater-tab-console').click();$('repeater-console-command').value='reboot';submit('repeater-console-form');await settle();
  assert.equal(posts.filter(p=>p.action==='console').length,2);
  $('repeater-close').click();

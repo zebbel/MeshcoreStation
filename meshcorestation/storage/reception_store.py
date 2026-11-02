@@ -28,8 +28,6 @@ def channel_identity(key, stamp, text):
                                     separators=(',', ':')).encode()).hexdigest()
 
 
-def room_identity(room, post):
-    return hashlib.sha256(json.dumps(['room', room, post['author'], post.get('sender_timestamp'), post['text']], separators=(',', ':')).encode()).hexdigest()
 
 
 def authenticate(rx, key, scopes=()):

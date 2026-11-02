@@ -47,31 +47,15 @@
             fetch('/api/repeater', {method: 'POST', keepalive: true, headers: {'Content-Type': 'application/json', 'X-Meshcore-Control': '1'}, body: JSON.stringify({action: 'logout', public_key: contact.public_key, session})}).catch(() => {});
         }
         $('repeater-console-log').textContent='';$('repeater-console-command').value='';
-        const frame = $('repeater-advisor-frame'); if (frame && !$('optimization-analysis-inline')) frame.removeAttribute('src');
         session = ''; inputs.forEach(input => { if (input.type === 'password') input.value = ''; });
     }
     function close() {
         if (busy || (dirty() && !window.confirm('Discard unsaved repeater edits?'))) return;
         forget(); dialog.close();
     }
-    window.addEventListener('meshcorestation-optimizer-state',()=>{
-        const frame=$('repeater-advisor-frame');
-        if(frame?.contentWindow && (!$('optimization-analysis-inline') || ($('optimization-analysis-disclosure')?.open && $('repeater-optimizer-disclosure')?.open)))frame.contentWindow.postMessage({type:'meshcorestation-optimizer-refresh'},window.location.origin);
-    });
     function tab(name) {
-        if (name === 'advisor') {
-            if (!admin || !session) { message('Connect as administrator to use Repeater Optimizer.', true); return; }
-            const frame = $('repeater-advisor-frame');
-            if (!frame.hasAttribute('src')) frame.src = '/repeater-optimizer';
-            else if (selectedTab !== 'advisor') {
-                // The Status tab can save fresh neighbor data while the
-                // embedded optimizer stays loaded. Refresh locally on return.
-                // A refresh does NOT send a LoRa request.
-                frame.contentWindow.postMessage({type:'meshcorestation-optimizer-refresh'},window.location.origin);
-            }
-        }
         selectedTab = name;
-        for (const value of ['status', 'config', 'console', 'advisor']) {
+        for (const value of ['status', 'config', 'console']) {
             const active = value === name;
             $('repeater-tab-' + value).setAttribute('aria-selected', String(active));
             $('repeater-tab-' + value).tabIndex = active ? 0 : -1;
@@ -82,34 +66,20 @@
         dialog = node('dialog'); dialog.id = 'repeater-manage-dialog'; dialog.setAttribute('aria-labelledby', 'repeater-title');
         dialog.innerHTML = `<div class="dialog-header"><h2 id="repeater-title">Repeater management</h2><button type="button" id="repeater-close" aria-label="Close repeater management">×</button></div>
             <div class="repeater-fixed"><strong id="repeater-name"></strong><p id="repeater-identity" class="muted"></p><div class="repeater-tabs" role="tablist" aria-label="Repeater management">
-            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button><button type="button" id="repeater-tab-advisor" role="tab" aria-controls="repeater-advisor" hidden>Repeater Optimizer</button></div></div>
+            <button type="button" id="repeater-tab-status" role="tab" aria-controls="repeater-status">Status</button><button type="button" id="repeater-tab-config" role="tab" aria-controls="repeater-config">Configurations</button><button type="button" id="repeater-tab-console" role="tab" aria-controls="repeater-console">Console</button></div></div>
             <div class="dialog-body"><p id="repeater-message" role="status" aria-live="polite"></p><button type="button" id="repeater-reconnect" hidden>Connect again</button>
             <section id="repeater-status" role="tabpanel" aria-labelledby="repeater-tab-status"><div class="repeater-toolbar"><span id="repeater-last-response" class="muted">Not yet read</span><button type="button" id="repeater-refresh">↻ Refresh</button></div><div id="repeater-status-cards"></div><div id="repeater-extras"></div></section>
             <section id="repeater-config" role="tabpanel" aria-labelledby="repeater-tab-config" hidden></section>
-            <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section><section id="repeater-advisor" role="tabpanel" aria-labelledby="repeater-tab-advisor" hidden><iframe id="repeater-advisor-frame" title="Repeater Optimizer" loading="lazy" referrerpolicy="same-origin"></iframe></section></div>`;
+            <section id="repeater-console" role="tabpanel" aria-labelledby="repeater-tab-console" hidden><p class="muted">Send remote CLI commands as administrator. Commands run immediately and are not retried. Available commands depend on repeater firmware; serial-only commands cannot run over radio.</p><pre id="repeater-console-log" class="repeater-data" role="log" aria-label="Repeater console output" aria-live="polite"></pre><form id="repeater-console-form"><label for="repeater-console-command">Command</label><div class="repeater-toolbar"><input id="repeater-console-command" placeholder="e.g. get name" autocomplete="off" spellcheck="false" maxlength="147" required><button type="button" id="repeater-console-commands">Commands…</button><button type="submit">Send</button></div></form><button type="button" id="repeater-console-clear">Clear console</button><p class="muted">History is kept only while this management window is open. Password and private-key command text and replies are hidden. After using the console, read configuration values again before saving.</p></section></div>`;
         document.body.append(dialog);
-        const inline=$('optimization-analysis-inline');
-        if(inline){
-            const existing=inline.querySelector('iframe');
-            const generated=dialog.querySelector('#repeater-advisor-frame');
-            if(existing){generated.remove();}else{generated.title='Optimization Analysis';inline.append(generated);}
-            const back=button('Return to Optimization Analysis',()=>{
-                if(busy||!admin||!session)return;
-                if(contact.public_key!==window.meshcorestationSelectedRepeater){message('Select this repeater in Repeater Management before opening analysis.',true);return;}
-                if(dirty()&&!window.confirm('Discard unsaved repeater edits?'))return;
-                dialog.close();$('repeater-optimizer-disclosure').open=true;$('optimization-analysis-disclosure').open=true;
-                $('repeater-advisor-frame').contentWindow.postMessage({type:'meshcorestation-optimizer-context',public_key:contact.public_key,name:contact.name},window.location.origin);
-            });
-            back.id='analysis-return';dialog.querySelector('.repeater-fixed').append(back);
-        }
         $('repeater-close').addEventListener('click', close);
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
         $('repeater-refresh').addEventListener('click', () => run(readStatus));
         $('repeater-reconnect').addEventListener('click', () => { if (dirty() && !window.confirm('Discard unsaved edits and reconnect?')) return; forget(); dialog.close(); openLogin(); });
-        for (const name of ['status', 'config', 'console', 'advisor']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
+        for (const name of ['status', 'config', 'console']) $('repeater-tab-' + name).addEventListener('click', () => tab(name));
         dialog.querySelector('[role="tablist"]').addEventListener('keydown', event => {
             if (busy || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-            event.preventDefault(); const tabs=admin&&!$('optimization-analysis-inline')?['status','config','console','advisor']:['status','config','console'];
+            event.preventDefault(); const tabs=['status','config','console'];
             tab(event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(tabs.indexOf(selectedTab)+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length]);
             $('repeater-tab-' + selectedTab).focus();
         });
@@ -153,7 +123,6 @@
                 const remembered = savePassword($('repeater-remember-password').checked ? password : '');
                 session = result.session; admin = result.admin; schema = result.fields;
                 values.clear(); inputs.clear(); loaded.clear(); buildConfig(); buildExtras();
-                if(!$('optimization-analysis-inline'))$('repeater-advisor-frame').removeAttribute('src');
                 $('repeater-name').replaceChildren(window.MeshcoreStationRepeaterNames?.element(contact.public_key)||node('span',contact.name||'(unnamed repeater)'));
                 identity(result.contact); $('repeater-reconnect').hidden = true;
                 $('repeater-status-cards').replaceChildren(); $('repeater-last-response').textContent = 'Not yet read';
@@ -241,120 +210,16 @@
         const hops = info.out_path_len;
         $('repeater-identity').textContent = contact.public_key.slice(0, 12) + '… · ' + (hops === 0 ? 'Direct' : hops > 0 ? hops + ' hops' : 'Flood route') + (admin ? '' : ' · Guest access');
         $('repeater-identity').title = contact.public_key;
-        const advisorTab = $('repeater-tab-advisor'); if (advisorTab) advisorTab.hidden = !admin || !!$('optimization-analysis-inline');
     }
 
     // Same-origin embedded advisor; credentials and radio session stay in management.
     const advisorFields = ['flood.max','flood.max.unscoped'];
-    window.addEventListener('message', event => {
-        const frame=$('repeater-advisor-frame');
-        if(!frame || event.origin!==window.location.origin || event.source!==frame.contentWindow ||
-            !['meshcorestation-advisor-request','meshcorestation-advisor-apply','meshcorestation-advisor-return',
-              'meshcorestation-optimizer-neighbors','meshcorestation-optimizer-ready',
-              'meshcorestation-optimizer-profile','meshcorestation-optimizer-storage',
-              'meshcorestation-optimizer-clear-history'].includes(event.data?.type)) return;
-        const inline=!!$('optimization-analysis-inline');
-        const usable=()=>dialog?.open || (inline && $('optimization-analysis-disclosure')?.open && $('repeater-optimizer-disclosure')?.open);
-        if(event.data.type==='meshcorestation-optimizer-ready'&&inline)return;
-        if(event.data.type==='meshcorestation-optimizer-ready'){
-            if(dialog.open && admin && session)
-                frame.contentWindow.postMessage({type:'meshcorestation-optimizer-context',public_key:contact.public_key,name:contact.name},window.location.origin);
-            return;
-        }
-        if(event.data.type==='meshcorestation-advisor-return'){
-            if(dialog?.open){tab('config');$('repeater-tab-config').focus();}
-            return;
-        }
-        const target=frame.contentWindow,payload=event.data;
-        const send=data=>{if(usable()&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-values',request_id:payload.request_id,...data},window.location.origin);};
-        if(inline && (payload.public_key!==window.meshcorestationSelectedRepeater || payload.public_key!==contact?.public_key)){send({error:'Connect as administrator for the selected repeater, then return to Optimization Analysis.'});return;}
-        if (busy || !session || !admin) { send({error:'Connect as administrator and finish any pending repeater operation.'}); return; }
-        const progress=text=>{if(usable()&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text},window.location.origin);};
-        progress('Management connected. Checking administrator session…');
-        const options=['meshcorestation-optimizer-profile','meshcorestation-optimizer-storage','meshcorestation-optimizer-clear-history'].includes(payload.type);
-        if(options){
-            if(payload.public_key!==contact.public_key){send({error:'Selected repeater changed. Reopen Optimizer.'});return;}
-            run(async()=>{
-                try {
-                    const body={action:payload.type==='meshcorestation-optimizer-profile'?'profile':
-                        payload.type==='meshcorestation-optimizer-storage'?'storage':'clear_history',
-                        public_key:contact.public_key,session};
-                    if(body.action==='profile'){
-                        body.role=payload.role;body.polling=payload.polling;
-                    }else if(body.action==='storage') body.settings=payload.settings;
-                    else if(body.action==='clear_history') body.confirm=payload.confirm===true;
-                    const res=await fetch('/api/repeater-optimizer',{method:'POST',cache:'no-store',
-                        headers:{'Content-Type':'application/json','X-Meshcore-Control':'1'},body:JSON.stringify(body)});
-                    const data=await res.json();
-                    if(!res.ok||!data.ok)throw Error(data.error||'Saving optimizer settings failed.');
-                    send({saved:true,profile:data.profile,settings:data.settings,removed:data.removed});
-                }catch(error){send({error:error.message});}
-            });
-            return;
-        }
-        const neighbors=payload.type==='meshcorestation-optimizer-neighbors';
-        if(neighbors) {
-            run(async()=>{
-                try {
-                    progress('Reading one neighbor page over LoRa…');
-                    const data=await request({action:'neighbors',offset:0,optimizer:true});
-                    send({public_key:contact.public_key,neighbors:data.data,
-                        snapshot:data.neighbor_snapshot,neighbor_read:true});
-                    message('Neighbor snapshot received and stored.');
-                }catch(error){send({error:error.message});message(error.message,true);}
-            });
-            return;
-        }
-        const apply=payload.type==='meshcorestation-advisor-apply';
-        if(apply && (payload.public_key!==contact.public_key || dirty())) {
-            send({error:'Repeater changed or configuration edits are unsaved. Save or discard edits, then read again.'});return;
-        }
-        const changes=payload.changes;
-        if(apply && (!Array.isArray(changes) || !changes.length || changes.length>advisorFields.length ||
-            changes.some(item=>!item || !advisorFields.includes(item.field) || typeof item.expected!=='string' || typeof item.value!=='string') ||
-            new Set(changes.map(item=>item.field)).size!==changes.length)) {send({error:'Invalid change list.'});return;}
-        if(apply && !window.confirm('Apply to '+contact.name+' ('+contact.public_key.slice(0,12)+')?\n\n'+
-            changes.map(item=>item.field+': '+item.expected+' → '+item.value).join('\n')+'\n\nChanges can affect mesh connectivity. Stop on the first unconfirmed result.')) {send({error:'Changes cancelled.'});return;}
-        run(async()=>{
-            const current={}, errors={}, results=[];
-            try {
-                if(apply) {
-                    // Preflight every selected field before any write; write rechecks it again.
-                    for(const item of changes) {
-                        progress('Checking current '+item.field+' before changes…');
-                        const read=await request({action:'read',field:item.field,optimizer:true});
-                        if(String(read.value)!==item.expected)throw Error(item.field+' changed on the repeater. Read and review again.');
-                    }
-                    for(const item of changes) {
-                        progress('Applying and verifying '+item.field+'…');
-                        values.delete(item.field);
-                        try {
-                            const result=await request({action:'advisor_write',field:item.field,value:item.value,expected:item.expected,confirm:true});
-                            current[item.field]=result.value;results.push({field:item.field,value:result.value});
-                            if(String(result.value)!==item.value)throw Error('Readback differs for '+item.field+'. Remaining changes stopped.');
-                        } catch(error) {errors[item.field]=error.message;break;}
-                    }
-                } else {
-                    for(const field of advisorFields) {
-                        progress('Reading '+field+' ('+(advisorFields.indexOf(field)+1)+'/'+advisorFields.length+')… Waiting for repeater reply.');
-                        try {current[field]=(await request({action:'read',field,optimizer:true})).value;
-                            if(usable()&&frame.contentWindow===target)target.postMessage({type:'meshcorestation-advisor-progress',request_id:payload.request_id,text:'Received '+field+'.',field,value:current[field]},window.location.origin);}
-                        catch(error) {errors[field]=error.message;if(!session || /timed out|two minutes|Administrator/i.test(error.message))break;}
-                    }
-                }
-                send({public_key:contact.public_key,name:contact.name,current,errors,results,applied:apply});
-                message(apply?'Advisor operation finished. Read affected configuration sections again.':'Advisor read finished; form edits preserved.');
-            } catch(error) {send({error:error.message,public_key:contact.public_key,results,applied:apply});}
-        });
-    });
     function openLogin() {
         $('repeater-login-name').replaceChildren(window.MeshcoreStationRepeaterNames?.element(contact.public_key)||node('span',contact.name||contact.public_key));
         $('repeater-login-message').textContent = ''; $('repeater-password').value = savedPassword();
         $('repeater-remember-password').checked = $('repeater-password').value !== ''; $('repeater-password').type = 'password'; $('repeater-show-password').textContent = 'Show';
         controls(); loginDialog.showModal(); $('repeater-password').focus();
     }
-    document.addEventListener('analysis-connect',event=>window.meshcorestationManageRepeater(event.detail));
-    document.addEventListener('analysis-disconnect',()=>{if(dialog&&!busy)forget();});
     document.addEventListener('managed-repeater-selected',()=>{
         if(dialog&&contact?.public_key!==window.meshcorestationSelectedRepeater){forget();if(dialog.open)dialog.close();if(loginDialog.open)loginDialog.close();}
     });
@@ -423,16 +288,7 @@
                     else content.append(node('pre', JSON.stringify(result.data, null, 2), 'repeater-data'));
                 }
                 loaded.add(action);
-                if (action === 'neighbors') {
-                    const snap = result.neighbor_snapshot;
-                    report(snap
-                        ? label + ' received. Snapshot #' + snap.id + ': ' +
-                          snap.neighbors + ' of ' + snap.received +
-                          ' returned entries saved (' +
-                          (snap.reported==null?'total unknown':snap.reported+' reported total') + ').'
-                        : 'Neighbor response received, but no saved snapshot confirmation was returned.',
-                        !snap);
-                } else report(label + ' received.');
+                report(label + ' received.');
             };
             const refresh = button('↻ Refresh', () => run(() => load(), report)), next = button('Load more', () => run(() => load(true), report)); next.hidden = true;
             box.append(refresh); if (action === 'neighbors') box.append(localMessage); box.append(content); if (action === 'neighbors') box.append(next);

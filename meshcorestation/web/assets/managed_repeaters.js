@@ -49,7 +49,7 @@
         $('managed-repeater-remove').onclick=async()=>{
             const key=window.meshcorestationSelectedRepeater;
             const name=window.MeshcoreStationRepeaterNames?.label(key)||known.find(r=>r.public_key===key)?.name||key;
-            if(!key||!window.confirm(`Remove ${name} from management? Its telemetry settings, readings, report history, collected statistics, performance measurements and change markers will be permanently deleted.`))return;
+            if(!key||!window.confirm(`Remove ${name} from management? Its local telemetry settings, readings and reports will be deleted. The known-repeater identity will remain.`))return;
             $('managed-repeater-remove').disabled=true;
             try{
                 const response=await fetch('/api/bot/voltage',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},body:JSON.stringify({operation:'remove',public_key:key})});
@@ -69,7 +69,7 @@
                 const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Could not add repeater.');
                 if(!await load(e.detail))throw Error('Addition was submitted, but the managed list could not be refreshed.');
                 if(!managed.includes(e.detail))throw Error('Addition could not be verified. Reload and try again.');
-                $('managed-repeater-message').textContent='Repeater added. Telemetry monitoring can be enabled in its settings.';
+                $('managed-repeater-message').textContent='Repeater added. Optional telemetry monitoring can be enabled in its settings.';
             }catch(error){$('managed-repeater-message').textContent=error.message;}
         });
         // Avoid this extra voltage/repeater request while management is collapsed.

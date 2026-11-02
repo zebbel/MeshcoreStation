@@ -20,7 +20,7 @@ def db(tmp_path,monkeypatch):
     conn=instance.db
     conn.execute("INSERT INTO logger (id,sender,message) VALUES (1,'Alice','ping')")
     for key,name in [('aa'+'11'*31,'Repeater A'),('bb'+'22'*31,'Repeater B'),('bb'+'33'*31,'Collision')]:
-        conn.execute('INSERT INTO repeaters(public_key,name,first_seen,last_seen) VALUES (?,?,1,1)',(key,name))
+        instance.add_new_repeater(NS(payload={'type':2,'public_key':key,'adv_name':name}),observed=False)
     conn.commit()
     yield instance
     instance.close()

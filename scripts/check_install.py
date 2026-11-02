@@ -1,38 +1,33 @@
-"""Offline installation check; never opens a serial device or sends a message."""
-import tempfile
+"""V5 fresh-install smoke check: isolated databases, no serial device or network."""
+import os
 from pathlib import Path
-from markupsafe import escape
-from Crypto.Cipher import AES
-import dbus_fast
-from meshcorestation.storage import database
-from meshcorestation.storage.voltage_store import initialize
-from meshcorestation.web.app import create_app
-
-
-class QuietLogger:
-    def info(self, *args):
-        pass
+import subprocess
+import sys
+import tempfile
 
 
 def main():
-    assert str(escape('<test>&')) == '&lt;test&gt;&amp;'
-    key = bytes.fromhex('000102030405060708090a0b0c0d0e0f')
-    plain = bytes.fromhex('00112233445566778899aabbccddeeff')
-    assert AES.new(key, AES.MODE_ECB).encrypt(plain).hex() == '69c4e0d86a7b0430d8cdb78070b4c55a'
-    with tempfile.TemporaryDirectory() as directory:
-        database.DB_FILE = Path(directory) / 'check.db'
-        db = database.Database(QuietLogger())
-        try:
-            initialize(db.db)
-            assert db.get_bot_settings()['channel_name'] == ''
-        finally:
-            db.close()
-    app = create_app()
-    required = {'/api/repeater-network', '/api/replies/<int:command_id>', '/api/oled/pages', '/api/repeater-statistics', '/api/update', '/api/update/health', '/api/bot/commands', '/api/repeater', '/api/bot/runtime', '/api/bot/voltage', '/api/companion', '/api/companion/contacts', '/api/companion/channels'}
-    assert required <= {route.rule for route in app.server.url_map.iter_rules()}
-    assert app.server.test_client().get('/').status_code == 200
-    print('MeshcoreStation imports, native dependencies, fresh database and dashboard routes OK.')
+    code='''
+from pathlib import Path
+from meshcorestation.config import DATA_DIR,DB_PATH
+from meshcorestation.web.app import create_app
+from meshcorestation import __version__
+import sqlite3
+app=create_app();client=app.server.test_client()
+assert __version__=='5.0.0'
+assert {p.name for p in DATA_DIR.glob('*.db')}=={'meshcorestation.db','knownRepeaters.db'}
+with sqlite3.connect(DB_PATH) as db:
+    tables={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert 'repeaters' not in tables
+assert client.get('/').status_code==200
+assert client.get('/_dash-layout').status_code==200
+rules={r.rule for r in app.server.url_map.iter_rules()}
+assert {'/api/bot/commands','/api/bot/scopes','/api/repeater','/api/bot/voltage','/api/companion/contacts','/api/companion/channels','/api/update','/api/maps/repeaters','/api/replies/<int:command_id>'}<=rules
+assert not {'/api/repeater-performance','/api/repeater-network','/api/repeater-statistics','/api/rooms'}&rules
+print('V5 5.0.0: fresh two-database ownership, imports, dashboard and included routes OK; no radio opened.')
+'''
+    with tempfile.TemporaryDirectory(prefix='v5-install-check-',dir=os.getenv('TMPDIR',str(Path.cwd()))) as directory:
+        subprocess.run([sys.executable,'-c',code],env={**os.environ,'MESHCORESTATION_DATA_DIR':directory},check=True)
 
 
-if __name__ == '__main__':
-    main()
+if __name__=='__main__':main()

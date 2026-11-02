@@ -1,0 +1,52 @@
+name: V5 milestone validation
+on:
+  push:
+    branches: [V5]
+  pull_request:
+    branches: [V5]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt pytest
+      - run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --package-lock=false jsdom playwright@1.56.1
+      - run: for file in tests/*.cjs; do node "$file" || exit 1; done
+      - run: python -m scripts.check_install
+      - run: npx playwright install --with-deps chromium
+      - name: Desktop and mobile browser acceptance
+        run: |
+          PYTHONPATH=. python tests/browser/serve.py > browser-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in {1..30}; do curl -fsS http://127.0.0.1:8050/ > /dev/null && break; sleep 1; done
+          node tests/browser/v5_milestone.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v5-browser-evidence
+          path: |
+            browser-evidence/
+            browser-server.log
+  publish:
+    needs: verify
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.0.0:')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish authorized V5 milestone prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create v5.0.0 --target "$GITHUB_SHA" --title "MeshcoreStation 5.0.0 — V5 milestone 1" --notes-file docs/v5-release.md --prerelease --latest=false

@@ -9,59 +9,23 @@ FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'repor
 
 
 def initialize(db):
-    db.executescript('''
-    CREATE TABLE IF NOT EXISTS voltage_config (
-      id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL DEFAULT 0,
-      public_key TEXT NOT NULL DEFAULT '', interval_minutes INTEGER NOT NULL DEFAULT 30,
-      reports_enabled INTEGER NOT NULL DEFAULT 1,
-      report_time_1 TEXT NOT NULL DEFAULT '08:00', report_time_2 TEXT NOT NULL DEFAULT '20:00',
-      timezone TEXT NOT NULL DEFAULT 'Europe/Berlin', voltage_channel INTEGER NOT NULL DEFAULT 1,
-      report_target TEXT NOT NULL DEFAULT 'bot',
-      revision INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL DEFAULT 0,
-      request_seq INTEGER NOT NULL DEFAULT 0, handled_seq INTEGER NOT NULL DEFAULT 0);
-    INSERT OR IGNORE INTO voltage_config (id) VALUES (1);
-    CREATE TABLE IF NOT EXISTS voltage_samples (
-      id INTEGER PRIMARY KEY, public_key TEXT NOT NULL, name TEXT NOT NULL,
-      sampled_at REAL NOT NULL, voltage REAL, error TEXT,
-      voltage_channel INTEGER NOT NULL, interval_seconds INTEGER NOT NULL);
-    CREATE INDEX IF NOT EXISTS voltage_samples_key_time ON voltage_samples(public_key, sampled_at);
-    CREATE TABLE IF NOT EXISTS voltage_reports (
-      slot TEXT PRIMARY KEY, public_key TEXT NOT NULL, due_at REAL NOT NULL,
-      attempted_at REAL NOT NULL, channel_name TEXT, status TEXT NOT NULL, detail TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS voltage_worker (
-      id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL NOT NULL, state TEXT NOT NULL);
-    ''')
-    # Keep the previous bot-chat destination for existing installations.
-    if 'report_target' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
-        db.execute("ALTER TABLE voltage_config ADD COLUMN report_target TEXT NOT NULL DEFAULT 'bot'")
-
-    if 'report_template' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
-        db.execute("ALTER TABLE voltage_config ADD COLUMN report_template TEXT NOT NULL DEFAULT 'Battery {repeater_name}: {reading} | {sample_time}'")
-
-    # Add optional telemetry fields in place; legacy voltage rows keep their IDs
-    # and values, and NULL temperature means it was never measured.
-    if 'temperature_channel' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
-        db.execute('ALTER TABLE voltage_config ADD COLUMN temperature_channel INTEGER NOT NULL DEFAULT 1')
-    sample_columns = {row[1] for row in db.execute('PRAGMA table_info(voltage_samples)')}
-    for name, kind in (('temperature','REAL'), ('temperature_channel','INTEGER'), ('temperature_error','TEXT')):
-        if name not in sample_columns:
-            db.execute(f'ALTER TABLE voltage_samples ADD COLUMN {name} {kind}')
-    db.execute('CREATE INDEX IF NOT EXISTS voltage_samples_temperature_time ON voltage_samples(public_key,temperature_channel,sampled_at)')
-
-    if 'managed' not in {row[1] for row in db.execute('PRAGMA table_info(voltage_config)')}:
-        db.execute('ALTER TABLE voltage_config ADD COLUMN managed INTEGER NOT NULL DEFAULT 1')
-    # Upgrade the singleton table in place, preserving settings and pending reads.
-    sql = db.execute("SELECT sql FROM sqlite_master WHERE name='voltage_config'").fetchone()[0]
-    if re.search(r'CHECK\s*\(\s*id\s*=\s*1\s*\)', sql, re.I):
-        columns = ','.join(row[1] for row in db.execute('PRAGMA table_info(voltage_config)'))
-        with db:
-            db.execute('ALTER TABLE voltage_config RENAME TO voltage_config_single')
-            db.execute(re.sub(r'CHECK\s*\(\s*id\s*=\s*1\s*\)', '', sql, flags=re.I))
-            db.execute(f'INSERT INTO voltage_config ({columns}) SELECT {columns} FROM voltage_config_single')
-            db.execute('DROP TABLE voltage_config_single')
-    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS voltage_config_key ON voltage_config(public_key) WHERE public_key != ''")
-    # Keep existing report attempts reserved after namespacing slots by repeater.
-    db.execute("UPDATE voltage_reports SET slot=public_key||'|'||slot WHERE substr(slot,1,65) != public_key||'|'")
+    db.executescript("""
+    CREATE TABLE IF NOT EXISTS voltage_config(
+      id INTEGER PRIMARY KEY,public_key TEXT NOT NULL DEFAULT '',managed INTEGER NOT NULL DEFAULT 1,
+      enabled INTEGER NOT NULL DEFAULT 0,interval_minutes INTEGER NOT NULL DEFAULT 30,
+      reports_enabled INTEGER NOT NULL DEFAULT 0,report_time_1 TEXT NOT NULL DEFAULT '08:00',report_time_2 TEXT NOT NULL DEFAULT '20:00',
+      timezone TEXT NOT NULL DEFAULT 'Europe/Berlin',voltage_channel INTEGER NOT NULL DEFAULT 1,temperature_channel INTEGER NOT NULL DEFAULT 1,
+      report_target TEXT NOT NULL DEFAULT 'bot',report_template TEXT NOT NULL DEFAULT 'Battery {repeater_name}: {reading} | {sample_time}',
+      revision INTEGER NOT NULL DEFAULT 0,updated_at REAL NOT NULL DEFAULT 0,request_seq INTEGER NOT NULL DEFAULT 0,handled_seq INTEGER NOT NULL DEFAULT 0);
+    INSERT OR IGNORE INTO voltage_config(id,managed) VALUES(1,0);
+    CREATE UNIQUE INDEX IF NOT EXISTS voltage_config_key ON voltage_config(public_key) WHERE public_key!='';
+    CREATE TABLE IF NOT EXISTS voltage_samples(id INTEGER PRIMARY KEY,public_key TEXT NOT NULL,name TEXT NOT NULL,sampled_at REAL NOT NULL,
+      voltage REAL,error TEXT,voltage_channel INTEGER NOT NULL,interval_seconds INTEGER NOT NULL,temperature REAL,temperature_channel INTEGER,temperature_error TEXT);
+    CREATE INDEX IF NOT EXISTS voltage_samples_key_time ON voltage_samples(public_key,sampled_at);
+    CREATE INDEX IF NOT EXISTS voltage_samples_temperature_time ON voltage_samples(public_key,temperature_channel,sampled_at);
+    CREATE TABLE IF NOT EXISTS voltage_reports(slot TEXT PRIMARY KEY,public_key TEXT NOT NULL,due_at REAL NOT NULL,attempted_at REAL NOT NULL,channel_name TEXT,status TEXT NOT NULL,detail TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS voltage_worker(id INTEGER PRIMARY KEY CHECK(id=1),heartbeat REAL NOT NULL,state TEXT NOT NULL);
+    """)
     db.commit()
 
 
@@ -125,10 +89,6 @@ def validate(value, db):
         raise ValueError('Choose a battery report destination.')
     if target == 'bot':
         pass
-    elif target.startswith('room:'):
-        room_id = target[5:]
-        if not room_id.isdecimal() or room_id.startswith('0') or not 1 <= int(room_id) <= 2147483647:
-            raise ValueError('Choose an existing room.')
     elif target.startswith('channel:'):
         name = target[8:]
         if (not name or name.strip() != name or len(name.encode('utf-8')) > 31

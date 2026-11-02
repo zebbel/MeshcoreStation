@@ -30,7 +30,7 @@ async def read_network(companion):
             raise ValueError("No default scope response")
         scope = result.payload
         if not scope:
-            network["default_scope"] = {"name": name.removeprefix("#"), "key": key.lower()}
+            network["default_scope"] = {"name": "", "key": ""}
         else:
             name, key = scope.get("scope_name"), scope.get("scope_key")
             if not isinstance(name, str) or not name or not isinstance(key, str) or not re.fullmatch(r"[0-9a-fA-F]{32}", key):

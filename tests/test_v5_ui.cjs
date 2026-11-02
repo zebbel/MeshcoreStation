@@ -1,0 +1,31 @@
+/* Actual V4 dialog code, wired into V5's separate Settings/Bot/history hosts. */
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
+const dom=new JSDOM(`<body><button id="open-station-settings">Settings</button><dialog id="station-settings-dialog"><div class="dialog-header"><button id="close-station-settings"></button></div><div class="dialog-body"></div></dialog><button id="open-companion"></button><button id="open-contacts"></button><button id="open-channels"></button><details id="bot-disclosure"><details id="bot-settings-disclosure"><button id="open-commands"></button><div class="companion-grid"></div></details><details id="command-history-disclosure"><button id="open-commands-history"></button><div id="command-scroll"><table><tbody id="command-rows"></tbody></table></div></details></details><dialog id="details-dialog"><button id="close-details"></button><h2 id="detail-title"></h2><dl id="detail-fields"></dl></dialog></body>`,{url:'http://localhost/',runScripts:'outside-only',pretendToBeVisual:true});
+const w=dom.window,$=id=>w.document.getElementById(id),key='ab'.repeat(32),identity='11'.repeat(32),requests=[],props=[];
+w.TextEncoder=TextEncoder;w.AbortSignal.timeout=()=>undefined;w.confirm=()=>true;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+w.dash_clientside={set_props:(id,value)=>props.push([id,value])};let managed,protectedChannel=false,scopeRows=[];
+w.meshcorestationManageRepeater=value=>managed=value;
+w.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null;requests.push({url,body});let data={ok:true};
+ if(url==='/api/update')data={...data,version:'5.0.0',revision:'a'.repeat(40),branch:'V5',ready:false,check:{},status:{},branches:{V5:'V5'}};
+ else if(url==='/api/companion')data.settings={public_key:identity,name:'Fixture',adv_lat:49,adv_lon:8,tx_power:10,max_tx_power:22,radio_freq:869.525,radio_bw:125,radio_sf:7,radio_cr:5};
+ else if(url==='/api/companion/network')data.network={public_key:identity,path_hash_size:1,default_scope:{name:'',key:''}};
+ else if(url==='/api/bot/runtime')data={...data,settings:{serial_port:'/dev/fixture',channel_name:'Bot'},ports:[{device:'/dev/fixture',description:'Simulated'}]};
+ else if(url==='/api/companion/contacts')data={...data,public_key:identity,contacts:[{public_key:key,name:'Hill',type:2,latitude:49.6,longitude:8.6,details:{}}]};
+ else if(url==='/api/companion/channels'){if(body?.operation==='set_bot_channel')protectedChannel=true;data={...data,public_key:identity,revision:'b'.repeat(64),capacity:8,free_slots:7,channels:[{index:0,name:'Bot',type:'private',protected:protectedChannel}]};}
+ else if(url==='/api/bot/scopes'){if(body?.operation==='add')scopeRows.push({name:body.name,scope_key:'c'.repeat(32)});data={...data,scopes:scopeRows,revision:'scope-revision'};}
+ else if(url==='/api/bot/commands')data={...data,commands:[{id:'help',trigger:'?',help:'Help',reply:'{command_list}',action:'reply'}],revision:'commands',placeholders:[]};
+ else throw Error('Unexpected UI request '+url);
+ return {ok:true,json:async()=>data};};
+const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r));};
+(async()=>{
+ for(const file of ['aa_dialog.js','aa_display.js','station_settings.js','display_settings.js','updates.js','bot_runtime.js','companion_settings.js','contacts.js','channels.js','commands.js','scopes.js','dashboard.js'])w.eval(fs.readFileSync('meshcorestation/web/assets/'+file,'utf8'));
+ await settle();assert($('display-settings').closest('#station-settings-dialog'));assert($('update-panel').closest('#station-settings-dialog'));assert(!$('serial-panel'));assert($('scope-settings').closest('#bot-settings-disclosure'));
+ $('open-station-settings').click();assert($('station-settings-dialog').open);$('close-station-settings').click();assert(!$('station-settings-dialog').open);
+ $('open-companion').click();await settle();assert($('companion-dialog').open);assert($('serial-panel').closest('#companion-dialog'));assert(!$('display-settings').closest('#companion-dialog'));assert($('companion-settings-disclosure').open);assert($('bot-serial-port'));$('close-companion').click();
+ $('open-contacts').click();await settle();assert($('contacts-dialog').open);const manage=$('contacts-list').querySelector('.contact-manage');assert(manage);manage.click();assert.equal(managed.public_key,key);$('contacts-add').click();assert(!$('contact-form').hidden);$('contact-cancel').click();assert($('contact-form').hidden);$('contacts-close').click();
+ $('open-channels').click();await settle();assert($('channels-dialog').open);$('channels-list').querySelector('button[aria-label^="Use "]').click();await settle();assert(requests.some(r=>r.body?.operation==='set_bot_channel'));assert($('channels-list').textContent.includes('Used by bot'));assert($('channels-list').querySelector('.channel-delete').disabled);$('channels-add').click();$('channel-type').value='private';$('channel-type').dispatchEvent(new w.Event('change'));$('channel-generate').click();assert.match($('channel-key').value,/^[0-9a-f]{32}$/);$('channel-cancel').click();$('channels-close').click();
+ $('open-commands-history').click();await settle();assert($('commands-dialog').open,'history button opens the same command editor');$('commands-close').click();$('open-commands').click();await settle();assert($('commands-dialog').open);$('commands-close').click();
+ $('bot-settings-disclosure').open=true;await settle();$('scope-name').value='local';$('scope-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await settle();assert($('scopes-list').textContent.includes('local'));
+ $('bot-disclosure').open=true;$('command-history-disclosure').open=true;await settle();assert(props.some(([id,p])=>id==='history-visible'&&p.data===true));$('bot-disclosure').open=false;await settle();assert.equal(props.filter(([id])=>id==='history-visible').at(-1)[1].data,false,'closing Bot pauses the still-open nested History');
+ dom.window.close();console.log('V5 dialog hosts, serial isolation, Contacts Manage, protected Bot channel, generated keys, both Commands buttons, scopes and nested history visibility passed.');
+})().catch(e=>{console.error(e);dom.window.close();process.exit(1);});

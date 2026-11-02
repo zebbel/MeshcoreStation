@@ -9,23 +9,12 @@ DEFAULTS = [
     dict(id='status', trigger='status', help='Show repeater count', reply='@{sender_name} | {repeater_count} repeaters.', action='reply'),
     dict(id='ping', trigger='ping', help='Test the connection', reply='@{sender_name} | {hop_count} hops | SNR {snr} | RSSI {rssi} dBm | direct {direct_distance}km | route {route_distance}km | scope {scope_name}.', action='reply'),
 ]
-LEGACY = [
-    dict(id='position', trigger='position', help='Update saved coordinates', reply='@[{sender_name}] {result}', action='position'),
-    dict(id='scope', trigger='scope', help='Add a reply scope', reply='@[{sender_name}] {result}', action='scope'),
-]
-
-
-def initialize(db, legacy=False):
-    exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bot_commands'").fetchone()
-    db.execute('CREATE TABLE IF NOT EXISTS bot_commands (id TEXT PRIMARY KEY, trigger TEXT NOT NULL UNIQUE, help TEXT NOT NULL, reply TEXT NOT NULL, action TEXT NOT NULL, sort_order INTEGER NOT NULL)')
-    columns = {row[1] for row in db.execute('PRAGMA table_info(bot_commands)')}
-    if 'failure_reply' not in columns:
-        db.execute("ALTER TABLE bot_commands ADD COLUMN failure_reply TEXT NOT NULL DEFAULT '@{sender_name} | {result}'")
+def initialize(db):
+    exists=db.execute("SELECT 1 FROM sqlite_master WHERE name='bot_commands'").fetchone()
+    db.execute("CREATE TABLE IF NOT EXISTS bot_commands(id TEXT PRIMARY KEY, trigger TEXT NOT NULL UNIQUE,help TEXT NOT NULL,reply TEXT NOT NULL,action TEXT NOT NULL,sort_order INTEGER NOT NULL,failure_reply TEXT NOT NULL DEFAULT '@{sender_name} | {result}')")
     if not exists:
-        for index, item in enumerate(DEFAULTS + (LEGACY if legacy else [])):
-            db.execute('INSERT INTO bot_commands (id,trigger,help,reply,action,sort_order) VALUES (?,?,?,?,?,?)', (item['id'], item['trigger'], item['help'], item['reply'], item['action'], index))
-
-    db.execute("UPDATE bot_commands SET reply=replace(reply,'@{sender_name}','@[{sender_name}]'), failure_reply=replace(failure_reply,'@{sender_name}','@[{sender_name}]') WHERE action='position'")
+        for index,item in enumerate(DEFAULTS):
+            db.execute('INSERT INTO bot_commands(id,trigger,help,reply,action,sort_order) VALUES(?,?,?,?,?,?)',(item['id'],item['trigger'],item['help'],item['reply'],item['action'],index))
 
 
 def read(db):

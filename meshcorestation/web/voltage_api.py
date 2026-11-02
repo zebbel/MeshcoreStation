@@ -1,3 +1,4 @@
+from meshcorestation.storage.connection import connect as open_database
 """Short database requests; radio polling happens asynchronously in the bot."""
 import json
 import sqlite3
@@ -6,7 +7,6 @@ from contextlib import closing
 from meshcorestation.web.data import DB_PATH
 from meshcorestation.storage.voltage_store import FIELDS, config, configurations, ensure_repeater, validate, latest, latest_temperature
 from meshcorestation.config import DATA_DIR
-from meshcorestation.rooms.service import RoomService
 from meshcorestation import battery_templates
 
 
@@ -29,16 +29,11 @@ def payload(db, selected_key, days):
     row = db.execute('SELECT channel_name FROM bot_settings WHERE id=1').fetchone()
     worker = db.execute('SELECT * FROM voltage_worker WHERE id=1').fetchone()
     reports = [dict(r) for r in db.execute('SELECT * FROM voltage_reports WHERE public_key=? ORDER BY attempted_at DESC LIMIT 6', (key,))]
-    rooms = [{'id': r['id'], 'name': r['name'], 'enabled': bool(r['enabled'])} for r in RoomService(DATA_DIR / 'rooms.db').rooms()]
     managed_keys = [c['public_key'] for c in configurations(db)]
-    from meshcorestation.storage import passive_stats
-    with closing(passive_stats.connect()) as stats_db:
-        managed_keys = list(dict.fromkeys(managed_keys + [row[0] for row in stats_db.execute(
-            "SELECT public_key FROM subscriptions UNION SELECT public_key FROM selection WHERE public_key != ''")]))
     return {'ok': True, 'config': cfg, 'repeaters': repeaters, 'managed_repeaters': managed_keys, 'history_key': key,
             'samples': samples, 'temperature_samples':temperature_samples,
             'latest_temperature':latest_temperature(db,dict(cfg,public_key=key)), 'latest': latest(db, dict(cfg, public_key=key)),
-            'bot_channel': row['channel_name'] if row else None, 'rooms': rooms,
+            'bot_channel': row['channel_name'] if row else None,
             'worker': dict(worker) if worker else None, 'reports': reports, 'server_time': time.time(),
             'report_placeholders': battery_templates.catalog(),
             'report_default': battery_templates.DEFAULT}
@@ -46,7 +41,7 @@ def payload(db, selected_key, days):
 
 def voltage_request(request):
     try:
-        with closing(sqlite3.connect(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
+        with closing(open_database(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
             db.row_factory = sqlite3.Row
             if request.method == 'GET':
                 days = request.args.get('days', '7')
@@ -77,7 +72,6 @@ def voltage_request(request):
                 if body['operation'] == 'remove':
                     if not key:
                         raise ValueError('Select a repeater to remove.')
-                    from meshcorestation.storage import passive_stats
                     # Keep only a disabled identity/revision tombstone to reject in-flight work.
                     db.execute('''UPDATE voltage_config SET managed=0,enabled=0,reports_enabled=0,
                         request_seq=0,handled_seq=0,revision=revision+1,interval_minutes=30,
@@ -85,36 +79,15 @@ def voltage_request(request):
                         voltage_channel=1,temperature_channel=1,report_target='bot',report_template='Battery {repeater_name}: {reading} | {sample_time}',updated_at=? WHERE public_key=?''', (time.time(), key))
                     db.execute('DELETE FROM voltage_samples WHERE public_key=?', (key,))
                     db.execute('DELETE FROM voltage_reports WHERE public_key=?', (key,))
-                    with closing(passive_stats.connect()) as stats_db, stats_db:
-                        stats_db.execute('DELETE FROM subscriptions WHERE public_key=?', (key,))
-                        stats_db.execute('DELETE FROM observations WHERE target=?', (key,))
-                        stats_db.execute("UPDATE selection SET public_key='' WHERE public_key=?", (key,))
-                    # Removing a managed repeater must also erase its optimizer
-                    # role, scheduled neighbor reads, snapshots and audit history.
-                    # Network-wide passive observations remain because other
-                    # repeaters still depend on those common packet records.
-                    from meshcorestation.storage import optimizer_store, advisor_history
-                    optimizer_store.remove_repeater(key)
-                    advisor_history.remove_repeater(key)
-                    from meshcorestation.analyzer import service as analyzer_service
-                    analyzer_service.remove(key)
                     return {'ok': True}, 200
                 if body['operation'] == 'add':
                     cfg = ensure_repeater(db, key)
-                    from meshcorestation.storage import passive_stats
-                    passive_stats.track(key)
-                    from meshcorestation.storage import performance_store
-                    performance_store.allow_repeater(key)
                     return {'ok': True, 'config': cfg}, 200
                 cfg = config(db, key)
                 if type(body.get('expected_revision')) is not int or body['expected_revision'] != cfg['revision']:
                     return {'ok': False, 'error': 'Settings changed. Refresh before saving or reading.'}, 409
                 if body['operation'] == 'save':
                     value = validate(body.get('value'), db)
-                    if value['report_target'].startswith('room:'):
-                        room = RoomService(DATA_DIR / 'rooms.db').config(int(value['report_target'][5:]))
-                        if not room['enabled']:
-                            raise ValueError('Enable the chosen room before selecting it for reports.')
                     if key and value['public_key'] != key:
                         raise ValueError('Selected repeater changed. Reload its settings.')
                     cfg = ensure_repeater(db, value['public_key'])

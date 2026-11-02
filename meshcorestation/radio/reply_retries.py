@@ -89,7 +89,7 @@ class ReplyRetries:
 
     def context(self,job):
         return (not self.closed and self.connected() and self.c.channel_idx==job.channel and self.c.tracking_key==job.channel_key
-                and self.c.room_bot_id is None and not job.stop.is_set())
+                and not job.stop.is_set())
 
     def schedule(self,root,command,channel,message,scope,scope_key,stamp,hops):
         maximum=2 if type(hops) is int and hops==0 else 4 if type(hops) is int and 1<=hops<=63 else 1

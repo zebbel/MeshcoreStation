@@ -1,3 +1,4 @@
+from meshcorestation.storage.connection import connect as open_database
 """Manage the saved reply scopes with transactional, conflict-checked edits."""
 import hashlib
 import json
@@ -15,7 +16,7 @@ def snapshot(db):
 
 def scopes_request(request):
     try:
-        with closing(sqlite3.connect(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
+        with closing(open_database(DB_PATH.as_uri() + '?mode=rw', uri=True, timeout=5)) as db:
             db.row_factory = sqlite3.Row
             if request.method == 'GET':
                 return snapshot(db), 200
@@ -54,6 +55,12 @@ def scopes_request(request):
                         db.execute('INSERT INTO scopes (name,scope_key) VALUES (?,?)', (name, key))
                     else:
                         db.execute('UPDATE scopes SET name=?,scope_key=? WHERE name=?', (name, key, original))
+                from meshcorestation.bridge import bridge
+                if bridge.runtime and bridge.loop:
+                    def cancel():
+                        if bridge.runtime and bridge.runtime.companion:
+                            bridge.runtime.companion.reply_retries.cancel('Reply scopes changed; pending retries cancelled.')
+                    bridge.loop.call_soon_threadsafe(cancel)
                 result = snapshot(db)
             return result, 200
     except sqlite3.IntegrityError:

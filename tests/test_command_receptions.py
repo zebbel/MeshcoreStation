@@ -117,24 +117,13 @@ def test_unidentifiable_scope_association_is_not_guessed(db):
     assert store.paths(db.db,command) == []
 
 
-def test_migration_is_additive_idempotent_and_retains_legacy_route(tmp_path, monkeypatch):
-    file = tmp_path/'legacy.db'
-    conn = sqlite3.connect(file)
-    conn.executescript('CREATE TABLE logger(id INTEGER PRIMARY KEY, recv_time INTEGER, rx_path TEXT); INSERT INTO logger VALUES(1,123,"aabb");')
-    conn.close()
-    monkeypatch.setattr(database, 'DB_FILE', file)
-    instance = database.Database(Mock())
-    instance.create_database()
-    assert tuple(instance.db.execute('SELECT id,recv_time,rx_path FROM logger').fetchone()) == (1,123,'aabb')
-    assert store.paths(instance.db,1) == []
-    instance.close()
 
 
 def test_map_variants_share_endpoints_and_calculate_each_route(db, monkeypatch):
     db.save_companion_position('11'*32, 'Alice', 50, 8, 0)
     db.save_companion_position('22'*32, 'Bot', 50, 9, 0, is_bot=True)
     for key, name, lat, lon in [('aa'+'11'*31,'Hill',50.1,8.5),('bb'+'22'*31,'Valley',51,8.5)]:
-        db.db.execute('INSERT INTO repeaters(public_key,name,latitude,longitude,first_seen,last_seen) VALUES(?,?,?,?,1,1)', (key,name,lat,lon))
+        db.add_new_repeater(NS(payload={'type':2,'public_key':key,'adv_name':name,'adv_lat':lat,'adv_lon':lon}),observed=False)
     db.db.commit()
     command = db.add_logger(dict(name='Alice', message='ping', path_len=1), packet(), 'unscoped', '')
     identity = store.channel_identity(KEY,123,'Alice: ping')

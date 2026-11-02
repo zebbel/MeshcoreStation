@@ -12,7 +12,16 @@ ADV_TYPE_REPEATER = 2
 class Database:
     def __init__(self, logger):
         self.logger = logger
-        self.db = sqlite3.connect(DB_FILE)
+        from meshcorestation.storage.connection import connect
+        from meshcorestation.storage import registry
+        DB_FILE.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+        if not DB_FILE.exists():DB_FILE.touch(mode=0o600)
+        with sqlite3.connect(DB_FILE) as check:
+            if check.execute("SELECT 1 FROM sqlite_master WHERE name='repeaters' AND type='table'").fetchone():
+                raise ValueError('V5 requires a fresh data directory; V3/V4 databases are not migrated.')
+        self.known_path=DB_FILE.with_name('knownRepeaters.db')
+        registry.initialize(self.known_path)
+        self.db = connect(DB_FILE)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA foreign_keys=ON")
@@ -38,16 +47,15 @@ class Database:
 
     def create_database(self):
         from meshcorestation.storage.command_store import initialize as initialize_commands
-        legacy = self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='repeaters'").fetchone() is not None
-        initialize_commands(self.db, legacy=legacy)
+        initialize_commands(self.db)
         initialize(self.db)
-        from meshcorestation.storage.oled_store import initialize as initialize_oled
-        initialize_oled(self.db)
-        self.db.execute("CREATE TABLE IF NOT EXISTS repeaters (public_key TEXT PRIMARY KEY, name TEXT, adv_type INTEGER, flags INTEGER, latitude REAL, longitude REAL, out_path_len INTEGER, out_path TEXT, last_advert INTEGER, lastmod INTEGER, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, advert_count INTEGER NOT NULL DEFAULT 1)")
-        self.db.execute("CREATE TABLE IF NOT EXISTS companion_positions (public_key TEXT PRIMARY KEY, name TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL, altitude REAL, updated_at INTEGER NOT NULL)")
-        if "is_bot" not in {row["name"] for row in self.db.execute("PRAGMA table_info(companion_positions)")}:
-            self.db.execute("ALTER TABLE companion_positions ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0 CHECK (is_bot IN (0, 1))")
-        self.db.execute("CREATE TABLE IF NOT EXISTS scopes (name TEXT PRIMARY KEY, scope_key TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS application_meta(id INTEGER PRIMARY KEY CHECK(id=1),generation INTEGER NOT NULL CHECK(generation=5))")
+        self.db.execute('INSERT OR IGNORE INTO application_meta VALUES(1,5)')
+        self.db.execute("CREATE TABLE IF NOT EXISTS application_preferences(id INTEGER PRIMARY KEY CHECK(id=1),date_format TEXT NOT NULL DEFAULT 'german',hour_format TEXT NOT NULL DEFAULT '24')")
+        self.db.execute('INSERT OR IGNORE INTO application_preferences(id) VALUES(1)')
+        self.db.execute("CREATE TABLE IF NOT EXISTS companion_positions(public_key TEXT PRIMARY KEY,name TEXT NOT NULL,latitude REAL NOT NULL,longitude REAL NOT NULL,altitude REAL,updated_at INTEGER NOT NULL,is_bot INTEGER NOT NULL DEFAULT 0)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS scopes(name TEXT PRIMARY KEY,scope_key TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS management_audit(id INTEGER PRIMARY KEY,public_key TEXT NOT NULL,at REAL NOT NULL,field TEXT NOT NULL,before_value TEXT,after_value TEXT,status TEXT NOT NULL)")
         self.db.execute("""
             CREATE TABLE IF NOT EXISTS logger (
                 id INTEGER PRIMARY KEY,
@@ -82,23 +90,14 @@ class Database:
                 sender_longitude REAL,
                 sender_altitude REAL,
                 sender_position_updated_at INTEGER,
-                room_id INTEGER,
                 command_status TEXT
             )""")
-        # Existing installations retain their history while gaining room metadata.
-        logger_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(logger)")}
-        if "room_id" not in logger_columns:
-            self.db.execute("ALTER TABLE logger ADD COLUMN room_id INTEGER")
-        if "command_status" not in logger_columns:
-            self.db.execute("ALTER TABLE logger ADD COLUMN command_status TEXT")
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_logger_recv_time ON logger(recv_time)")
-        if "message" in logger_columns:
-            self.db.execute("CREATE INDEX IF NOT EXISTS idx_logger_message_time ON logger(message, recv_time DESC, id DESC)")
-
+        self.db.execute('CREATE INDEX IF NOT EXISTS idx_logger_recv_time ON logger(recv_time)')
+        self.db.execute('CREATE INDEX IF NOT EXISTS idx_logger_message_time ON logger(message,recv_time DESC,id DESC)')
         from meshcorestation.storage.reply_store import initialize as initialize_replies
-        initialize_replies(self.db)
         from meshcorestation.storage.reception_store import initialize as initialize_receptions
-        initialize_receptions(self.db)
+        from meshcorestation.storage.voltage_store import initialize as initialize_telemetry
+        initialize_replies(self.db);initialize_receptions(self.db);initialize_telemetry(self.db)
         self.db.commit()
 
 ################################################
@@ -109,7 +108,7 @@ class Database:
         rx = matched_rx if matched_rx is not None else {}
 
         shared_fields = "sender_timestamp recv_time path_len txt_type attempt".split()
-        message_fields = "type channel_idx message path path_hash_mode room_id command_status".split()
+        message_fields = "type channel_idx message path path_hash_mode command_status".split()
         rx_fields = "path_hash_size route_type payload_type payload_ver transport_code pkt_hash msg_hash raw_hex".split()
 
         data = {field: message_data.get(field) for field in message_fields}
@@ -121,20 +120,14 @@ class Database:
         data["snr"] = message_data.get("SNR") if message_data.get("SNR") is not None else rx.get("snr")
         data["rx_path"] = rx.get("path")
         data["channel_hash"] = rx.get("channel_hash") or rx.get("chan_hash")
-        data["channel_name"] = message_data.get("room_name") if message_data.get("room_id") is not None else rx.get("channel_name") or rx.get("chan_name")
+        data["channel_name"] = rx.get("channel_name") or rx.get("chan_name")
         data["scope_name"] = scope_name
         data["reply"] = reply
 
-        if message_data.get("room_id") is not None:
-            # Room messages have a cryptographically authenticated sender key.
-            # Never substitute a same-name companion's coordinates or identity.
-            sender_key = self._normalize_public_key(message_data.get("sender_public_key"))
-            position = self.get_companion_position(sender_key) or {}
-            data["sender_public_key"] = sender_key
-        else:
-            positions = self.get_companion_positions_by_name(message_data.get("name"))
-            position = positions[0] if len(positions) == 1 else {}
-            data["sender_public_key"] = position.get("public_key")
+        positions=self.get_companion_positions_by_name(message_data.get('name'))
+        position=positions[0] if len(positions)==1 else {}
+        data['sender_public_key']=position.get('public_key')
+        if data.get('recv_time') is None:data['recv_time']=int(time.time())
         data["sender_latitude"] = position.get("latitude")
         data["sender_longitude"] = position.get("longitude")
         data["sender_altitude"] = position.get("altitude")
@@ -168,48 +161,12 @@ class Database:
         wanted_name = name.strip().casefold()
         return [dict(row) for row in rows if (row["name"] or "").strip().casefold() == wanted_name]
 
-    def add_new_repeater(self, event, observed=True):
-        advert = event.payload or {}
-        adv_type = advert.get("type")
-
-        try:
-            adv_type = int(adv_type)
-        except (TypeError, ValueError):
-            return
-
-        if adv_type != ADV_TYPE_REPEATER:
-            return
-
-        public_key = self._normalize_public_key(advert.get("public_key"))
-
-        # Preserve the existing repeater exclusion rule.
-        if public_key == 'e2e019a47200c2fe568493a52a9d40de7b3b56385ce790f213cbce1997df6bc2':
-            return
-
-        if not public_key:
-            self.logger.warning("Repeater advert has no public key.")
-            return
-
-        now = int(time.time())
-    
-        name = advert.get("adv_name", "")
-        adv_type = advert.get("type")
-        flags = advert.get("flags")
-        latitude = advert.get("adv_lat")
-        longitude = advert.get("adv_lon")
-        out_path_len = advert.get("out_path_len")
-        out_path = self._bytes_to_hex(advert.get("out_path"))
-        last_advert = advert.get("last_advert")
-        lastmod = advert.get("lastmod")
-    
-        self.db.execute("""
-            INSERT INTO repeaters ( public_key, name, adv_type, flags, latitude, longitude, out_path_len, out_path, last_advert, lastmod, first_seen, last_seen, advert_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(public_key) DO UPDATE SET name = excluded.name, adv_type = excluded.adv_type, flags = excluded.flags, latitude = excluded.latitude, longitude = excluded.longitude, out_path_len = excluded.out_path_len, out_path = excluded.out_path, last_advert = excluded.last_advert, lastmod = excluded.lastmod, last_seen = MAX(repeaters.last_seen, excluded.last_seen), advert_count = repeaters.advert_count + excluded.advert_count
-            """, (public_key, name, adv_type, flags, latitude, longitude, out_path_len, out_path, last_advert, lastmod, now, now if observed else int(last_advert or 0), int(observed)))
-
-        self.db.commit()
-
-        self.logger.info('REPEATER STORED | name=%r | advert count=%r | known repeaters=%r' % (advert.get("adv_name", "?"), self.get_repeater_advert_count(public_key), self.get_repeater_count()))
+    def add_new_repeater(self,event,observed=True):
+        from meshcorestation.storage.registry import upsert
+        try:return upsert(self.known_path,event.payload or {},observed=observed)
+        except (ValueError,TypeError):
+            self.logger.warning('Invalid repeater metadata; registry unchanged.')
+            return False
 
 ################################################
 # COMPANION FUNCTIONS
