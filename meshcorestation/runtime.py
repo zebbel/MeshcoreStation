@@ -15,6 +15,10 @@ class Runtime:
         self.requests = set()
         self.close_error = None
         self.device_info = {}
+        from pathlib import Path
+        from meshcorestation.radio.statistics_collector import Collector
+        main_path = Path(database.db.execute("PRAGMA database_list").fetchone()[2])
+        self.statistics = Collector(main_path, logger)
 
     async def dispatch(self, payload):
         """Serialize control changes with bot replies and telemetry requests."""
@@ -58,6 +62,7 @@ class Runtime:
 
     async def session(self):
         self.companion = Companion(self.logger, self.database)
+        self.companion.statistics = self.statistics
         if not await self.companion.connect():
             raise ConnectionError('No response from companion')
         try:
@@ -67,6 +72,7 @@ class Runtime:
             self.device_info = {}
         self.companion.device_info = self.device_info
         await self.companion.subscribe()
+        self.statistics.connected = True
         self.control = CompanionControl(self.companion)
         self.voltage = VoltageMonitor(self.companion)
         self.voltage.start()
@@ -80,6 +86,7 @@ class Runtime:
             await asyncio.sleep(1)
 
     async def run(self):
+        self.statistics.start()
         bridge.attach(self)
         try:
             while True:
@@ -107,4 +114,5 @@ class Runtime:
                     except asyncio.TimeoutError:
                         pass
         finally:
+            await self.statistics.close()
             bridge.detach()

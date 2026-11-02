@@ -18,6 +18,7 @@ class Companion:
     def __init__(self, logger, database):
         self.logger = logger
         self.mc = None
+        self.statistics = None
         self.repeater_sync = None
         self.database = database
         settings = database.get_bot_settings()
@@ -92,6 +93,7 @@ class Companion:
         return True
 
     async def disconnect(self):
+        if self.statistics is not None: self.statistics.connected = False
         await self.reply_retries.close()
         if self.repeater_sync is not None:
             await self.repeater_sync.close()
@@ -347,6 +349,9 @@ class Companion:
 
     def _handle_rx_log(self, event):
         rx = event.payload or {}
+        # Passive collection precedes every Bot/channel filter and makes no RF request.
+        if self.statistics is not None:
+            self.statistics.submit(rx)
         # Contact snapshots/notifications are not counted as received advertisements.
         # Count only a complete actual RX advert decoded by the pinned client.
         payload=rx.get('pkt_payload')

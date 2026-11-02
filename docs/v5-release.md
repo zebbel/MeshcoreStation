@@ -1,19 +1,32 @@
-# MeshcoreStation 5.0.0 — first V5 milestone
+# MeshcoreStation 5.1.0 — Repeater Statistics
 
-Fresh V5 dashboard with three top cards, nested Bot Settings and Command History,
-and separate Repeater Management. Retains V4 Contacts/Channels interactions,
-protected Bot channel selection, command templates/scopes, persistent history,
-hop-aware reply retries, guest/admin management and configuration readback.
+Adds a separate expandable Repeater Statistics section below Repeater Management,
+with an independent managed-only selector, recording health, saved observation
+count and last-recorded timestamp. No charts or performance analysis are included.
 
-Uses exactly two fresh application databases: meshcorestation.db and
-knownRepeaters.db. Known repeater identities remain available while disconnected.
-Includes application preferences, branch-specific update checking and fixed footer.
+Passively collects Companion RX_LOG_DATA for every managed repeater, independently
+of Bot channel, UI selection and telemetry settings. Uses bounded asynchronous
+queues and off-loop batched SQLite writes without extra radio traffic.
 
-Validation: Python and JavaScript regression suites, isolated fresh-install smoke,
-and actual Chromium desktop/light and mobile/dark acceptance gate.
+Relevant observations create private WAL databases beneath
+`data/repeaterStatistics/<full-public-key>.db`. Keeps original payload/metadata,
+RSSI/SNR, route/scope evidence and attribution uncertainty. Collision matching uses
+all known repeater keys; repeated receptions remain separate. A reception involving
+multiple managed repeaters is recorded in each corresponding database.
 
-This is a prerelease. Use a new empty V5 data directory: no V3/V4 migration or
-compatibility is provided. Physical Companion/repeater and RF delivery are not
-verified by the protocol fakes. Hardware-dependent failures remain explicit.
-Optimizer, Analyzer, Performance and Room Server are excluded from this milestone.
-V3 main and V4 v4.0.0 are unchanged. Nothing is deployed automatically.
+Managed removal rejects queued observations and preserves statistics history.
+Re-adding resumes appending without restoring stale queued packets. Handles queue
+overflow, write errors, reconnects and low disk space without automatic deletion.
+
+Validation: 189 Python tests, 16 JavaScript suites, isolated fresh-install smoke,
+and the existing Chromium desktop/light and mobile/dark acceptance gate, extended
+with a focused Statistics status/selector check.
+
+V5 5.0.0 data is preserved through an additive membership-cutoff column. Core
+identity remains authoritative in knownRepeaters.db. No V3/V4 migration is provided.
+This remains a prerelease; physical Companion/RF operation is unverified. Direct
+routes and TRACE candidates are uncertain evidence, not confirmed forwarding or
+verified RF links. In-memory queued data may be lost on abrupt shutdown; dropped
+or unavailable observations must not be interpreted as zero activity.
+
+V3 main and V4 v4.0.0 remain unchanged. No deployment is performed.

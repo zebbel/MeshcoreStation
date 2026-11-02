@@ -39,4 +39,6 @@ def create_app():
     from meshcorestation.web.reply_api import register_reply_routes
     register_firmware_routes(app.server)
     register_reply_routes(app.server)
+    from meshcorestation.web.statistics_api import register_statistics_routes
+    register_statistics_routes(app.server)
     return app

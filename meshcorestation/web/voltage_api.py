@@ -5,7 +5,7 @@ import sqlite3
 import time
 from contextlib import closing
 from meshcorestation.web.data import DB_PATH
-from meshcorestation.storage.voltage_store import FIELDS, config, configurations, ensure_repeater, validate, latest, latest_temperature
+from meshcorestation.storage.voltage_store import MEMBERSHIP_LOCK, FIELDS, config, configurations, ensure_repeater, validate, latest, latest_temperature
 from meshcorestation.config import DATA_DIR
 from meshcorestation import battery_templates
 
@@ -60,7 +60,7 @@ def voltage_request(request):
             body = json.loads(raw)
             if not isinstance(body, dict) or body.get('operation') not in {'save', 'sample', 'add', 'remove'}:
                 raise ValueError('Unknown voltage operation.')
-            with db:
+            with MEMBERSHIP_LOCK, db:
                 db.execute('BEGIN IMMEDIATE')
                 value_body = body.get('value')
                 if value_body is not None and not isinstance(value_body, dict):

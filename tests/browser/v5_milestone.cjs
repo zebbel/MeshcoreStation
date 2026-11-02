@@ -21,7 +21,13 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   await page.locator('#command-rows button[data-details]').last().click();await page.locator('#details-dialog[open]').waitFor();await page.locator('#reply-tracking').getByText('Outgoing replies',{exact:true}).waitFor();await page.locator('#close-details').click();
   await page.locator('#open-commands-history').click();await page.locator('#commands-dialog[open]').waitFor();await page.locator('#commands-close').click();
   await page.locator('#open-repeaters').click();await page.locator('#repeater-map .leaflet-marker-icon').first().waitFor();await page.locator('#close-repeaters').click();
+  await page.locator('#repeater-statistics-disclosure > summary').click();
+  await page.locator('#statistics-repeater option').filter({hasText:'Hill'}).waitFor({state:'attached'});
+  assert.equal(await page.locator('#statistics-repeater option').count(),1);
+  await page.locator('#statistics-status').filter({hasText:'saved observations'}).waitFor();
+  assert(await page.locator('#statistics-repeater').isEnabled());
+  await page.locator('#repeater-statistics-disclosure > summary').click();
   assert.deepEqual(errors,[]);await page.close();
  }
- console.log('V5 actual-browser desktop/mobile layout, modal hosts, contact Manage, protected Bot channel, nested 200-row paging, details and offline registry map passed.');
+ console.log('V5 actual-browser desktop/mobile layout, modal hosts, contact Manage, protected Bot channel, nested 200-row paging, details, offline registry map and managed-only Statistics status passed.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});

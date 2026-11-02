@@ -58,7 +58,7 @@
                 document.dispatchEvent(new CustomEvent('managed-repeater-removed',{detail:key}));
                 if(!await load())throw Error('Removal was submitted, but the managed list could not be refreshed. Reload the page to verify it.');
                 if(managed.includes(key))throw Error('Removal could not be verified. Reload and try again.');
-                $('managed-repeater-message').textContent='Repeater removed and its monitoring data deleted.';
+                $('managed-repeater-message').textContent='Repeater removed. Local telemetry data was deleted; passive statistics history is preserved.';
             }catch(error){$('managed-repeater-message').textContent=error.message;$('managed-repeater-remove').disabled=false;}
         };
         document.addEventListener('managed-repeater-added',async e=>{

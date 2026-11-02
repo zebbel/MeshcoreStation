@@ -35,3 +35,6 @@
 @media(max-width:700px){.command-history-summary .history-latest {display:block;margin:12px 0 0;}.command-history-summary > button {right:16px;top:28px;transform:none;}.v5-card {min-height:210px;}}
 
 #station-settings-dialog {padding:0;overflow:hidden;}
+#statistics-repeater {max-width:100%;width:min(100%,480px);}
+#statistics-status,#statistics-error {overflow-wrap:anywhere;}
+#statistics-error {color:var(--red);}

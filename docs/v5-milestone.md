@@ -95,3 +95,25 @@ are not publication targets. No deployment or hardware operation is performed.
 - Actual desktop/mobile Chromium acceptance: required separately in CI before release.
 - Live USB/RF hardware: **not tested**. Guest/admin/readback/timeout and reconnect
   coverage use protocol fakes.
+
+## Repeater Statistics development follow-up
+
+A managed-only passive collection backend and minimal independent dashboard section
+are prepared after the 5.0.0 milestone release. The two core stores remain unchanged
+in ownership; relevant managed-repeater observations now create separate WAL files
+beneath `repeaterStatistics/`. No charts, Analyzer or performance features are added.
+See [collection architecture and limitations](v5-repeater-statistics.md).
+
+This follow-up is included in the authorized **5.1.0** V5 prerelease.
+Publication is gated on regression, fresh-install and Chromium acceptance checks.
+Its tests cover all client packet types, membership removal/re-addition (including
+queued packets), full-registry collisions, repeated receptions, multi-target writes,
+disk/database failures, queue overflow, off-loop writes, persistence, safe status
+reads and independent status-view interactions. Physical radio reception remains
+unverified. The release workflow runs the existing desktop/light and mobile/dark browser
+acceptance with a focused managed-only Statistics status check.
+
+Follow-up validation: **189 Python tests passed**, **16 JavaScript suites passed**,
+isolated fresh-install smoke passed, and `git diff --check` passed. The fresh
+installation still creates only the two core databases until a relevant managed
+observation arrives. No RF commands were sent by these tests.

@@ -1,9 +1,14 @@
 """SQLite storage shared by bot and dashboard; never contains channel secrets."""
 import math
+import threading
+import time
 import re
 from meshcorestation import battery_templates
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+# Hold through commit for managed-list changes; shared with the statistics writer.
+MEMBERSHIP_LOCK = threading.RLock()
 
 FIELDS = ('enabled', 'public_key', 'interval_minutes', 'reports_enabled', 'report_time_1', 'report_time_2', 'timezone', 'voltage_channel', 'report_target', 'report_template', 'temperature_channel')
 
@@ -26,6 +31,10 @@ def initialize(db):
     CREATE TABLE IF NOT EXISTS voltage_reports(slot TEXT PRIMARY KEY,public_key TEXT NOT NULL,due_at REAL NOT NULL,attempted_at REAL NOT NULL,channel_name TEXT,status TEXT NOT NULL,detail TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS voltage_worker(id INTEGER PRIMARY KEY CHECK(id=1),heartbeat REAL NOT NULL,state TEXT NOT NULL);
     """)
+    # Additive V5 schema extension; existing membership and history are preserved.
+    columns = {row[1] for row in db.execute("PRAGMA table_info(voltage_config)")}
+    if "statistics_since_ns" not in columns:
+        db.execute("ALTER TABLE voltage_config ADD COLUMN statistics_since_ns INTEGER NOT NULL DEFAULT 0")
     db.commit()
 
 
@@ -34,12 +43,14 @@ def configurations(db):
 
 
 def ensure_repeater(db, key):
+    # Production mutations hold MEMBERSHIP_LOCK through the enclosing transaction.
     if not isinstance(key, str) or not re.fullmatch('[0-9a-f]{64}', key):
         raise ValueError('Select a repeater from the list or map.')
     if not db.execute('SELECT 1 FROM repeaters WHERE lower(public_key)=? AND adv_type=2', (key,)).fetchone():
         raise ValueError('Selected repeater is not in the known repeater list.')
-    db.execute('INSERT OR IGNORE INTO voltage_config(public_key) VALUES (?)', (key,))
-    db.execute('UPDATE voltage_config SET managed=1 WHERE public_key=?', (key,))
+    db.execute('INSERT OR IGNORE INTO voltage_config(public_key,managed) VALUES (?,0)', (key,))
+    db.execute('''UPDATE voltage_config SET statistics_since_ns=CASE WHEN managed=0 THEN ?
+        ELSE statistics_since_ns END,managed=1 WHERE public_key=?''', (time.time_ns(), key))
     return config(db, key)
 
 

@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.0.0 milestone 1
+# MeshcoreStation V5 — 5.1.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.0.0** is the first V5 milestone prerelease.
+Development branch: **`V5`**. Version **5.1.0** adds managed-repeater passive statistics to the V5 prerelease.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -14,7 +14,9 @@ and never install automatically.
 
 Below the cards, **Bot** contains only **Bot Settings** and **Command History**,
 independently collapsible. **Repeater Management** follows as a separate section.
-There is no Optimizer, Analyzer, Performance, Network Monitoring or Room Server.
+An independent **Repeater Statistics** section follows Management, with a managed-only
+selector and recording status. There is no Optimizer, Analyzer, Performance,
+Network Monitoring or Room Server.
 
 ## Fresh storage only
 
@@ -31,9 +33,11 @@ The main database has **no persistent repeater registry**. Included protocol
 readers access a read-only temporary view of the attached canonical registry;
 the view stores no identities. Contact imports do not increment advertisement
 counts. Actual advertisements do. Removing management or deleting a hardware
-contact leaves the saved known identity intact. Both files are created by the
-running user with private permissions. SQLite may create ordinary WAL/SHM journal
-sidecars; these are not additional application databases.
+contact leaves the saved known identity intact. The two core files are created by the running user with private permissions.
+Passive statistics additionally use `data/repeaterStatistics/<full-public-key>.db`
+for managed repeaters only, created on their first relevant observation. SQLite
+may create ordinary WAL/SHM journal sidecars. Removing management preserves these
+statistics files; re-adding resumes recording without restoring queued old packets.
 
 Actual contacts, channel slots/keys, radio settings and remote configuration
 remain authoritative on hardware. Private channel keys and management passwords
@@ -70,6 +74,16 @@ off by default, with the V4 unencrypted-storage warning.
   is started.
 - Known Repeaters: saved count and map work while disconnected. Only valid saved
   coordinates are plotted; ambiguous short path hashes remain unidentified.
+
+## Passive repeater statistics
+
+All managed repeaters (`voltage_config.managed = 1`) are recorded automatically
+from Companion `RX_LOG_DATA`, regardless of dashboard selection, Bot channel,
+collapsed sections or telemetry settings. The collector sends no radio requests.
+The Statistics selector changes only the displayed recording status. No charts,
+performance analysis, Analyzer collection or automatic deletion are included.
+
+See [passive statistics storage and limitations](docs/v5-repeater-statistics.md).
 
 ## Run locally for review
 

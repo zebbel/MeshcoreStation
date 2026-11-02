@@ -165,6 +165,9 @@ def test_exact_dashboard_structure_and_closed_history_no_reads(station,monkeypat
     page=build_layout();nodes=list(walk(page));ids={getattr(n,'id',None):n for n in nodes}
     cards=next(n for n in nodes if getattr(n,'className',None)=='cards')
     assert [c.id for c in cards.children]==['station-card','companion-card','known-card']
+    sections=[n.children.id for n in page.children if isinstance(n,html.Section) and isinstance(n.children,html.Details)]
+    assert sections==['bot-disclosure','repeater-management-disclosure','repeater-statistics-disclosure']
+    assert ids['statistics-repeater'] is not ids['managed-repeater']
     bot=ids['bot-disclosure'];assert [n.id for n in walk(bot) if isinstance(n,html.Details)]==['bot-disclosure','bot-settings-disclosure','command-history-disclosure']
     ids_list=[n.id for n in nodes if getattr(n,'id',None)]
     assert len(ids_list)==len(set(ids_list))
@@ -205,6 +208,7 @@ def test_connection_reconnection_and_shutdown_use_one_session(station,monkeypatc
         finally:
             task.cancel();await asyncio.gather(task,return_exceptions=True)
         assert not radios[-1].connection_manager.is_connected and bridge.runtime is None
+        assert runtime.statistics.task.done() and not runtime.statistics.health()['running']
     asyncio.run(run())
 
 
