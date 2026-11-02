@@ -38,3 +38,17 @@
 #statistics-repeater {max-width:100%;width:min(100%,480px);}
 #statistics-status,#statistics-error {overflow-wrap:anywhere;}
 #statistics-error {color:var(--red);}
+.statistics-controls {display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin:16px 0;}
+.statistics-block {border-top:1px solid var(--border);padding:20px 0;min-width:0;}
+.statistics-chart {overflow-x:auto;max-width:100%;}
+.statistics-chart > svg {display:block;width:100%;min-width:620px;height:auto;}
+.statistics-chart > svg text {font:13px system-ui;fill:var(--text);}
+.statistics-grid {stroke:var(--border);stroke-width:1;}
+.statistics-chart-legend,.statistics-map-legend {color:var(--muted);font-size:13px;}
+#statistics-neighbor-map {height:380px;min-height:280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;}
+.statistics-marker {display:grid;place-items:center;border:2px solid white;border-radius:50%;height:28px;width:28px;background:#475569;color:white;font:bold 13px system-ui;box-shadow:0 1px 5px #0008;}
+.statistics-marker.selected {background:#2563eb;}
+#statistics-region-names {display:block;width:100%;max-width:100%;box-sizing:border-box;margin:12px 0;}
+#statistics-ambiguous,#statistics-missing-coordinates {overflow-wrap:anywhere;max-height:300px;overflow-y:auto;}
+.statistics-error {color:var(--red);}
+@media(max-width:600px){#statistics-neighbor-map {height:300px;}.statistics-controls {align-items:stretch;flex-direction:column;}}

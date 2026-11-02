@@ -1,7 +1,7 @@
 """V5 passive evidence, adapted from V4's collision-aware route attribution.
 
 Only the worker writes per-managed-repeater stores. No subscriptions, RF requests,
-network-wide database, aggregation, deduplication or automatic retention/deletion.
+network-wide database, deduplication or automatic retention/deletion.
 """
 from contextlib import closing
 import hashlib
@@ -214,3 +214,37 @@ def snapshot(main_path, selected=None):
                 status['observation_count'] = None
                 status['error'] = 'Saved statistics unavailable: '+str(exc)
     return dict(ok=True, repeaters=rows, selected=selected, **status)
+
+
+COVERAGE_SCHEMA = """CREATE TABLE IF NOT EXISTS collection_windows(
+ id INTEGER PRIMARY KEY, started_at REAL NOT NULL, ended_at REAL NOT NULL);
+ CREATE INDEX IF NOT EXISTS collection_windows_time ON collection_windows(ended_at,started_at);"""
+
+
+def record_coverage(main_path, started_at, ended_at):
+    """Local collector uptime only; never creates files or collects RF data.
+
+    Called only after a connected, healthy, drained interval. Loss/connection
+    changes reset the interval before this writer runs. Existing history remains.
+    """
+    if ended_at<=started_at:return
+    with MEMBERSHIP_LOCK, closing(open_database(Path(main_path).as_uri()+'?mode=ro',timeout=.25)) as main:
+        for cfg in main.execute("SELECT public_key,statistics_since_ns FROM voltage_config WHERE managed=1 AND public_key!=''"):
+            path=statistics_path(main_path,cfg['public_key'])
+            if not path.exists():continue
+            lo=max(started_at,cfg['statistics_since_ns']/1e9)
+            if lo>=ended_at:continue
+            if shutil.disk_usage(path.parent).free<MIN_FREE_BYTES:raise OSError('Coverage recording paused: low disk space.')
+            with closing(sqlite3.connect(path,timeout=.25)) as db:
+                db.executescript(COVERAGE_SCHEMA)
+                with db:
+                    last=db.execute('SELECT id,started_at,ended_at FROM collection_windows ORDER BY ended_at DESC LIMIT 1').fetchone()
+                    if last and lo<=last[2]+.001 and lo>=last[1]:
+                        db.execute('UPDATE collection_windows SET ended_at=MAX(ended_at,?) WHERE id=?',(ended_at,last[0]))
+                    else:db.execute('INSERT INTO collection_windows(started_at,ended_at) VALUES(?,?)',(lo,ended_at))
+
+
+
+def active_keys(main_path):
+    with closing(open_database(Path(main_path).as_uri()+'?mode=ro',timeout=.25)) as db:
+        return {r[0] for r in db.execute("SELECT public_key FROM voltage_config WHERE managed=1 AND public_key!=''")}

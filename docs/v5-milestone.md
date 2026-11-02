@@ -117,3 +117,21 @@ Follow-up validation: **189 Python tests passed**, **16 JavaScript suites passed
 isolated fresh-install smoke passed, and `git diff --check` passed. The fresh
 installation still creates only the two core databases until a relevant managed
 observation arrives. No RF commands were sent by these tests.
+
+
+## Statistics visualization — 5.2.0
+
+The existing Statistics section now includes a shared 24h/7d/30d period,
+Observed Neighbor Map, Messages per Hour, Hop Count Ranking and MeshCore Regional
+Traffic Ranking (including Unscoped). Aggregation is SQLite-based and uses saved
+observations only. Configurable region names/keys are local display attribution
+settings, separate from Bot reply scope configuration. Healthy local collection
+windows support future gap detection; older history without coverage stays unknown.
+See [visualization semantics](v5-statistics-visualization.md).
+
+Validation: 198 Python tests, 17 JavaScript suites, fresh-install smoke and a running
+local HTTP fixture. JavaScript uses real Leaflet vector overlays with remote tiles
+replaced for deterministic checks. The actual Chromium test includes chart/map checks and is a mandatory CI gate
+before the authorized 5.2.0 prerelease can publish. Chromium is unavailable locally;
+local test counts above do not include that browser run. Physical RF collection
+is not verified here. V3/V4 are not publication targets.

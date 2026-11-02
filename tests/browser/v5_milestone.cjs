@@ -26,6 +26,18 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   assert.equal(await page.locator('#statistics-repeater option').count(),1);
   await page.locator('#statistics-status').filter({hasText:'saved observations'}).waitFor();
   assert(await page.locator('#statistics-repeater').isEnabled());
+  await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();
+  await page.locator('#statistics-neighbor-map .leaflet-overlay-pane svg path').nth(1).waitFor();
+  const overlays=page.locator('#statistics-neighbor-map .leaflet-overlay-pane svg');
+  assert(await overlays.evaluate(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0;}));
+  assert.equal(await page.locator('#statistics-neighbor-map path[stroke="#15803d"]').count(),1);
+  assert.equal(await page.locator('#statistics-neighbor-map path[stroke="#dc2626"]').count(),1);
+  await page.locator('#statistics-neighbor-map path[stroke="#15803d"]').click();
+  await page.locator('#statistics-neighbor-map .leaflet-popup-content').filter({hasText:'Last observation'}).waitFor();
+  assert(await page.locator('#statistics-regions').innerText().then(t=>t.includes('Unscoped')));
+  await page.locator('#statistics-period').selectOption('7');
+  await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();
+  await page.screenshot({path:`browser-evidence/statistics-${width}-${colorScheme}.png`,fullPage:true});
   await page.locator('#repeater-statistics-disclosure > summary').click();
   assert.deepEqual(errors,[]);await page.close();
  }

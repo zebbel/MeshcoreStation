@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.1.0
+# MeshcoreStation V5 — 5.2.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.1.0** adds managed-repeater passive statistics to the V5 prerelease.
+Development branch: **`V5`**. Version **5.2.0** adds saved-data neighbor maps and statistics charts to the V5 prerelease.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -15,7 +15,7 @@ and never install automatically.
 Below the cards, **Bot** contains only **Bot Settings** and **Command History**,
 independently collapsible. **Repeater Management** follows as a separate section.
 An independent **Repeater Statistics** section follows Management, with a managed-only
-selector and recording status. There is no Optimizer, Analyzer, Performance,
+selector, recording status and saved-data visualizations. There is no Optimizer, Analyzer, Performance,
 Network Monitoring or Room Server.
 
 ## Fresh storage only
@@ -80,10 +80,14 @@ off by default, with the V4 unencrypted-storage warning.
 All managed repeaters (`voltage_config.managed = 1`) are recorded automatically
 from Companion `RX_LOG_DATA`, regardless of dashboard selection, Bot channel,
 collapsed sections or telemetry settings. The collector sends no radio requests.
-The Statistics selector changes only the displayed recording status. No charts,
-performance analysis, Analyzer collection or automatic deletion are included.
+The Statistics selector changes only the displayed recording status. Shared 24-hour, 7-day and 30-day filters update the Observed Neighbor Map,
+Messages per Hour, Hop Count Ranking and MeshCore Regional Traffic Ranking.
+The view refreshes on opening, filter changes or **Refresh saved view**, without
+active radio polling. No performance analysis, Analyzer collection or automatic
+deletion is included.
 
-See [passive statistics storage and limitations](docs/v5-repeater-statistics.md).
+See [passive statistics storage and limitations](docs/v5-repeater-statistics.md)
+and [visualization and scope interpretation](docs/v5-statistics-visualization.md).
 
 ## Run locally for review
 

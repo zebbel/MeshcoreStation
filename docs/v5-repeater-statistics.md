@@ -3,8 +3,10 @@
 Repeater Statistics is a separate expandable dashboard section below Repeater
 Management. Its independent selector lists only managed repeaters. It displays
 recording state, saved observation count, last recorded time and errors. Opening,
-closing or changing this view does not start or stop collection. Status reads
-refresh while the section is visible, without radio requests.
+closing or changing this view does not start or stop collection. Status and aggregates are read on opening, period changes and manual saved-view
+refresh, without radio requests or continuous dashboard polling. Four saved-data
+visualizations now share the independent selector; see
+[visualization interpretation](v5-statistics-visualization.md).
 
 ## Membership and lifecycle
 

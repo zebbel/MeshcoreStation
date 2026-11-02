@@ -21,3 +21,31 @@ def register_statistics_routes(server):
             return jsonify(ok=False,error=str(exc)),400
         except (OSError,sqlite3.Error):
             return jsonify(ok=False,error='Recording status unavailable. Saved history has not been deleted.'),503
+
+    @server.get('/api/repeater-statistics/view')
+    def statistics_view():
+        from meshcorestation.storage.statistics_view import aggregate
+        from meshcorestation.web.http import json_response
+        try:
+            raw=request.args.get('days','1')
+            if raw not in {'1','7','30'}:raise ValueError('Choose 24 hours, 7 days or 30 days.')
+            return json_response(aggregate(config.DB_PATH,request.args.get('public_key') or None,int(raw)))
+        except ValueError as exc:return json_response(dict(ok=False,error=str(exc)),400)
+        except (OSError,sqlite3.Error):return json_response(dict(ok=False,error='Saved statistics could not be read within the query limit. Try a shorter period; recorded data is preserved.'),503)
+
+    @server.route('/api/repeater-statistics/regions',methods=['GET','POST'])
+    def statistics_regions():
+        from meshcorestation.storage.statistics_view import region_config,save_regions
+        from meshcorestation.web.http import control_request_error,json_response
+        if control_request_error():return json_response(dict(ok=False,error='Open region settings from the local dashboard.'),403)
+        try:
+            if request.method=='POST':
+                if request.mimetype!='application/json' or (request.content_length or 0)>8192:raise ValueError('Expected a region list (up to 8 KiB).')
+                raw=request.get_data(cache=True)
+                if len(raw)>8192:raise ValueError('Region configuration is too large.')
+                body=request.get_json(silent=True)
+                if not isinstance(body,dict):raise ValueError('Expected region settings.')
+                save_regions(config.DB_PATH,body.get('regions'))
+            return json_response(dict(ok=True,regions=region_config(config.DB_PATH)))
+        except (ValueError,TypeError):return json_response(dict(ok=False,error='Invalid region settings. Use up to 64 distinct names and optional 32-hex keys; Unknown and Unscoped are reserved.'),400)
+        except (OSError,sqlite3.Error):return json_response(dict(ok=False,error='Region settings unavailable. Existing observations are preserved.'),503)

@@ -98,6 +98,8 @@ class Database:
         from meshcorestation.storage.reception_store import initialize as initialize_receptions
         from meshcorestation.storage.voltage_store import initialize as initialize_telemetry
         initialize_replies(self.db);initialize_receptions(self.db);initialize_telemetry(self.db)
+        from meshcorestation.storage.statistics_view import REGIONS_SCHEMA
+        self.db.execute(REGIONS_SCHEMA)
         self.db.commit()
 
 ################################################
