@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.2.3
+# MeshcoreStation V5 — 5.2.4
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.2.3** adds neighbor hover/tap summaries and clearer hourly and hop-count columns.
+Development branch: **`V5`**. Version **5.2.4** adds neighbor activity rankings, a traffic heatmap and packet-type distribution.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -83,8 +83,10 @@ collapsed sections or telemetry settings. The collector sends no radio requests.
 The Statistics selector changes only the displayed recording status. Shared 24-hour, 7-day and 30-day filters update the Observed Neighbor Map,
 Messages per Hour, Hop Count Ranking and MeshCore Regional Traffic Ranking.
 Neighbor hover/tap summaries show incoming (We hear) and outgoing (They hear)
-route observations. Hourly charts use side-by-side unique/repeated bars; hop
-charts use numerically ordered stacked columns. Unknown coverage remains a gap,
+route observations. Hourly and numerically ordered hop charts use side-by-side
+unique/repeated bars. Most Active Neighbors, a calendar-hour Traffic Activity
+Heatmap and Packet Type Distribution extend the same saved-data view.
+Advertisement origins remain separate from forwarding. Unknown coverage remains a gap,
 and exact-count tables preserve unidentified receptions.
 The view refreshes on opening, filter changes or **Refresh saved view**, without
 active radio polling. No performance analysis, Analyzer collection or automatic

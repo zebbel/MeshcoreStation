@@ -1,6 +1,6 @@
 # V5 Repeater Statistics visualization
 
-All four views use saved per-repeater observations with a shared rolling 24-hour,
+All views use saved per-repeater observations with a shared rolling 24-hour,
 7-day or 30-day filter. The managed-only Statistics selector remains independent
 of Repeater Management. Opening the section, changing a filter, or clicking
 **Refresh saved view** reads local databases. There is no periodic Statistics
@@ -24,10 +24,11 @@ counts, last observation, names and full public keys. Neighbor identities can be
 unmanaged. Missing coordinates are listed rather than invented; ambiguous or
 unknown adjacent hashes appear separately and do not create confirmed map lines.
 Markers use CSS divIcons and vector lines remain if background tiles fail.
-Hovering over a neighbor shows its resolved name, **We hear** (incoming toward
+Hovering over a neighbor shows a single-line resolved name (long names are
+ellipsized), followed by left-aligned labels and right-aligned counts. **We hear** (incoming toward
 the selected repeater) and **They hear** (outgoing toward the neighbor) reception
-counts for the selected period. Tapping opens the existing detailed popup with
-the same summary. These are observed route relationships, not RF reception
+counts use the selected period. Tapping opens the existing detailed popup with
+the same summary and full repeater name. These are observed route relationships, not RF reception
 confirmation or delivery acknowledgements.
 
 One-way observation does not prove that reverse communication is impossible.
@@ -58,10 +59,61 @@ these per-hour unique figures must not be summed as globally unique packets.
 
 Columns are ordered by increasing numeric hop count. Each category uses
 the complete recorded flood-route hop count, not estimated transmissions or
-hops to a destination. Each column stacks blue unique
-packets and orange repeated receptions. Unidentified payloads remain in the
+hops to a destination. Each category has side-by-side blue unique-packet
+and orange repeated-reception columns. Unidentified payloads remain in the
 expandable exact-count table; column heights show only identified receptions. Ambiguous, direct-routing
 and TRACE evidence is excluded from confirmed totals.
+
+## Most Active Neighbors
+
+Up to 20 neighbors are sorted by combined incoming and outgoing route observations.
+Horizontal grouped bars show blue **We hear** (incoming) and orange **They hear**
+(outgoing), with names, exact counts and hover/focus/tap details. Managed and
+unmanaged known neighbors are included, including those without coordinates.
+Ambiguous identities are excluded from this ranking and remain in the map's
+separate uncertain-evidence list. The existing 1,000 direction-group response
+limit also bounds this ranking; a visible warning appears when reached. Observed
+volume is not evidence of RF reception reliability.
+
+## Traffic Activity Heatmap
+
+Calendar days form the rows and hours 00–23 form the columns. The intensity scale
+uses counts of confidently attributed flood-path receptions across all packet
+types, excluding full-key advertisement origins. It therefore covers more packet
+types than Messages per Hour, which remains text-only.
+
+Cells distinguish observed traffic, complete recorded zero intervals, incomplete
+coverage (dashed outline/lower bound), and unknown recording gaps (hatching).
+Cells outside the rolling period or without a clock hour are also marked unknown,
+with their reason in the tooltip. Hover, focus or tap reveals the exact count,
+original interval and recorded/expected seconds. Date labels follow the dashboard
+preferences and calendar boundaries follow its configured time zone, including
+fractional-hour offsets. Repeated daylight-saving hours share a cell with summed
+reception counts and both original intervals in the details; skipped hours never
+receive invented zeros. Partial boundary hours remain visually incomplete.
+
+## Packet Type Distribution
+
+The donut shows Group messages, Direct text messages, Advertisements and Other
+MeshCore packet types. Unknown/unsupported saved packet kinds remain in Other.
+Counts and percentages describe included receptions, including repeated copies,
+not a forwarding-success or delivery rate. The legend, interactive segments and
+exact table retain precise values. Zero categories remain visible in the legend.
+
+Full-key advertisement-origin evidence is included as a separate evidence class,
+never classified as forwarding in this new distribution. Advertisement route
+observations involving the selected repeater are separately labeled flood-path
+evidence; these are not independent forwarding-event confirmations. The advertisement legend shows both origin and path counts;
+the exact table separates evidence classes and preserves unique, repeated and
+unidentified counts. Ambiguous/unverified routes remain excluded, while an
+independently identified full-key origin is not lost due to a route-hash collision.
+An origin reception is counted only once in this distribution. The existing
+forwarding totals and original observation history are unchanged.
+
+The new aggregates reuse the single source scan and compact disposable SQLite
+facts. The activity view adds bounded local-calendar bins, and packet distribution
+adds a grouped query over those facts; raw route histories are not scanned again.
+The isolated worker, cache invalidation and timeouts remain unchanged.
 
 ## MeshCore Regional Traffic Ranking
 

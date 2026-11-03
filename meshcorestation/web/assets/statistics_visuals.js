@@ -74,13 +74,69 @@
     function hopColumns(data){
         const host=$('statistics-hops');if(!host)return;const rows=[...data.hops].sort((a,b)=>a.hop_count-b.hop_count);
         if(!rows.length){host.replaceChildren(text('p','No confidently attributed observations in this period.','statistics-empty'));return;}
-        const total=r=>r.unique_packets+r.repeated,max=Math.max(1,...rows.map(total));
-        const f=columns(host,'Observed total route hop count',rows,max,{key:data.selected+'|'+data.days,minimum:56});
-        rows.forEach((r,i)=>{const center=(i+.5)*f.spacing,width=Math.min(64,f.spacing*.65),description=`${r.hop_count} ${r.hop_count===1?'hop':'hops'}: ${countDescription(r)}. Columns show identified receptions; unidentified counts remain in the table.`;let accumulated=0;
-            for(const[field,color]of[['unique_packets','#2563eb'],['repeated','#c75c0d']]){const value=r[field],bottom=f.y(accumulated);accumulated+=value;const bar=svg('rect',{x:center-width/2,y:f.y(accumulated),width,height:bottom-f.y(accumulated),fill:color,class:'statistics-hop-bar','data-hop':r.hop_count,'data-series':field,'data-value':value});f.interactive(bar,description);f.s.append(bar);}
-            const label=svg('text',{x:center,y:f.y(total(r))-7,'text-anchor':'middle',class:'statistics-column-total'},total(r)||'?');f.interactive(label,description);f.s.append(label,svg('text',{x:center,y:246,'text-anchor':'middle',class:'statistics-hop-tick','data-hop':r.hop_count},r.hop_count));
+        const max=Math.max(1,...rows.map(r=>Math.max(r.unique_packets,r.repeated)));
+        const f=columns(host,'Observed total route hop count',rows,max,{key:data.selected+'|'+data.days,minimum:72});
+        rows.forEach((r,i)=>{const center=(i+.5)*f.spacing,width=Math.min(30,(f.spacing-8)/2),description=`${r.hop_count} ${r.hop_count===1?'hop':'hops'}: ${countDescription(r)}. Columns show identified receptions; unidentified counts remain in the table.`;
+            for(const[field,color,offset]of[['unique_packets','#2563eb',-width-1],['repeated','#c75c0d',1]]){const value=r[field],bar=svg('rect',{x:center+offset,y:f.y(value),width,height:f.base-f.y(value),fill:color,class:'statistics-hop-bar','data-hop':r.hop_count,'data-series':field,'data-value':value});f.interactive(bar,description);f.s.append(bar);}
+            f.s.append(svg('text',{x:center,y:246,'text-anchor':'middle',class:'statistics-hop-tick','data-hop':r.hop_count},r.hop_count));
         });f.s.append(svg('text',{x:f.width/2,y:282,'text-anchor':'middle',class:'statistics-axis-title'},'Total route hop count'));
-        legend(host,false);host.append(text('p','Observed hop categories are ordered numerically. Columns stack unique and repeated receptions; unidentified counts remain in the exact-count table. No missing hop categories are invented.','muted'));exactCounts(host,rows,r=>`${r.hop_count} ${r.hop_count===1?'hop':'hops'}`);
+        legend(host,false);host.append(text('p','Observed hop categories are ordered numerically. Side-by-side columns show unique and repeated receptions; unidentified counts remain in the exact-count table. No missing hop categories are invented.','muted'));exactCounts(host,rows,r=>`${r.hop_count} ${r.hop_count===1?'hop':'hops'}`);
+    }
+    function inspect(host){
+        const message=text('p','Hover, focus or tap a measurement for details.','statistics-hover-value');message.setAttribute('role','status');message.setAttribute('aria-live','polite');host.append(message);
+        return (node,value)=>{node.setAttribute('tabindex','0');node.setAttribute('aria-label',value);node.append(svg('title',{},value));for(const event of ['pointerenter','focus','click'])node.addEventListener(event,()=>{message.textContent=value;});};
+    }
+    function activeNeighbors(data){
+        const host=$('statistics-active-neighbors');if(!host)return;host.replaceChildren();
+        const rows=[...data.neighbors].sort((a,b)=>(b.incoming+b.outgoing)-(a.incoming+a.outgoing)||name(a).localeCompare(name(b))).slice(0,20);
+        if(!rows.length){host.append(text('p','No unambiguous adjacent flood-path relationships observed in this period.','statistics-empty'));return;}
+        const s=chart(host,'Most active observed neighbors',rows.length*64+58),maximum=Math.max(1,...rows.map(r=>Math.max(r.incoming,r.outgoing))),interactive=inspect(host);
+        rows.forEach((r,i)=>{const y=20+i*64,label=name(r),description=`${label} · We hear: ${r.incoming} times; They hear: ${r.outgoing} times. Last observation: ${stamp(r.last_observed)}. Observed route relationships, not confirmed RF reception.`;
+            const title=svg('text',{x:8,y:y+17},label.length>23?label.slice(0,22)+'…':label);interactive(title,description);s.append(title);
+            for(const [field,color,offset]of [['incoming','#2563eb',0],['outgoing','#c75c0d',24]]){const value=r[field],width=value/maximum*480,bar=svg('rect',{x:205,y:y+offset,width,height:18,fill:color,class:'statistics-neighbor-bar','data-key':r.public_key,'data-direction':field,'data-value':value});interactive(bar,description);s.append(bar,svg('text',{x:695,y:y+offset+14},value));}
+        });s.append(svg('text',{x:445,y:rows.length*64+42,'text-anchor':'middle'},'Observed receptions'));
+        host.append(text('p','Blue: We hear (incoming) · Orange: They hear (outgoing). Top '+rows.length+' neighbors by combined directional observations. Includes neighbors without coordinates. Ambiguous identities remain in the separate map list; this is not a ranking of RF link reliability.','muted'));
+        for(const note of data.notes||[])if(note.startsWith('Neighbor output'))host.append(text('p',note+' Ranking uses this bounded summary.','muted'));
+    }
+    function heatmap(data){
+        const host=$('statistics-heatmap');if(!host)return;host.replaceChildren();const rows=data.activity_hourly||[];
+        if(!rows.length){host.append(text('p','No saved activity intervals available.','statistics-empty'));return;}
+        const zone=data.activity_timezone||window.meshcorestationDisplaySettings?.timezone||'Europe/Berlin',format=new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}),days=new Map();
+        for(const row of rows){const parts=Object.fromEntries(format.formatToParts(new Date(row.at*1000)).map(p=>[p.type,p.value])),day=`${parts.year}-${parts.month}-${parts.day}`,hour=Number(parts.hour);
+            if(!days.has(day))days.set(day,{at:row.at,hours:new Map()});const hours=days.get(day).hours;if(!hours.has(hour))hours.set(hour,[]);hours.get(hour).push(row);
+        }
+        const cell=28,left=110,top=34,width=left+24*cell+12,height=top+days.size*cell+36;
+        const scroll=text('div','','statistics-heatmap-scroll');scroll.tabIndex=0;scroll.setAttribute('role','region');scroll.setAttribute('aria-label','Traffic activity by calendar day and hour; scroll horizontally');
+        const s=svg('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':'Observed flood-path activity by day and hour',class:'statistics-heatmap-svg'});s.style.width=width+'px';scroll.append(s);host.append(scroll);const interactive=inspect(host),maximum=Math.max(1,...[...days.values()].flatMap(day=>[...day.hours.values()].map(intervals=>intervals.reduce((n,r)=>n+(r.receptions||0),0))));
+        const defs=svg('defs'),pattern=svg('pattern',{id:'statistics-heatmap-gap',width:6,height:6,patternUnits:'userSpaceOnUse'});pattern.append(svg('path',{d:'M0 6L6 0',class:'statistics-gap-hatch'}));defs.append(pattern);s.append(defs);
+        for(let h=0;h<24;h++)s.append(svg('text',{x:left+(h+.5)*cell,y:20,'text-anchor':'middle'},String(h).padStart(2,'0')));
+        let i=0;for(const [day,entry]of days){const y=top+i++*cell;s.append(svg('text',{x:left-8,y:y+19,'text-anchor':'end'},window.meshcorestationFormatDate?.(entry.at,zone,{dateOnly:true})||day));
+            for(let h=0;h<24;h++){
+                const intervals=entry.hours.get(h)||[],positive=intervals.filter(r=>r.receptions!=null),count=positive.reduce((n,r)=>n+r.receptions,0),unknown=positive.length!==intervals.length||!intervals.length;
+                const complete=intervals.length>0&&!unknown&&intervals.every(r=>r.complete&&r.expected_seconds>=(r.interval_seconds||3600)),partial=positive.length>0&&!complete;
+                const state=!intervals.length?'Outside selected window or skipped clock hour':!positive.length?'Unknown recording gap':complete?(count?'Recorded traffic':'Recorded zero traffic'):'Incomplete observation coverage; counts are lower bounds';
+                const rect=svg('rect',{x:left+h*cell,y,width:cell-2,height:cell-2,rx:3,fill:!positive.length?'url(#statistics-heatmap-gap)':count?'#2563eb':'var(--panel)',stroke:'var(--border)','stroke-dasharray':partial?'3 2':'','fill-opacity':count?.22+.78*Math.sqrt(Math.min(1,count/maximum)):1,class:'statistics-heatmap-cell'+(partial?' statistics-heatmap-incomplete':''),'data-day':day,'data-hour':h,'data-state':complete?'complete':partial?'incomplete':'unknown','data-count':positive.length?count:''});
+                const details=`${window.meshcorestationFormatDate?.(entry.at,zone,{dateOnly:true})||day} · ${String(h).padStart(2,'0')}:00 · ${positive.length?count+' observed receptions':'Count unknown'}. ${state}. ${intervals.length>1?'Repeated clock hour; intervals are combined. ':''}`+intervals.map(r=>`${stamp(Math.max(r.at,data.start))} — ${stamp(Math.min(r.until||r.at+3600,data.end))}: ${r.receptions??'unknown'} receptions, recording ${Math.round(r.coverage_seconds||0)}/${Math.round(r.expected_seconds||0)} seconds`).join('; ');
+                interactive(rect,details);s.append(rect);
+            }
+        }
+        s.append(svg('text',{x:left+12*cell,y:height-8,'text-anchor':'middle'},'Hour of day · '+zone));
+        const key=text('div','','statistics-heatmap-key');for(const [label,kind]of [['Recorded zero','zero'],[`Observed traffic: lighter → darker (1–${maximum})`,'traffic'],['Incomplete coverage','incomplete'],['Unknown / outside period','unknown']]){const item=text('span',label),sample=text('i','','statistics-heatmap-sample '+kind);item.prepend(sample);key.append(item);}host.append(key);
+        host.append(text('p','All confidently attributed flood-path packet types; advertisement origins are excluded. Calendar-hour intervals use the dashboard time zone. Partial boundary hours and missing recording remain incomplete; repeated daylight-saving hours are combined with their original intervals available above.','muted'));
+    }
+    function packetTypes(data){
+        const host=$('statistics-packet-types');if(!host)return;host.replaceChildren();const rows=data.packet_types||[],total=rows.reduce((n,r)=>n+r.receptions,0);
+        if(!total){host.append(text('p','No confidently attributed flood-path or full-key advertisement-origin observations in this period.','statistics-empty'));return;}
+        const categories=[['Group messages','#2563eb'],['Direct text messages','#c75c0d'],['Advertisements','#168c6b'],['Other MeshCore packet types','#a855f7']],frame=text('div','','statistics-donut-layout'),s=svg('svg',{viewBox:'0 0 260 260',role:'img','aria-label':'Packet type distribution',class:'statistics-donut'}),list=text('div','','statistics-donut-legend');frame.append(s,list);host.append(frame);const interactive=inspect(host);let offset=0;
+        const circumference=2*Math.PI*82;
+        for(const [category,color]of categories){const records=rows.filter(r=>r.category===category),count=records.reduce((n,r)=>n+r.receptions,0),percent=100*count/total;
+            const detail=records.map(r=>`${r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':r.category==='Advertisements'?'Advertisement flood-path observations (route evidence)':'Confirmed flood-path observations'}: ${countDescription(r)}`).join('; '),description=`${category}: ${count} observations (${percent.toFixed(1)}%). ${detail}`;
+            if(count){const segment=svg('circle',{cx:130,cy:130,r:82,fill:'none',stroke:color,'stroke-width':34,'stroke-dasharray':`${circumference*count/total} ${circumference}`,'stroke-dashoffset':-offset,transform:'rotate(-90 130 130)',class:'statistics-donut-segment','data-category':category,'data-count':count});interactive(segment,description);s.append(segment);offset+=circumference*count/total;}
+            const item=text('button','','statistics-packet-category');item.type='button';const swatch=text('i','','statistics-category-swatch');swatch.style.background=color;item.append(swatch,text('strong',category),text('span',`${count} · ${percent.toFixed(1)}%`));if(category==='Advertisements'){const origins=records.filter(r=>r.evidence==='advertisement-origin').reduce((n,r)=>n+r.receptions,0);item.append(text('small',`Origin (not forwarding): ${origins} · Flood path: ${count-origins}`,'statistics-evidence-split'));}item.title=description;item.addEventListener('click',()=>{host.querySelector('.statistics-hover-value').textContent=description;});list.append(item);
+        }
+        s.append(svg('text',{x:130,y:128,'text-anchor':'middle',class:'statistics-donut-total'},total),svg('text',{x:130,y:151,'text-anchor':'middle'},'observations'));
+        host.append(text('p','Receptions are counted, including repeated copies. Advertisement origins are full-key source observations, never forwarding events. Advertisements seen on flood paths are separately identified in the exact table. Ambiguous/unverified routes are excluded; unknown or unsupported types remain Other. Percentages use only included observations and do not measure delivery success.','muted'));
+        exactCounts(host,rows,r=>r.category+' · '+(r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':'Confirmed flood-path observation'),{percent:true});
     }
     function ranking(id,rows,labelOf,title,percent=false){
         const host=$(id);if(!host)return;
@@ -104,7 +160,10 @@
         chartResize=observer;observer.observe(host);
     }
     function position(r){return r&&typeof r.latitude==='number'&&typeof r.longitude==='number'&&Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)&&Math.abs(r.latitude)<=90&&Math.abs(r.longitude)<=180&&(r.latitude!==0||r.longitude!==0)?[r.latitude,r.longitude]:null;}
-    function neighborSummary(r){const box=text('div','','statistics-neighbor-summary');box.append(text('strong',name(r)),text('p',`We hear: ${r.incoming} times`),text('p',`They hear: ${r.outgoing} times`));return box;}
+    function neighborSummary(r){
+        const box=text('div','','statistics-neighbor-summary'),heading=text('strong',name(r),'statistics-neighbor-name');heading.title=name(r);box.append(heading);
+        for(const[label,value]of[['We hear: ',r.incoming],['They hear: ',r.outgoing]]){const row=text('div','','statistics-neighbor-count');row.append(text('span',label),text('span',`${value} times`));box.append(row);}return box;
+    }
     function popup(selected,r){const box=document.createElement('div');box.append(neighborSummary(r),text('strong',`${name(selected)} ${r.incoming&&r.outgoing?'↔':r.outgoing?'→':'←'} ${name(r)}`),text('p',`${name(selected)} → ${name(r)}: ${r.outgoing} receptions; ${r.outgoing_unique||0} unique packets`),text('p',`${name(r)} → ${name(selected)}: ${r.incoming} receptions; ${r.incoming_unique||0} unique packets`),text('p',`Last observation: ${stamp(r.last_observed)}`),text('p','A direction with no observations is not proof that communication is impossible.'),text('p','Relationships are inferred from observed flood routes, not verified direct RF links.'),text('p',`Public keys: ${selected.public_key} / ${r.public_key}`,'map-key'));return box;}
     async function neighborMap(data){
         const host=$('statistics-neighbor-map'),note=$('statistics-map-notes'),missing=$('statistics-missing-coordinates'),uncertain=$('statistics-ambiguous');if(!host)return;
@@ -141,11 +200,11 @@
         }catch(error){if(ticket===generation)note.append(text('p','Map unavailable: '+error.message+'. Saved charts and relationship lists remain available.','statistics-error'));}
     }
     window.MeshcoreStationStatisticsVisuals={dispose,stale(){
-        dispose();for(const id of ['statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.add('statistics-stale');
+        dispose();for(const id of ['statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.add('statistics-stale');
         if($('statistics-coverage')?.textContent&&!$('statistics-coverage').textContent.startsWith('Previous snapshot'))$('statistics-coverage').textContent='Previous snapshot — '+$('statistics-coverage').textContent;
     },render(data){
-        for(const id of ['statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.remove('statistics-stale');
+        for(const id of ['statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.remove('statistics-stale');
         if($('statistics-coverage'))$('statistics-coverage').textContent=`${stamp(data.start)} — ${stamp(data.end)}. Recorded collection coverage: ${data.coverage_known?(100*data.coverage_seconds/data.coverage_expected).toFixed(1)+'% with recorded uptime; the remainder is unknown.':'Unknown (no saved uptime evidence for this history).'} ${data.excluded} ambiguous, unverified or non-forwarding receptions excluded from confirmed totals. Historical hours without uptime records have unknown coverage.`;
-        hourly(data);hopColumns(data);ranking('statistics-regions',data.regions,r=>r.name,'MeshCore regional traffic',true);neighborMap(data);observeCharts(data);
+        hourly(data);hopColumns(data);activeNeighbors(data);heatmap(data);packetTypes(data);ranking('statistics-regions',data.regions,r=>r.name,'MeshCore regional traffic',true);neighborMap(data);observeCharts(data);
     }};
 })();

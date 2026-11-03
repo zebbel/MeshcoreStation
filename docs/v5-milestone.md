@@ -195,3 +195,39 @@ Chromium desktop/mobile acceptance test was extended, but could not run because
 Chromium is unavailable and its download did not complete. Actual desktop/mobile
 visual verification remains outstanding. The user authorized publication as 5.2.3. The existing Chromium CI gate must pass
 before the workflow creates the V5 prerelease.
+
+## Statistics UI enhancements — 5.2.4
+
+Neighbor balloons now keep names and each directional count on one line, with
+left-aligned labels and right-aligned values. Exceptionally long balloon names
+use an ellipsis; detailed popups retain full names. Hop categories now use grouped
+blue unique/orange repeated columns rather than stacks.
+
+The shared saved-data view adds Most Active Neighbors (top 20 directional grouped
+bars, including neighbors without coordinates), a local-calendar Traffic Activity
+Heatmap, and Packet Type Distribution. The heatmap distinguishes complete zero,
+observed traffic, partial lower bounds and unknown gaps, including correct
+fractional-offset and daylight-saving calendar boundaries. The donut separates
+advertisement-origin evidence from observed flood-path evidence and retains unique,
+repeated and unidentified counts in details. Unknown packet kinds remain Other.
+All views share the independent managed-repeater selector and 24h/7d/30d filters.
+
+Compact activity and packet-type aggregates reuse the existing one-pass source
+classification and disposable SQLite facts. Original history, schemas, passive
+collection, worker isolation, request budgets and cache behavior are preserved.
+No radio requests, active polling or history deletion were added.
+
+Validation: 222 Python tests, all 18 JavaScript suites, fresh-install smoke,
+JavaScript syntax and whitespace checks passed. The scale suite covers 2,500,
+10,000, 50,000 and 100,000 observations across all periods and recording during
+aggregation. Additional local measurements: 2,500 observations took 0.073–0.078s;
+100,000 took 3.77–4.46s across the three periods, below the unchanged 8s budget.
+These synthetic local timings are not a device-specific guarantee. Real Leaflet
+DOM tests cover marker summaries, direction mapping and preserved map overlays;
+focused chart tests cover grouping, ranking limits, gaps, DST folds, empty states
+and selector/stale-view handling. The existing Chromium acceptance test was
+extended for the new views but has not run for these changes because local
+Chromium is unavailable. Desktop/mobile visual verification remains outstanding.
+
+Publication was explicitly authorized as 5.2.4. The existing Chromium CI gate
+must pass before the workflow creates the V5 prerelease; main and V4 are unchanged.

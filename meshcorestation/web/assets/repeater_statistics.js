@@ -73,7 +73,7 @@
     function attach(){
         const section=$('repeater-statistics-disclosure');if(attached||!section)return;attached=true;
         section.addEventListener('toggle',()=>{if(section.open)load();else{stop();window.MeshcoreStationStatisticsVisuals?.dispose();}});
-        function clearView(){window.MeshcoreStationStatisticsVisuals?.dispose();for(const id of ['statistics-hourly','statistics-hops','statistics-regions','statistics-coverage','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.replaceChildren();}
+        function clearView(){window.MeshcoreStationStatisticsVisuals?.dispose();for(const id of ['statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-coverage','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.replaceChildren();}
         $('statistics-repeater').addEventListener('change',()=>{selected=$('statistics-repeater').value;clearView();load();});
         $('statistics-period')?.addEventListener('change',()=>{clearView();load();});
         $('statistics-refresh')?.addEventListener('click',load);

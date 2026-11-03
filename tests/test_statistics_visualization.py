@@ -195,3 +195,80 @@ def test_missing_payload_is_unidentified_not_a_unique_or_repeated_packet(station
     assert row['unidentified']==1 and row['unique_packets']==row['repeated']==0
     empty=next(h for h in view['hourly'] if h['receptions'] is None)
     assert empty['unidentified'] is None
+
+
+def test_packet_distribution_origin_forwarding_unknown_and_repeated(station):
+    add(payload=b'group');add(payload=b'group');add(kind=2,payload=b'direct')
+    add(kind=15,payload=b'unknown-type')
+    origin=bytes.fromhex(A)+bytes(68)+bytes([2])
+    neighbor_advert=bytes.fromhex(B)+bytes(68)+bytes([2])
+    add(path='',kind=4,payload=origin);add(path='',kind=4,payload=origin)
+    add(kind=4,payload=neighbor_advert)  # selected repeater is in its flood path
+    add(route=2,payload=b'unverified');add(kind=9,payload=b'trace')
+    add(payload=b'outside',at=NOW-2*86400)
+    view=aggregate(database.DB_FILE,A,1,now=NOW)
+    rows={(r['category'],r['evidence']):r for r in view['packet_types']}
+    group=rows['Group messages','observed-flood-route']
+    assert (group['receptions'],group['unique_packets'],group['repeated'])==(2,1,1)
+    advert=rows['Advertisements','advertisement-origin']
+    assert (advert['receptions'],advert['unique_packets'],advert['repeated'])==(2,1,1)
+    assert rows['Advertisements','observed-flood-route']['receptions']==1
+    assert rows['Other MeshCore packet types','observed-flood-route']['receptions']==1
+    assert sum(r['receptions'] for r in view['packet_types'])==7
+    assert sum(r['percentage'] for r in view['packet_types'])==pytest.approx(100)
+    assert sum(r['receptions'] or 0 for r in view['activity_hourly'])==5
+    assert view['totals']['receptions']==5  # source advertisements are not forwarding
+    for days in (7,30):
+        older=aggregate(database.DB_FILE,A,days,now=NOW)
+        assert sum(r['receptions'] for r in older['packet_types'])==8
+    path=store.statistics_path(database.DB_FILE,A)
+    with sqlite3.connect(path) as db:
+        db.execute("UPDATE observations SET packet_digest=NULL WHERE packet_type=15")
+    unknown=next(r for r in aggregate(database.DB_FILE,A,1,now=NOW)['packet_types'] if r['category']=='Other MeshCore packet types')
+    assert unknown['unidentified']==1 and unknown['unique_packets']==0
+
+
+def test_activity_calendar_hours_fractional_offset_and_gaps(station,monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    zone=ZoneInfo('Asia/Kolkata');monkeypatch.setattr(config,'TIMEZONE',zone)
+    start=datetime(2026,11,1,0,tzinfo=zone).timestamp();end=start+86400
+    add(at=start+3590,payload=b'first');add(at=start+3610,payload=b'second')
+    store.record_coverage(database.DB_FILE,start,start+7200)
+    view=aggregate(database.DB_FILE,A,1,now=end)
+    assert view['activity_timezone']=='Asia/Kolkata' and len(view['activity_hourly'])==24
+    rows=view['activity_hourly']
+    assert rows[0]['receptions']==rows[1]['receptions']==1
+    assert rows[0]['complete'] and rows[1]['complete']
+    assert rows[2]['receptions'] is None and not rows[2]['complete']
+    assert all(datetime.fromtimestamp(r['at'],zone).minute==0 for r in rows)
+    store.record_coverage(database.DB_FILE,start+7200,start+10800)
+    view=aggregate(database.DB_FILE,A,1,now=end)
+    assert view['activity_hourly'][2]['receptions']==0 and view['activity_hourly'][2]['complete']
+
+
+def test_calendar_boundaries_preserve_dst_folds_and_skip_missing_hours():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from meshcorestation.storage.statistics_view import _calendar_boundaries
+    zone=ZoneInfo('Europe/Berlin')
+    for month,day,hours in [(10,25,25),(3,29,23)]:
+        start=datetime(2026,month,day,tzinfo=zone).timestamp()
+        end=datetime(2026,month,day+1,tzinfo=zone).timestamp()
+        points=[at for at in _calendar_boundaries(start,end,zone) if start<=at<end]
+        assert len(points)==hours
+        twos=[at for at in points if datetime.fromtimestamp(at,zone).hour==2]
+        assert len(twos)==(2 if month==10 else 0)
+
+
+def test_ambiguous_routes_stay_out_of_new_confirmed_views_but_origin_remains(station):
+    station.add_new_repeater(NS(payload=dict(type=2,public_key='aa99'+'05'*30,adv_name='Collision')),observed=False)
+    add(path='aabb',size=1,payload=b'ambiguous')
+    origin=bytes.fromhex(A)+bytes(68)+bytes([2])
+    add(path='aabb',size=1,kind=4,payload=origin)
+    view=aggregate(database.DB_FILE,A,1,now=NOW)
+    assert not view['neighbors'] and view['ambiguous']
+    assert sum(r['receptions'] or 0 for r in view['activity_hourly'])==0
+    assert len(view['packet_types'])==1
+    assert view['packet_types'][0]['evidence']=='advertisement-origin'
+    assert view['packet_types'][0]['receptions']==1

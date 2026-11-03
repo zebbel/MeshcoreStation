@@ -8,6 +8,8 @@ import logging
 import os
 import shutil
 import tempfile
+from bisect import bisect_right
+from datetime import datetime, timedelta
 from collections import OrderedDict
 from pathlib import Path
 import re
@@ -163,18 +165,18 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path)
     work.executescript('''PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;
         PRAGMA temp_store=FILE; PRAGMA cache_size=-2048;
         CREATE TABLE facts(id INTEGER PRIMARY KEY,digest TEXT,at REAL,bucket INTEGER,
-          kind INTEGER,hop INTEGER,confirmed INTEGER,region TEXT);
+          kind INTEGER,hop INTEGER,confirmed INTEGER,region TEXT,origin INTEGER);
         CREATE TABLE edges(identity TEXT,direction TEXT,verified INTEGER,digest BLOB,at REAL);''')
     routes=RouteCache(key,resolve_hash);region_name=scope_resolver(regions)
     rows=source.execute('''SELECT id,received_at,packet_digest,packet_type,route_type,
-        ambiguous,first_hop,middle_hop,last_hop,hop_count,route,payload,transport_code
+        ambiguous,first_hop,middle_hop,last_hop,hop_count,route,payload,transport_code,evidence
         FROM observations WHERE received_at>=? AND received_at<?''',(start,end))
     while True:
         batch=rows.fetchmany(128)
         if not batch:break
         diagnostics.check();_space_guard(main_path);facts=[];edge_facts=[]
         for row in batch:
-            oid,at,digest,kind,route_type,ambiguous,first,middle,last,hop,route,payload,transport=row
+            oid,at,digest,kind,route_type,ambiguous,first,middle,last,hop,route,payload,transport,evidence=row
             observed=route_type in (0,1) and kind!=9
             matched,links=routes.get(route) if observed else (False,())
             confirmed=int(observed and not ambiguous and (first or middle or last) and matched)
@@ -182,12 +184,15 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path)
             # SHA-256 identifiers remain exact; compact lowercase digests only
             # in this disposable spool (noncanonical stored strings stay strings).
             if isinstance(digest,str) and re.fullmatch('[0-9a-f]{64}',digest):digest=bytes.fromhex(digest)
-            facts.append((oid,digest,at,int(at//3600)*3600,kind,hop,confirmed,region))
+            # Full advertised origin is independent of route-hash ambiguity.
+            origin=int(kind==4 and evidence=='advertisement-origin' and isinstance(payload,bytes)
+                       and len(payload)>=101 and payload[:32].hex()==key and payload[100]&15==2)
+            facts.append((oid,digest,at,int(at//3600)*3600,kind,hop,confirmed,region,origin))
             # Deduplicate a direction within this reception, never across RX copies.
             edges={(neighbor_key if valid and not ambiguous else prefix+' → '+other,direction,int(valid and not ambiguous))
                    for prefix,other,neighbor_key,direction,valid in links}
             edge_facts.extend((identity,direction,valid,digest,at) for identity,direction,valid in edges)
-        work.executemany('INSERT INTO facts VALUES(?,?,?,?,?,?,?,?)',facts)
+        work.executemany('INSERT INTO facts VALUES(?,?,?,?,?,?,?,?,?)',facts)
         work.executemany('INSERT INTO edges VALUES(?,?,?,?,?)',edge_facts)
         diagnostics.rows+=len(batch)
         # Yield the GIL to the radio loop/collector between bounded batches.
@@ -195,15 +200,36 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path)
     return routes
 
 
-def _coverage(source,start,end,diagnostics):
-    buckets={};known=bool(source.execute("SELECT 1 FROM sqlite_master WHERE name='collection_windows'").fetchone())
-    if not known:return buckets,False
+def _calendar_boundaries(start,end,zone):
+    """Real local-hour boundaries, including folds and excluding skipped hours."""
+    day=datetime.fromtimestamp(start,zone).date()-timedelta(days=1)
+    last=datetime.fromtimestamp(end,zone).date()+timedelta(days=1)
+    points=set()
+    while day<=last:
+        for hour in range(24):
+            for fold in (0,1):
+                local=datetime(day.year,day.month,day.day,hour,tzinfo=zone,fold=fold)
+                at=local.timestamp();back=datetime.fromtimestamp(at,zone)
+                if back.date()==day and back.hour==hour and back.minute==0:points.add(at)
+        day+=timedelta(days=1)
+    return sorted(points)
+
+
+def _coverage(source,start,end,diagnostics,local_bounds):
+    buckets={};local_buckets={};known=bool(source.execute("SELECT 1 FROM sqlite_master WHERE name='collection_windows'").fetchone())
+    if not known:return buckets,False,local_buckets
     pending=None
     def add(lo,hi):
         lo,hi=max(start,lo),min(end,hi)
         for bucket in range(int(lo//3600)*3600,int(hi//3600)*3600+1,3600):
             overlap=max(0,min(hi,bucket+3600)-max(lo,bucket))
             if overlap:buckets[bucket]=buckets.get(bucket,0)+overlap
+        i=max(0,bisect_right(local_bounds,lo)-1)
+        while i+1<len(local_bounds) and local_bounds[i]<hi:
+            bucket,until=local_bounds[i:i+2]
+            overlap=max(0,min(hi,until)-max(lo,bucket))
+            if overlap:local_buckets[bucket]=local_buckets.get(bucket,0)+overlap
+            i+=1
     for i,(lo,hi) in enumerate(source.execute('''SELECT started_at,ended_at FROM collection_windows
         WHERE ended_at>? AND started_at<? ORDER BY started_at''',(start,end))):
         if i%128==0:diagnostics.check()
@@ -212,7 +238,7 @@ def _coverage(source,start,end,diagnostics):
             if pending:add(*pending)
             pending=(lo,hi)
     if pending:add(*pending)
-    return buckets,True
+    return buckets,True,local_buckets
 
 
 def aggregate(main_path,key,days=1,now=None):
@@ -233,11 +259,14 @@ def aggregate(main_path,key,days=1,now=None):
                 matches=prefixes.get(prefix,[])
                 return matches[0] if len(matches)==1 else None
             result=dict(ok=True,selected=key,days=days,start=start,end=now,generated_at=now,
-                hourly=[],hops=[],regions=[],neighbors=[],ambiguous=[],totals={},excluded=0,
+                hourly=[],activity_hourly=[],packet_types=[],hops=[],regions=[],neighbors=[],ambiguous=[],totals={},excluded=0,
                 coverage_seconds=0,coverage_expected=days*86400,coverage_known=False,
                 selected_repeater=registry.get(key),notes=[])
             path=passive_stats.statistics_path(main_path,key) if key else None
-            hourly={};coverage={}
+            from meshcorestation.config import TIMEZONE
+            local_bounds=_calendar_boundaries(start,now,TIMEZONE)
+            result['activity_timezone']=TIMEZONE.key
+            hourly={};activity={};coverage={};activity_coverage={}
         if path and path.exists():
             with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=.25)) as source,closing(sqlite3.connect('')) as work:
                 source.execute('PRAGMA query_only=ON');source.execute('BEGIN')
@@ -258,6 +287,19 @@ def aggregate(main_path,key,days=1,now=None):
                 count_sql=COUNTS.replace('packet_digest','digest')
                 with diagnostics.stage('hourly'):
                     hourly={r['bucket']:dict(r) for r in work.execute('SELECT bucket,'+count_sql+' FROM facts WHERE confirmed=1 AND kind IN (2,5) GROUP BY bucket')}
+                with diagnostics.stage('activity'):
+                    # Reuse compact facts; never parse routes or read source payloads again.
+                    work.create_function('calendar_bucket',1,lambda at:local_bounds[bisect_right(local_bounds,at)-1],deterministic=True)
+                    activity={r['bucket']:dict(r) for r in work.execute('SELECT calendar_bucket(at) AS bucket,'+count_sql+' FROM facts WHERE confirmed=1 AND origin=0 GROUP BY calendar_bucket(at)')}
+                with diagnostics.stage('packet_types'):
+                    result['packet_types']=[dict(r) for r in work.execute('''SELECT
+                      CASE kind WHEN 5 THEN 'Group messages' WHEN 2 THEN 'Direct text messages'
+                      WHEN 4 THEN 'Advertisements' ELSE 'Other MeshCore packet types' END AS category,
+                      CASE WHEN origin=1 THEN 'advertisement-origin' ELSE 'observed-flood-route' END AS evidence,
+                      '''+count_sql+''' FROM facts WHERE confirmed=1 OR origin=1
+                      GROUP BY category,evidence ORDER BY category,evidence''')]
+                    total=sum(r['receptions'] for r in result['packet_types'])
+                    for row in result['packet_types']:row['percentage']=100*row['receptions']/total if total else 0
                 with diagnostics.stage('hops'):
                     result['hops']=[dict(r) for r in work.execute('SELECT hop AS hop_count,'+count_sql+' FROM facts WHERE confirmed=1 GROUP BY hop ORDER BY receptions DESC,hop')]
                 with diagnostics.stage('regions'):
@@ -281,7 +323,7 @@ def aggregate(main_path,key,days=1,now=None):
                     result['neighbors']=list(grouped.values())
                     if len(edge_rows)>=1000:result['notes'].append('Neighbor output is limited to 1,000 grouped direction entries.')
                 with diagnostics.stage('coverage'):
-                    coverage,result['coverage_known']=_coverage(source,start,now,diagnostics)
+                    coverage,result['coverage_known'],activity_coverage=_coverage(source,start,now,diagnostics,local_bounds)
                 result['diagnostics']=dict(source_rows=diagnostics.rows,parsed_routes=routes.parsed,route_cache_bytes=routes.used)
         with diagnostics.stage('render_series'):
             for bucket in range(int(start//3600)*3600,int(now//3600)*3600+1,3600):
@@ -291,6 +333,12 @@ def aggregate(main_path,key,days=1,now=None):
                 complete=seconds>=hi-lo-1e-6
                 values=hourly.get(bucket) or dict(receptions=0 if complete else None,unique_packets=0 if complete else None,repeated=0 if complete else None,unidentified=0 if complete else None)
                 result['hourly'].append(dict(at=bucket,coverage_seconds=seconds,expected_seconds=hi-lo,complete=complete,**values))
+            for bucket,until in zip(local_bounds,local_bounds[1:]):
+                lo,hi=max(start,bucket),min(now,until)
+                if hi<=lo:continue
+                seconds=min(hi-lo,activity_coverage.get(bucket,0));complete=seconds>=hi-lo-1e-6
+                values=activity.get(bucket) or dict(receptions=0 if complete else None,unique_packets=0 if complete else None,repeated=0 if complete else None,unidentified=0 if complete else None)
+                result['activity_hourly'].append(dict(at=bucket,until=until,interval_seconds=until-bucket,coverage_seconds=seconds,expected_seconds=hi-lo,complete=complete,**values))
             result['notes'].append('Adjacent flood-path observations are inferred relationships, not verified direct RF links or delivery confirmation.')
             result['notes'].append('Unique packets are distinct payload digests within each hour or ranking category; repeated receptions are additional copies in that group.')
         result.setdefault('diagnostics',{})['stages_ms']=diagnostics.times
