@@ -24,6 +24,11 @@ counts, last observation, names and full public keys. Neighbor identities can be
 unmanaged. Missing coordinates are listed rather than invented; ambiguous or
 unknown adjacent hashes appear separately and do not create confirmed map lines.
 Markers use CSS divIcons and vector lines remain if background tiles fail.
+Hovering over a neighbor shows its resolved name, **We hear** (incoming toward
+the selected repeater) and **They hear** (outgoing toward the neighbor) reception
+counts for the selected period. Tapping opens the existing detailed popup with
+the same summary. These are observed route relationships, not RF reception
+confirmation or delivery acknowledgements.
 
 One-way observation does not prove that reverse communication is impossible.
 Two-way observations do not establish a reliable direct bidirectional RF link.
@@ -41,16 +46,21 @@ channel and no channel decryption is required for these packet-type counts.
 
 Unique packets are distinct saved SHA-256 payload digests within each hour.
 Repeated receptions are additional receptions of those digests in that hour.
-Missing digests are shown separately as unidentified, never assumed unique.
+Blue unique-packet and orange repeated-reception bars appear side by side for
+each hour. Long periods scroll horizontally with a fixed count axis and Start /
+Latest hours controls. Hover, keyboard focus or tap shows exact values.
+Missing digests remain unidentified, never assumed unique; their statistics are
+preserved in the expandable exact-count table without a gray chart series.
 A digest appearing in separate hours is counted independently in each hour;
 these per-hour unique figures must not be summed as globally unique packets.
 
 ## Hop Count Ranking
 
-Bars are ranked by confidently attributed reception count. Each category uses
+Columns are ordered by increasing numeric hop count. Each category uses
 the complete recorded flood-route hop count, not estimated transmissions or
-hops to a destination. Each bar and expandable count table distinguishes unique
-packets, repeated receptions and unidentified payloads. Ambiguous, direct-routing
+hops to a destination. Each column stacks blue unique
+packets and orange repeated receptions. Unidentified payloads remain in the
+expandable exact-count table; column heights show only identified receptions. Ambiguous, direct-routing
 and TRACE evidence is excluded from confirmed totals.
 
 ## MeshCore Regional Traffic Ranking
@@ -85,7 +95,8 @@ not included in chart/map aggregation responses.
 
 The 5.1.0 history did not record collection uptime. Empty historical hours with
 no uptime evidence are unknown gaps, not zero traffic. Positive observations from
-such hours remain visible as hollow points/lower bounds. Zero is shown only for
+such hours remain visible as dashed, translucent bars/lower bounds. Unknown
+intervals use hatched gaps, while a recorded complete zero is explicitly labeled. Zero is shown only for
 an interval fully covered by saved healthy, connected collection windows. Hours
 use UTC boundaries and labels use the dashboard's date/time preferences.
 

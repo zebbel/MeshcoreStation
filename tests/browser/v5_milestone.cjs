@@ -3,7 +3,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
 fs.mkdirSync('browser-evidence',{recursive:true});
 (async()=>{const browser=await chromium.launch({headless:true});try{
  for(const [width,height,colorScheme] of [[1280,960,'light'],[390,844,'dark']]){
-  const page=await browser.newPage({viewport:{width,height},colorScheme}),errors=[];
+  const page=await browser.newPage({viewport:{width,height},colorScheme,hasTouch:width<800,isMobile:width<800}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   await page.goto('http://127.0.0.1:8050');await page.locator('#bot-status').filter({hasText:'Connected'}).waitFor();
@@ -34,6 +34,30 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   assert.equal(await page.locator('#statistics-neighbor-map path[stroke="#dc2626"]').count(),1);
   await page.locator('#statistics-neighbor-map path[stroke="#15803d"]').click();
   await page.locator('#statistics-neighbor-map .leaflet-popup-content').filter({hasText:'Last observation'}).waitFor();
+  await page.locator('#statistics-neighbor-map .leaflet-popup-close-button').click();
+  const marker=page.locator('#statistics-neighbor-map .statistics-map-icon[title="Fixture north"]');
+  if(width>800){
+   await marker.hover();
+   await page.locator('.statistics-neighbor-tooltip').filter({hasText:'We hear: 1 times'}).waitFor();
+   assert((await page.locator('.statistics-neighbor-tooltip').innerText()).includes('They hear: 1 times'));
+   await page.locator('#statistics-view-status').hover();
+   await page.locator('.statistics-neighbor-tooltip').waitFor({state:'hidden'});
+   await marker.click();
+  }else await marker.tap();
+  const popup=page.locator('#statistics-neighbor-map .leaflet-popup-content');
+  assert((await popup.innerText()).includes('We hear: 1 times'));
+  assert((await popup.innerText()).includes('They hear: 1 times'));
+  assert((await popup.innerText()).includes('Last observation'));
+  for(const period of ['1','7','30']){
+   await page.locator('#statistics-period').selectOption(period);
+   await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();
+   await page.locator('#statistics-hourly .statistics-hour-bar').first().waitFor({state:'attached'});
+   assert.equal(await page.locator('#statistics-hourly circle').count(),0);
+   assert(await page.locator('#statistics-hourly .statistics-plot-scroll').evaluate(el=>el.clientWidth>0&&el.scrollWidth>=el.clientWidth));
+   const hops=await page.locator('#statistics-hops .statistics-hop-tick').allTextContents();
+   assert.deepEqual(hops.map(Number),hops.map(Number).sort((a,b)=>a-b));
+   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  }
   assert(await page.locator('#statistics-regions').innerText().then(t=>t.includes('Unscoped')));
   await page.locator('#statistics-period').selectOption('7');
   await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();

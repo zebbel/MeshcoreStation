@@ -1,32 +1,28 @@
-# MeshcoreStation 5.2.2 — Statistics Worker Isolation
+# MeshcoreStation 5.2.3 — Repeater Statistics UI Improvements
 
-Addresses a saved-view failure specific to the running service: the user's actual
-2,517-row query completed in 0.8568 seconds in a separate CLI interpreter while
-its HTTP calculation still timed out during classify.
+Neighbor markers now show resolved names and directional reception counts on
+hover: We hear is incoming toward the selected repeater; They hear is outgoing
+toward the neighbor. Touch/click opens the existing detailed popup with the same
+summary, timestamps and public keys. Counts describe observed packet routes,
+not independently confirmed RF reception or delivery acknowledgements.
 
-A local busy-Python-thread reproduction makes the threaded view fail after
-8.461 seconds. Running the same calculation in a fresh interpreter completes in
-0.173–0.204 seconds under the modeled contention. This demonstrates a failure
-mode consistent with the field report; the actual busy thread/device cause has
-not been independently identified.
+Messages per Hour uses side-by-side blue unique-packet and orange repeated-
+reception bars. Long ranges scroll horizontally with a fixed count axis.
+Hop Count Ranking uses stacked blue/orange columns ordered by numeric hop count.
+Unknown coverage remains a hatched gap, incomplete counts are dashed lower bounds,
+and complete recorded zero intervals are labeled. Unidentified receptions remain
+in the exact-count tables without gray circles in the hourly chart.
 
-Saved-view calculation now uses one bounded read-only worker process, launched
-only for an uncached calculation. It imports no Companion/radio runtime, inherits
-no radio handles, sends no radio/network requests and exits after returning.
-Recording, recording status and management remain in the main application.
+Shared 24-hour, 7-day and 30-day filters, map interactions and ambiguity handling
+are preserved. The passive collector, saved calculations, isolated statistics
+worker, caching, timeouts and historical data are unchanged. No radio requests,
+active polling, schema migrations or automatic deletion are introduced.
 
-The eight-second core query budget remains unchanged. The parent bounds worker
-startup/execution to nine seconds; the browser retains separate status/view
-budgets. Shutdown and parent timeout reap the child. Result size is bounded, and
-safe CPU/RSS/roundtrip diagnostics and WARNING-level failure details are available.
-Original histories, schemas, scope matching, ambiguity, counts, coverage and all
-visualizations are preserved. No data migration or deletion is introduced.
+Local validation: 218 Python tests, 18 JavaScript suites, fresh-install smoke,
+JavaScript syntax and whitespace checks passed. Focused tests cover directional
+hover/click summaries using real Leaflet, grouped and stacked SVG columns, numeric
+hop ordering, preserved unidentified counts, coverage gaps and responsive redraw.
+Local Chromium is unavailable; the existing desktop/light and mobile/dark
+Chromium acceptance gate runs in CI before this prerelease is published.
 
-Validation: 218 Python tests, 18 JavaScript suites, fresh-install smoke, and the
-existing desktop/light and mobile/dark Chromium release gate. Tests cover thread
-contention, child import isolation, termination/reaping, corrupted-file safety,
-all three periods on 100,000 observations and recording during the calculation.
-
-Includes a read-only actual-data diagnostic script. This remains a prerelease;
-the corrected running service still needs confirmation on the user's device.
-V3 main and V4 v4.0.0 remain unchanged. No deployment is performed automatically.
+V5 remains a prerelease. V3 main and V4 v4.0.0 are unchanged.

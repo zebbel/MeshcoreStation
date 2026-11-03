@@ -172,3 +172,26 @@ still required after installation. See [service-context evidence](v5-statistics-
 
 Local validation: 218 Python tests, 18 JavaScript suites and fresh-install smoke.
 The authorized publication still requires the existing Chromium release gate.
+
+## Statistics UI improvements — 5.2.3
+
+Frontend changes on V5 add neighbor hover balloons and equivalent summaries in
+existing tap/click popups: We hear is incoming toward the selected repeater;
+They hear is outgoing toward the neighbor. Counts are saved route observations,
+not RF reception confirmation or delivery acknowledgements.
+
+Messages per Hour now uses side-by-side blue unique/orange repeated columns;
+Hop Count Ranking uses stacked columns ordered numerically. Long hourly ranges
+scroll with a fixed count axis. Unknown intervals remain hatched gaps, incomplete
+counts are dashed lower bounds, and complete recorded zeros are labeled.
+Unidentified receptions remain in expandable exact-count tables. The saved API,
+worker, cache, recording and original histories are unchanged.
+
+Local checks: 218 Python tests passed, all 18 JavaScript suites passed, and the
+fresh two-database install smoke check passed. Focused real-Leaflet DOM tests cover
+hover/leave/click summaries, actual SVG overlays, direction mapping, coverage,
+24h/7d/30d rendering, numeric ordering, stacks and resize cleanup. The existing
+Chromium desktop/mobile acceptance test was extended, but could not run because
+Chromium is unavailable and its download did not complete. Actual desktop/mobile
+visual verification remains outstanding. The user authorized publication as 5.2.3. The existing Chromium CI gate must pass
+before the workflow creates the V5 prerelease.
