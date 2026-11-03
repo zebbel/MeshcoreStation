@@ -231,3 +231,29 @@ Chromium is unavailable. Desktop/mobile visual verification remains outstanding.
 
 Publication was explicitly authorized as 5.2.4. The existing Chromium CI gate
 must pass before the workflow creates the V5 prerelease; main and V4 are unchanged.
+
+## Neighbor monitoring and accordion dashboard — 5.3.0
+
+Management neighbor names now use full-key results from the canonical registry,
+with explicit ambiguous/unknown prefixes on all pages. A separate opt-in neighbor
+SNR worker polls enabled managed repeaters without depending on UI selection or
+passive recording. It reuses the control lock, paces page requests, persists due
+times, and cancels or rechecks shutdown/configuration/membership changes. Raw
+readings and conservative last-heard/SNR deduplication are saved in existing
+per-repeater files. The new SNR table retains unidentified evidence separately.
+
+Main sections and eight Statistics views are independent exclusive accordions,
+initially collapsed. Their loaded controls/content are retained; opening local
+Statistics views only resizes charts/maps. Hidden Leaflet maps initialize with a
+finite view before fitting bounds when displayed. Management telemetry charts are
+permanently visible within the expanded main panel. Main-section gaps are 16 px.
+
+Local validation: 230 Python tests and 20 JavaScript suites passed; fresh-install,
+syntax and whitespace checks passed. Simulated-radio cases cover pagination,
+locking, timeouts, shutdown, disabled/removed/re-added repeaters, persistent
+scheduling, deduplication, invalid data, historical filters and canonical names.
+The Chromium desktop/mobile acceptance script was extended for accordion behavior,
+local-only expansion, hidden-map resizing, spacing, telemetry and saved SNR means.
+Publication is explicitly authorized through the standing handover instruction;
+the existing CI gate must pass before creating the 5.3.0 prerelease. Actual-device
+guest access/firmware behavior remains unverified. See [details and limitations](v5-neighbor-snr.md).

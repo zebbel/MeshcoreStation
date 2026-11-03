@@ -9,13 +9,14 @@ w.fetch=async(url,options)=>{
  const body=JSON.parse(options.body);posts.push(body);
  if(body.action==='login' && failLogin)return {ok:false,json:async()=>({ok:false,error:'Login failed'})};
  const result=body.action==='login'?{session:'token',admin,fields:{},contact:{public_key:key}}:
- body.action==='neighbors'?{data:{neighbours:[{pubkey:'aabb1234',secs_ago:23,snr:2.5}],neighbours_count:1},
+ body.action==='neighbors'?{data:{neighbours:body.offset?[{pubkey:'ffff',name:'Unknown Repeater (ffff…)',resolution:'unknown',secs_ago:30,snr:1}]:[{pubkey:'bbbb',public_key:'bb'.repeat(32),name:'Known unmanaged',resolution:'matched',secs_ago:23,snr:2.5},{pubkey:'eeee',name:'Ambiguous repeater (eeee…)',resolution:'ambiguous',secs_ago:24,snr:2}],neighbours_count:3},
  neighbor_snapshot:{id:23,neighbors:1,received:1,reported:1}}:
  body.action==='console'?{reply:body.command.startsWith('password')?'Sensitive command response hidden.':'<img src=x onerror=alert(1)>'}:
  {data:{},contact:{public_key:key},sampled_at:1};
  return {ok:true,json:async()=>({ok:true,...result})};
 };
 w.eval(fs.readFileSync('meshcorestation/web/assets/aa_display.js','utf8'));
+w.eval(fs.readFileSync('meshcorestation/web/assets/ab_repeater_names.js','utf8'));
 w.eval(fs.readFileSync('meshcorestation/web/assets/repeater_management.js','utf8'));
 const $=id=>w.document.getElementById(id),settle=()=>new Promise(r=>setImmediate(r));
 const submit=id=>$(id).dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
@@ -31,6 +32,11 @@ assert.equal($('repeater-tab-advisor'),null);
  neighborsPanel.dispatchEvent(new w.Event('toggle'));
  await settle();
  assert($('repeater-neighbors-message').textContent.includes('Neighbors received'));
+ assert(neighborsPanel.textContent.includes('Known unmanaged'));assert(neighborsPanel.textContent.includes('Ambiguous repeater (eeee…)'));
+ assert(neighborsPanel.querySelector('[data-repeater-key="'+('bb'.repeat(32))+'"]'));
+ [...neighborsPanel.querySelectorAll('button')].find(b=>b.textContent==='Load more').click();await settle();assert(neighborsPanel.textContent.includes('Unknown Repeater (ffff…)'));assert.equal(posts.at(-1).offset,2);
+ [...neighborsPanel.querySelectorAll('button')].find(b=>b.textContent.includes('Refresh')).click();await settle();assert.equal(posts.at(-1).offset,0);assert(neighborsPanel.textContent.includes('Known unmanaged'));
+
  $('repeater-tab-console').click();
  $('repeater-console-commands').click();assert.equal($('repeater-command-dialog').open,true);
  const before=posts.length;

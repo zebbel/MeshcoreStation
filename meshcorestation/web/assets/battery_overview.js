@@ -31,14 +31,13 @@
     function drawChart(){
         if(!lastData)return;
         const {data,days}=lastData;
-        if(el('battery-chart-disclosure')?.open)window.MeshcoreStationBattery.chart(el('battery-overview-chart'),el('battery-overview-note'),data.samples,data.config.timezone,days,data.server_time);
-        if(el('temperature-chart-disclosure')?.open)window.MeshcoreStationBattery.temperatureChart(el('temperature-overview-chart'),el('temperature-overview-note'),data.temperature_samples||[],data.config.timezone,days,data.server_time);
+        window.MeshcoreStationBattery.chart(el('battery-overview-chart'),el('battery-overview-note'),data.samples,data.config.timezone,days,data.server_time);
+        window.MeshcoreStationBattery.temperatureChart(el('temperature-overview-chart'),el('temperature-overview-note'),data.temperature_samples||[],data.config.timezone,days,data.server_time);
     }
     function attach(){
         const panel=el('battery-overview');if(!panel||attached)return;attached=true;
-        panel.innerHTML='<p id="battery-overview-latest" class="battery-reading">Loading saved telemetry history…</p><p id="temperature-overview-latest" class="battery-reading">Temperature: No readings yet.</p><p id="battery-overview-error" role="status"></p><label class="telemetry-period">Chart period <select id="battery-overview-days"><option value="1" selected>24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label><details id="battery-chart-disclosure"><summary>Voltage chart</summary><div id="battery-overview-chart" class="battery-chart"></div><p id="battery-overview-note" class="muted"></p></details><details id="temperature-chart-disclosure"><summary>Temperature chart</summary><div id="temperature-overview-chart" class="battery-chart"></div><p id="temperature-overview-note" class="muted"></p></details>';
-        el('temperature-chart-disclosure').addEventListener('toggle',drawChart);
-        el('battery-chart-disclosure').addEventListener('toggle',drawChart);
+        panel.innerHTML='<p id="battery-overview-latest" class="battery-reading">Loading saved telemetry history…</p><p id="temperature-overview-latest" class="battery-reading">Temperature: No readings yet.</p><p id="battery-overview-error" role="status"></p><label class="telemetry-period">Chart period <select id="battery-overview-days"><option value="1" selected>24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label><section id="battery-chart-disclosure"><h3>Voltage chart</h3><div id="battery-overview-chart" class="battery-chart"></div><p id="battery-overview-note" class="muted"></p></section><section id="temperature-chart-disclosure"><h3>Temperature chart</h3><div id="temperature-overview-chart" class="battery-chart"></div><p id="temperature-overview-note" class="muted"></p></section>';
+        el('repeater-management-disclosure')?.addEventListener('toggle',()=>{if(el('repeater-management-disclosure').open)load();});
         el('battery-overview-days').addEventListener('change',load);load();setInterval(load,15000);
     }
     document.addEventListener('managed-repeater-selected',()=>{lastData=null;if(el('temperature-overview-latest'))el('temperature-overview-latest').textContent='Loading selected repeater temperature…';if(el('battery-overview-latest')){el('battery-overview-latest').textContent='Loading selected repeater…';el('battery-overview-chart').replaceChildren();el('temperature-overview-chart').replaceChildren();}load();});

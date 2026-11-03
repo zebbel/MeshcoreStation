@@ -19,6 +19,8 @@ class Runtime:
         from meshcorestation.radio.statistics_collector import Collector
         main_path = Path(database.db.execute("PRAGMA database_list").fetchone()[2])
         self.statistics = Collector(main_path, logger)
+        from meshcorestation.radio.neighbor_monitor import NeighborMonitor
+        self.neighbor_monitor = NeighborMonitor(self, main_path)
 
     async def dispatch(self, payload):
         """Serialize control changes with bot replies and telemetry requests."""
@@ -44,6 +46,8 @@ class Runtime:
 
     async def close_session(self):
         self.control = None
+        if self.neighbor_monitor.task:
+            await self.neighbor_monitor.close()
         if self.companion is not None:
             await self.companion.reply_retries.close()
         for task in tuple(self.requests):
@@ -76,6 +80,7 @@ class Runtime:
         self.control = CompanionControl(self.companion)
         self.voltage = VoltageMonitor(self.companion)
         self.voltage.start()
+        self.neighbor_monitor.start()
         self.logger.set_log_level()
         while True:
             connected = self.companion.mc.connection_manager.is_connected

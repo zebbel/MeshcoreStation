@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.2.4
+# MeshcoreStation V5 — 5.3.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.2.4** adds neighbor activity rankings, a traffic heatmap and packet-type distribution.
+Development branch: **`V5`**. Version **5.3.0** adds opt-in neighbor SNR monitoring and independent dashboard/statistics accordions.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -91,6 +91,14 @@ and exact-count tables preserve unidentified receptions.
 The view refreshes on opening, filter changes or **Refresh saved view**, without
 active radio polling. No performance analysis, Analyzer collection or automatic
 deletion is included.
+
+Automatic **neighbor SNR monitoring** is a separate, per-repeater opt-in setting,
+disabled by default (suggested interval: 30 minutes). It sends coordinated guest
+neighbor requests while the dashboard is closed and retains deduplicated SNR
+history in the existing repeater statistics files. This does not change passive
+recording. See [neighbor monitoring, averages and limits](docs/v5-neighbor-snr.md).
+Main sections and Statistics views use independent accordions; telemetry charts
+remain visible inside expanded Repeater Management.
 
 See [passive statistics storage and limitations](docs/v5-repeater-statistics.md)
 and [visualization and scope interpretation](docs/v5-statistics-visualization.md).

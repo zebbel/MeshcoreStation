@@ -1,9 +1,9 @@
 /* Real Leaflet overlays and chart SVGs; only remote tiles are replaced. */
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
-const ids=['active-neighbors','heatmap','packet-types','coverage','hourly','hops','regions','neighbor-map','map-notes','missing-coordinates','ambiguous'];
+const ids=['neighbor-snr','active-neighbors','heatmap','packet-types','coverage','hourly','hops','regions','neighbor-map','map-notes','missing-coordinates','ambiguous'];
 const dom=new JSDOM(ids.map(id=>`<div id="statistics-${id}"></div>`).join(''),{runScripts:'outside-only',pretendToBeVisual:true,url:'http://localhost'}),w=dom.window,d=w.document;
 w.eval(fs.readFileSync('meshcorestation/web/assets/vendor/leaflet.js','utf8'));const L=w.L;L.Browser.svg=true;
-const host=d.getElementById('statistics-neighbor-map');Object.defineProperty(host,'clientWidth',{value:800});Object.defineProperty(host,'clientHeight',{value:380});
+const host=d.getElementById('statistics-neighbor-map');let mapWidth=800;Object.defineProperty(host,'clientWidth',{get:()=>mapWidth});Object.defineProperty(host,'clientHeight',{value:380});
 let current,maps=0,tileError;const factory=L.map;L.map=(...args)=>{maps++;return current=factory(...args);};
 L.tileLayer=()=>({on:(event,cb)=>{tileError=cb;return {addTo(){}};}});
 w.meshcorestationLoadMapLibrary=async()=>{};w.requestAnimationFrame=fn=>{fn();return 1;};w.meshcorestationFormatDate=v=>'time '+v;
@@ -13,6 +13,7 @@ w.eval(fs.readFileSync('meshcorestation/web/assets/statistics_visuals.js','utf8'
 const A='aa'.repeat(32),B='bb'.repeat(32),C='cc'.repeat(32),D='dd'.repeat(32),selected={public_key:A,name:'Selected <unsafe>',latitude:49.6,longitude:8.6};
 const data={selected:A,start:100,end:300,coverage_seconds:50,coverage_expected:200,excluded:2,selected_repeater:selected,
  activity_hourly:[{at:1793487600,receptions:3,unique_packets:2,repeated:1,complete:true,expected_seconds:3600,coverage_seconds:3600},{at:1793491200,receptions:null,complete:false,expected_seconds:3600,coverage_seconds:0},{at:1793494800,receptions:0,complete:true,expected_seconds:3600,coverage_seconds:3600},{at:1793498400,receptions:2,complete:false,expected_seconds:3600,coverage_seconds:100}],
+ neighbor_snr:[{public_key:B,name:'Two-way',prefix:'bbbb',resolution:'matched',average_snr:3.75,samples:2,last_heard:100},{public_key:null,prefix:'ffff',resolution:'unknown',average_snr:1,samples:1,last_heard:100}],
  packet_types:[{category:'Group messages',evidence:'observed-flood-route',receptions:3,unique_packets:2,repeated:1,unidentified:0,percentage:75},{category:'Advertisements',evidence:'advertisement-origin',receptions:1,unique_packets:1,repeated:0,unidentified:0,percentage:25}],
  hourly:[{at:100,receptions:3,unique_packets:2,repeated:1,unidentified:0,complete:true},{at:200,receptions:null,unique_packets:null,repeated:null,unidentified:null,complete:false},{at:300,receptions:1,unique_packets:1,repeated:0,unidentified:0,complete:false}],
  hops:[{hop_count:10,receptions:20,unique_packets:12,repeated:8,unidentified:0},{hop_count:2,receptions:3,unique_packets:2,repeated:1,unidentified:0},{hop_count:1,receptions:2,unique_packets:1,repeated:0,unidentified:1}],regions:[{name:'Unscoped',receptions:3,unique_packets:2,repeated:1,unidentified:0,percentage:100}],
@@ -33,6 +34,7 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
  const hourlyDetails=d.querySelector('#statistics-hourly details');hourlyDetails.open=true;hourlyDetails.dispatchEvent(new w.Event('toggle'));assert(hourlyDetails.textContent.includes('Unidentified'));
  const hopDetails=d.querySelector('#statistics-hops details');hopDetails.open=true;hopDetails.dispatchEvent(new w.Event('toggle'));assert(hopDetails.textContent.includes('1 hop'));assert(hopDetails.textContent.includes('Unidentified'));
 
+ assert(d.querySelector('#statistics-neighbor-snr').textContent.includes('3.75 dB'));assert(d.querySelector('#statistics-neighbor-snr').textContent.includes('Unknown Repeater (ffff…)'));assert(d.querySelector('#statistics-neighbor-snr').textContent.includes('single sample'));
  const active=[...d.querySelectorAll('#statistics-active-neighbors .statistics-neighbor-bar')];assert.equal(active.length,6);assert.equal(active[0].dataset.key,B);assert.equal(active[0].dataset.direction,'incoming');assert.equal(active[1].dataset.value,'4');assert(active.some(n=>n.dataset.key===D),'missing coordinates do not exclude active neighbors');
  const cells=[...d.querySelectorAll('.statistics-heatmap-cell')];assert(cells.some(n=>n.dataset.state==='unknown'&&n.dataset.count===''));assert(cells.some(n=>n.dataset.state==='complete'&&n.dataset.count==='0'));assert(cells.some(n=>n.dataset.state==='incomplete'&&n.dataset.count==='2'));cells.find(n=>n.dataset.count==='3').dispatchEvent(new w.Event('click'));assert(d.querySelector('#statistics-heatmap .statistics-hover-value').textContent.includes('3 observed receptions'));
  const donut=[...d.querySelectorAll('.statistics-donut-segment')];assert.equal(donut.length,2);assert.equal(donut[0].dataset.count,'3');donut[1].dispatchEvent(new w.Event('click'));assert(d.querySelector('#statistics-packet-types .statistics-hover-value').textContent.includes('Advertisement origin (not forwarding)'));assert(d.querySelector('#statistics-packet-types .statistics-hover-value').textContent.includes('25.0%'));
@@ -72,6 +74,8 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
  const folded=d.querySelector('.statistics-heatmap-cell[data-day="2026-10-25"][data-hour="2"]');assert.equal(folded.dataset.count,'3');folded.dispatchEvent(new w.Event('click'));assert(d.querySelector('#statistics-heatmap .statistics-hover-value').textContent.includes('Repeated clock hour'));
  w.MeshcoreStationStatisticsVisuals.stale();assert(d.querySelector('#statistics-heatmap').classList.contains('statistics-stale'));assert(d.querySelector('#statistics-packet-types').classList.contains('statistics-stale'));
  w.MeshcoreStationStatisticsVisuals.render(data);await settle();assert(!d.querySelector('#statistics-heatmap').classList.contains('statistics-stale'));
+ mapWidth=0;w.MeshcoreStationStatisticsVisuals.render(data);await settle();assert(!d.querySelector('#statistics-map-notes').textContent.includes('Map unavailable'),'hidden map initialization must use a finite view');
+ mapWidth=800;w.MeshcoreStationStatisticsVisuals.resize();await settle();assert(Number.isFinite(current.getZoom()));assert.equal(host.querySelectorAll('svg path.leaflet-interactive').length,2,'opening a hidden map redraws actual relationship overlays');
  const chartObserver=observers.findLast(o=>o.target?.id==='statistics-hourly');
  const plot=d.querySelector('#statistics-hourly .statistics-plot-scroll');plot.scrollLeft=96;
  chartWidth=320;chartObserver.callback();

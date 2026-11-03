@@ -8,13 +8,12 @@ const settle=()=>new Promise(r=>setImmediate(r));
 (async()=>{
  await settle();assert(d.getElementById('battery-overview-latest').textContent.includes('3.92 V'));
  assert(d.getElementById('temperature-overview-latest').textContent.includes('24.6 °C'));
- assert.equal(d.querySelectorAll('svg').length,0,'Collapsed charts defer rendering');
- for(const id of ['battery-chart-disclosure','temperature-chart-disclosure']){const section=d.getElementById(id);section.open=true;section.dispatchEvent(new w.Event('toggle'));}
- assert.equal(d.querySelectorAll('svg').length,2);
+ assert.equal(d.querySelectorAll('svg').length,2,'Both charts render without a nested disclosure');
+ assert.equal(d.querySelectorAll('#battery-overview details').length,0);
  for(const days of ['7','30']){const picker=d.getElementById('battery-overview-days');picker.value=days;picker.dispatchEvent(new w.Event('change'));await settle();assert(calls.at(-1).includes('days='+days));}
  const temp=d.querySelector('#temperature-overview-chart svg');temp.dispatchEvent(new w.MouseEvent('click',{clientX:900,clientY:100}));
  assert.equal(temp.querySelector('.telemetry-selected-value').textContent,'24.6 °C');
  d.getElementById('repeater-management-disclosure').open=false;
  const count=calls.length;d.dispatchEvent(new w.CustomEvent('managed-repeater-selected'));await settle();assert.equal(calls.length,count,'Closed telemetry panel must not poll');
- dom.window.close();console.log('Telemetry overview latest values, separate lazy charts and shared 24h/7d/30d period passed.');
+ dom.window.close();console.log('Telemetry overview latest values, permanently visible charts and shared 24h/7d/30d period passed.');
 })().catch(error=>{console.error(error);dom.window.close();process.exit(1)});

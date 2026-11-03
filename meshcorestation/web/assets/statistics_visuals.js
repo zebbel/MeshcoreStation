@@ -1,7 +1,7 @@
 /* Saved passive observations only; native chart SVGs never style Leaflet SVGs. */
 (() => {
     const $=id=>document.getElementById(id),ns='http://www.w3.org/2000/svg';
-    let map=null,resize=null,chartResize=null,generation=0;
+    let map=null,resize=null,chartResize=null,generation=0,lastData=null,mapPoints=[],mapNeedsFit=false;
     const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;};
     const stamp=value=>window.meshcorestationFormatDate?.(value)||new Date(value*1000).toLocaleString('en-GB');
     const name=r=>window.MeshcoreStationRepeaterNames?.label(r.public_key)||r.name||`Unknown Repeater (${r.public_key.slice(0,8)}…)`;
@@ -138,6 +138,25 @@
         host.append(text('p','Receptions are counted, including repeated copies. Advertisement origins are full-key source observations, never forwarding events. Advertisements seen on flood paths are separately identified in the exact table. Ambiguous/unverified routes are excluded; unknown or unsupported types remain Other. Percentages use only included observations and do not measure delivery success.','muted'));
         exactCounts(host,rows,r=>r.category+' · '+(r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':'Confirmed flood-path observation'),{percent:true});
     }
+    function neighborSnr(data){
+        const host=$('statistics-neighbor-snr');if(!host)return;host.replaceChildren();
+        const rows=data.neighbor_snr||[];window.MeshcoreStationRepeaterNames?.ingest(rows);
+        for(const [label,items]of [['Identified neighbors',rows.filter(r=>r.resolution==='matched')],['Unknown or ambiguous prefixes',rows.filter(r=>r.resolution!=='matched')]]){
+            host.append(text('h4',label));if(!items.length){host.append(text('p','No distinct valid measurements in this period.','muted'));continue;}
+            const scroll=text('div','','statistics-table-scroll'),table=document.createElement('table'),head=document.createElement('tr');
+            for(const value of ['Repeater','Average SNR','Samples','Last Heard'])head.append(text('th',value));table.append(head);
+            for(const row of items){const tr=document.createElement('tr'),identity=document.createElement('td');
+                identity.append(row.public_key?(window.MeshcoreStationRepeaterNames?.element(row.public_key)||text('span',row.name||row.public_key)):text('span',(row.resolution==='ambiguous'?'Ambiguous repeater':'Unknown Repeater')+' ('+row.prefix+'…)'));
+                tr.append(identity,text('td',row.average_snr.toFixed(2)+' dB'+(row.samples===1?' · single sample':'')),text('td',row.samples),text('td',stamp(row.last_heard)));table.append(tr);
+            }scroll.append(table);host.append(scroll);
+        }
+        host.append(text('p','Means use distinct valid repeater-side readings. Last Heard is estimated from reported age and request timing. Overlapping equal-SNR estimates count once; source reception IDs are unavailable. Single samples provide insufficient history for a trend. Missing/invalid SNR or age values remain in raw poll history and are excluded here. These measurements do not confirm packet delivery.','muted'));
+    }
+    function resizeVisible(){
+        const host=$('statistics-neighbor-map');
+        if(map&&host?.clientWidth&&host?.clientHeight){map.invalidateSize();if(mapNeedsFit&&mapPoints.length){map.fitBounds(mapPoints,{padding:[30,30],maxZoom:13});mapNeedsFit=false;}}
+        if(lastData&&$('statistics-hourly')?.clientWidth){hourly(lastData);hopColumns(lastData);}
+    }
     function ranking(id,rows,labelOf,title,percent=false){
         const host=$(id);if(!host)return;
         host.replaceChildren();if(!rows.length){host.append(text('p','No confidently attributed observations in this period.','statistics-empty'));return;}
@@ -178,7 +197,7 @@
         const summary=text('p',`${data.neighbors.length} observed neighbors · ${data.neighbors.filter(r=>r.incoming&&r.outgoing).length} two-way · ${data.neighbors.filter(r=>!r.incoming||!r.outgoing).length} one-way. Green: two-way observed. Red: one-way observed. Blue marker: selected repeater. Arrows show observed directions.`,'statistics-map-legend');note.append(summary);for(const message of data.notes||[])note.append(text('p',message,'muted'));
         try{
             await window.meshcorestationLoadMapLibrary();if(ticket!==generation)return;
-            map=L.map(host,{maxZoom:19});const layer=L.layerGroup().addTo(map),points=[];
+            map=L.map(host,{maxZoom:19});mapNeedsFit=!host.clientWidth||!host.clientHeight;const layer=L.layerGroup().addTo(map),points=[];
             function marker(r,selectedMarker=false){const p=position(r);if(!p)return;points.push(p);const dot=text('span',selectedMarker?'S':'R',selectedMarker?'statistics-marker selected':'statistics-marker');const marker=L.marker(p,{title:name(r),icon:L.divIcon({html:dot,className:'statistics-map-icon',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(layer);
                 if(!selectedMarker)marker.bindTooltip(neighborSummary(r),{direction:'top',offset:[0,-16],opacity:1,className:'statistics-neighbor-tooltip'});
                 marker.bindPopup(selectedMarker?text('strong',name(r)):popup(selected,r));
@@ -193,18 +212,20 @@
                     L.marker(mid,{interactive:false,icon:L.divIcon({html:arrow,className:'route-arrow-icon',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(layer);
                 }
             }
-            if(points.length)map.fitBounds(points,{padding:[30,30],maxZoom:13});else map.setView([51,10],5);
+            mapPoints=points;
+            if(points.length&&!mapNeedsFit)map.fitBounds(points,{padding:[30,30],maxZoom:13});else map.setView(points[0]||[51,10],points.length?10:5);
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).on('tileerror',()=>{if(ticket===generation&&!note.querySelector('.tile-warning'))note.append(text('p','Background tiles unavailable; observed markers and lines remain visible.','tile-warning'));}).addTo(map);
-            if(window.ResizeObserver){resize=new ResizeObserver(()=>map?.invalidateSize());resize.observe(host);}
+            if(window.ResizeObserver){resize=new ResizeObserver(resizeVisible);resize.observe(host);}
             requestAnimationFrame(()=>{if(ticket===generation)map?.invalidateSize();});
         }catch(error){if(ticket===generation)note.append(text('p','Map unavailable: '+error.message+'. Saved charts and relationship lists remain available.','statistics-error'));}
     }
-    window.MeshcoreStationStatisticsVisuals={dispose,stale(){
-        dispose();for(const id of ['statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.add('statistics-stale');
+    window.MeshcoreStationStatisticsVisuals={dispose,resize:resizeVisible,stale(){
+        dispose();for(const id of ['statistics-neighbor-snr','statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.add('statistics-stale');
         if($('statistics-coverage')?.textContent&&!$('statistics-coverage').textContent.startsWith('Previous snapshot'))$('statistics-coverage').textContent='Previous snapshot — '+$('statistics-coverage').textContent;
     },render(data){
-        for(const id of ['statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.remove('statistics-stale');
+        lastData=data;
+        for(const id of ['statistics-neighbor-snr','statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.remove('statistics-stale');
         if($('statistics-coverage'))$('statistics-coverage').textContent=`${stamp(data.start)} — ${stamp(data.end)}. Recorded collection coverage: ${data.coverage_known?(100*data.coverage_seconds/data.coverage_expected).toFixed(1)+'% with recorded uptime; the remainder is unknown.':'Unknown (no saved uptime evidence for this history).'} ${data.excluded} ambiguous, unverified or non-forwarding receptions excluded from confirmed totals. Historical hours without uptime records have unknown coverage.`;
-        hourly(data);hopColumns(data);activeNeighbors(data);heatmap(data);packetTypes(data);ranking('statistics-regions',data.regions,r=>r.name,'MeshCore regional traffic',true);neighborMap(data);observeCharts(data);
+        neighborSnr(data);hourly(data);hopColumns(data);activeNeighbors(data);heatmap(data);packetTypes(data);ranking('statistics-regions',data.regions,r=>r.name,'MeshCore regional traffic',true);neighborMap(data);observeCharts(data);
     }};
 })();

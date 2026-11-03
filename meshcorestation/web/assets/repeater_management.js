@@ -278,8 +278,8 @@
                 if (!more) content.replaceChildren();
                 if (action === 'neighbors') {
                     const data = result.data, rows = data.neighbours || [];
-                    window.MeshcoreStationRepeaterNames?.ingest(rows,'cached');
-                    content.append(table(['Repeater', 'Last heard', 'SNR'], rows.map(row => [window.MeshcoreStationRepeaterNames?.element(row.pubkey)||row.name||row.pubkey, duration(row.secs_ago) + ' ago', unit(row.snr, ' dB')])));
+                    window.MeshcoreStationRepeaterNames?.ingest(rows,'local');
+                    content.append(table(['Repeater', 'Last heard', 'SNR'], rows.map(row => [row.public_key ? (window.MeshcoreStationRepeaterNames?.element(row.public_key)||row.name||row.public_key) : row.name||('Unknown Repeater ('+row.pubkey+'…)'), duration(row.secs_ago) + ' ago', unit(row.snr, ' dB')])));
                     offset = (more ? offset : 0) + rows.length;
                     next.hidden = offset >= data.neighbours_count || rows.length === 0;
                     content.append(node('p', `${offset} / ${data.neighbours_count} neighbors`, 'muted'));

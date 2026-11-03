@@ -100,6 +100,8 @@ class Database:
         initialize_replies(self.db);initialize_receptions(self.db);initialize_telemetry(self.db)
         from meshcorestation.storage.statistics_view import REGIONS_SCHEMA
         self.db.execute(REGIONS_SCHEMA)
+        from meshcorestation.storage.neighbor_snr import SCHEMA as NEIGHBOR_SCHEMA
+        self.db.execute(NEIGHBOR_SCHEMA)
         self.db.commit()
 
 ################################################

@@ -259,7 +259,7 @@ def aggregate(main_path,key,days=1,now=None):
                 matches=prefixes.get(prefix,[])
                 return matches[0] if len(matches)==1 else None
             result=dict(ok=True,selected=key,days=days,start=start,end=now,generated_at=now,
-                hourly=[],activity_hourly=[],packet_types=[],hops=[],regions=[],neighbors=[],ambiguous=[],totals={},excluded=0,
+                neighbor_snr=[],hourly=[],activity_hourly=[],packet_types=[],hops=[],regions=[],neighbors=[],ambiguous=[],totals={},excluded=0,
                 coverage_seconds=0,coverage_expected=days*86400,coverage_known=False,
                 selected_repeater=registry.get(key),notes=[])
             path=passive_stats.statistics_path(main_path,key) if key else None
@@ -322,6 +322,9 @@ def aggregate(main_path,key,days=1,now=None):
                         item['last_observed']=max(item['last_observed'],r['last_observed'])
                     result['neighbors']=list(grouped.values())
                     if len(edge_rows)>=1000:result['notes'].append('Neighbor output is limited to 1,000 grouped direction entries.')
+                with diagnostics.stage('neighbor_snr'):
+                    from meshcorestation.storage.neighbor_snr import summary
+                    result['neighbor_snr']=summary(source,registry,start,now)
                 with diagnostics.stage('coverage'):
                     coverage,result['coverage_known'],activity_coverage=_coverage(source,start,now,diagnostics,local_bounds)
                 result['diagnostics']=dict(source_rows=diagnostics.rows,parsed_routes=routes.parsed,route_cache_bytes=routes.used)

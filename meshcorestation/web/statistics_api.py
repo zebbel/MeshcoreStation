@@ -61,3 +61,20 @@ def register_statistics_routes(server):
             return json_response(dict(ok=True,regions=region_config(config.DB_PATH)))
         except (ValueError,TypeError):return json_response(dict(ok=False,error='Invalid region settings. Use up to 64 distinct names and optional 32-hex keys; Unknown and Unscoped are reserved.'),400)
         except (OSError,sqlite3.Error):return json_response(dict(ok=False,error='Region settings unavailable. Existing observations are preserved.'),503)
+
+    @server.route('/api/repeater-statistics/neighbor-monitor',methods=['GET','POST'])
+    def neighbor_monitor_settings():
+        from meshcorestation.storage import neighbor_snr
+        from meshcorestation.web.http import control_request_error,json_response
+        if control_request_error():return json_response(dict(ok=False,error='Open monitoring settings from the local dashboard.'),403)
+        try:
+            if request.method=='POST':
+                if request.mimetype!='application/json' or (request.content_length or 0)>2048:raise ValueError('Expected monitoring settings.')
+                data=request.get_json(silent=True)
+                if not isinstance(data,dict):raise ValueError('Expected monitoring settings.')
+                value=neighbor_snr.save_settings(config.DB_PATH,data.get('public_key'),data.get('enabled'),data.get('interval_minutes'))
+            else:value=neighbor_snr.settings(config.DB_PATH,request.args.get('public_key'))
+            runtime=bridge.runtime;worker=getattr(runtime,'neighbor_monitor',None)
+            return json_response(dict(ok=True,config=value,running=bool(worker and worker.task and not worker.task.done())))
+        except (ValueError,TypeError) as exc:return json_response(dict(ok=False,error=str(exc)),400)
+        except (OSError,sqlite3.Error):return json_response(dict(ok=False,error='Neighbor monitoring storage unavailable; saved history is preserved.'),503)

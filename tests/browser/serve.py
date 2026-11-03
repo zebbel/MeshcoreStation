@@ -31,11 +31,19 @@ async def run():
     for index,path in enumerate(('abcd','cdab','abef')):
         packet=passive_stats.normalize(dict(payload_type=5,route_type=1,path_hash_size=1,path_len=2,path=path,pkt_payload=('fixture '+str(index)).encode()),now_ns=time_ns())
         passive_stats.store_batch(db.db.execute('PRAGMA database_list').fetchone()[2],[packet])
+    from meshcorestation.storage import neighbor_snr
+    import time
+    main_path=db.db.execute('PRAGMA database_list').fetchone()[2]
+    cfg=neighbor_snr.save_settings(main_path,KEY,True,30)
+    stamp=time.time()
+    for tag,started,age,snr in [('first',stamp-100,10,3),('same',stamp-50,60,3),('new',stamp-5,2,4.5)]:
+        neighbor_snr.record_page(main_path,cfg,tag,started,started+1,[dict(pubkey='cdcdcdcd',secs_ago=age,snr=snr)])
+    neighbor_snr.save_settings(main_path,KEY,False,30)
     for i in range(205):db.add_logger({'message':'ping' if i%2 else 'status','name':'Fixture Sender','recv_time':2000000000+i},None,'unscoped','Fixture reply')
     runtime=Runtime(logging.getLogger('fixture'),db);runtime.companion=c;runtime.control=CompanionControl(c)
     runtime.device_info={'ver':'fixture','fw_build':'SIMULATED — no radio','model':'Fixture Companion'}
     bridge.attach(runtime);bridge.status=('Running','Fixture Companion connected — simulated hardware','running')
-    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.2.4','checked_at':2000000000}
+    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.3.0','checked_at':2000000000}
     updater.ready=lambda:False
     bot_runtime.ports=lambda:[{'device':'/dev/fixture','description':'Simulated Companion'}]
     web=WebServer();web.start()

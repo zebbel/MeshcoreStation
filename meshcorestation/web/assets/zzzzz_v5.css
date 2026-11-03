@@ -55,3 +55,17 @@
 #statistics-view-error {color:var(--red);overflow-wrap:anywhere;}
 .statistics-stale {opacity:.5;}
 #statistics-view-status[aria-busy="true"]::before {content:'◌ ';color:var(--accent);}
+
+/* Keep the existing gap above Bot; add only the two main-section gaps. */
+.shell > .history + .history {margin-top:16px;}
+.statistics-accordion {border:1px solid var(--border);border-radius:10px;margin:12px 0;padding:0;overflow:hidden;}
+.statistics-accordion > summary {cursor:pointer;padding:16px;}
+.statistics-accordion > summary h3 {display:inline;font-size:16px;}
+.statistics-panel-body {padding:16px;min-width:0;border-top:1px solid var(--border);}
+.statistics-accordion[open] > .statistics-panel-body {animation:statistics-reveal .15s ease-out;}
+@keyframes statistics-reveal {from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.statistics-accordion[open] > .statistics-panel-body{animation:none;}}
+#neighbor-monitor-settings {border:1px solid var(--border);border-radius:9px;padding:14px;}
+#neighbor-monitor-settings legend {padding:0 6px;}
+#neighbor-monitor-settings input[type=number] {width:100px;max-width:100%;}
+#neighbor-monitor-settings p {flex-basis:100%;margin:3px 0;}
