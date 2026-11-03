@@ -15,8 +15,11 @@ def main():
     logging.basicConfig(level=logging.INFO,format='%(message)s')
     cpu_started=time.process_time()
     try:
-        path,key,days=sys.argv[1:]
-        value=aggregate(Path(path),key,int(days))
+        path,key,days=sys.argv[1:4]
+        if len(sys.argv)>4:
+            from meshcorestation.storage.repeater_comparison import aggregate as comparison
+            value=comparison(Path(path),key,int(sys.argv[4]),int(days))
+        else:value=aggregate(Path(path),key,int(days))
     except QueryTimeout as exc:value=dict(ok=False,error_code='QUERY_TIMEOUT',stage=exc.stage,diagnostics=exc.diagnostics)
     except sqlite3.Error as exc:value=dict(ok=False,error_code='SQLITE_ERROR',sqlite_code=getattr(exc,'sqlite_errorcode',None))
     except OSError:value=dict(ok=False,error_code='STORAGE_ERROR')

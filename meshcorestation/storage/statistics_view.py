@@ -1,10 +1,11 @@
 """SQLite aggregates of saved passive evidence; no radio/network calls."""
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, nullcontext
 from functools import lru_cache
 import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -241,17 +242,22 @@ def _coverage(source,start,end,diagnostics,local_bounds):
     return buckets,True,local_buckets
 
 
-def aggregate(main_path,key,days=1,now=None):
+def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_metadata=None,_budget=None,_covered=False):
     if days not in (1,7,30):raise ValueError('Choose 24 hours, 7 days or 30 days.')
-    diagnostics=Diagnostics(QUERY_BUDGET_SECONDS)
+    diagnostics=Diagnostics(QUERY_BUDGET_SECONDS if _budget is None else _budget)
     result=None;completed=False
     try:
         with diagnostics.stage('metadata'):
             status=passive_stats.snapshot(main_path,key)
-            key=status['selected'];now=time.time() if now is None else now;start=now-days*86400
-            with closing(open_database(Path(main_path).as_uri()+'?mode=ro',timeout=.25)) as main:
-                registry={r['public_key']:dict(r) for r in main.execute('SELECT public_key,name,latitude,longitude FROM repeaters')}
-                regions=[dict(r) for r in main.execute('SELECT name,scope_key FROM statistics_regions UNION SELECT name,scope_key FROM scopes')]
+            key=status['selected'];clock=time.time() if now is None else now
+            now=clock if end is None else end;start=now-days*86400 if start is None else start
+            if not all(type(v) in (int,float) and math.isfinite(v) for v in (start,now,clock)) or not 0<now-start<=30*86400:raise ValueError('Invalid historical window.')
+            observed_end=min(now,clock)
+            if _metadata is None:
+                with closing(open_database(Path(main_path).as_uri()+'?mode=ro',timeout=.25)) as main:
+                    registry={r['public_key']:dict(r) for r in main.execute('SELECT public_key,name,latitude,longitude FROM repeaters')}
+                    regions=[dict(r) for r in main.execute('SELECT name,scope_key FROM statistics_regions UNION SELECT name,scope_key FROM scopes')]
+            else:registry,regions=_metadata
             prefixes={}
             for full in registry:
                 for width in (2,4,6,8):prefixes.setdefault(full[:width],[]).append(full)
@@ -260,7 +266,7 @@ def aggregate(main_path,key,days=1,now=None):
                 return matches[0] if len(matches)==1 else None
             result=dict(ok=True,selected=key,days=days,start=start,end=now,generated_at=now,
                 neighbor_snr=[],hourly=[],activity_hourly=[],packet_types=[],hops=[],regions=[],neighbors=[],ambiguous=[],totals={},excluded=0,
-                coverage_seconds=0,coverage_expected=days*86400,coverage_known=False,
+                future=now>clock,coverage_seconds=0,coverage_expected=now-start,coverage_known=False,
                 selected_repeater=registry.get(key),notes=[])
             path=passive_stats.statistics_path(main_path,key) if key else None
             from meshcorestation.config import TIMEZONE
@@ -268,12 +274,13 @@ def aggregate(main_path,key,days=1,now=None):
             result['activity_timezone']=TIMEZONE.key
             hourly={};activity={};coverage={};activity_coverage={}
         if path and path.exists():
-            with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=.25)) as source,closing(sqlite3.connect('')) as work:
-                source.execute('PRAGMA query_only=ON');source.execute('BEGIN')
+            with (nullcontext(_source) if _source is not None else closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=.25))) as source,closing(sqlite3.connect('')) as work:
+                source.execute('PRAGMA query_only=ON')
+                if _source is None:source.execute('BEGIN')
                 source.set_progress_handler(lambda:int(time.monotonic()>=diagnostics.deadline),10000)
                 work.set_progress_handler(lambda:int(time.monotonic()>=diagnostics.deadline),10000)
                 with diagnostics.stage('classify'):
-                    routes=_spool(source,work,key,resolve_hash,regions,start,now,diagnostics,main_path)
+                    routes=_spool(source,work,key,resolve_hash,regions,start,observed_end,diagnostics,main_path)
                 work.row_factory=sqlite3.Row
                 # Compact covering indexes, built only in this disposable spool.
                 with diagnostics.stage('indexes'):
@@ -323,9 +330,25 @@ def aggregate(main_path,key,days=1,now=None):
                     if len(edge_rows)>=1000:result['notes'].append('Neighbor output is limited to 1,000 grouped direction entries.')
                 with diagnostics.stage('neighbor_snr'):
                     from meshcorestation.storage.neighbor_snr import summary
-                    result['neighbor_snr']=summary(source,registry,start,now)
+                    result['neighbor_snr']=summary(source,registry,start,observed_end)
                 with diagnostics.stage('coverage'):
-                    coverage,result['coverage_known'],activity_coverage=_coverage(source,start,now,diagnostics,local_bounds)
+                    coverage,result['coverage_known'],activity_coverage=_coverage(source,start,observed_end,diagnostics,local_bounds)
+                if _covered:
+                    with diagnostics.stage('covered_traffic'):
+                        intervals=[]
+                        if source.execute("SELECT 1 FROM sqlite_master WHERE name='collection_windows'").fetchone():
+                            for lo,hi in source.execute('SELECT started_at,ended_at FROM collection_windows WHERE ended_at>? AND started_at<? ORDER BY started_at',(start,observed_end)):
+                                diagnostics.check();lo=max(start,lo);hi=min(observed_end,hi)
+                                if intervals and lo<=intervals[-1][1]:intervals[-1]=(intervals[-1][0],max(hi,intervals[-1][1]))
+                                else:intervals.append((lo,hi))
+                                if len(intervals)>10000:intervals=None;break
+                        if intervals is not None:
+                            starts=[r[0] for r in intervals]
+                            def covered(at):
+                                i=bisect_right(starts,at)-1
+                                return int(i>=0 and at<intervals[i][1])
+                            work.create_function('recorded',1,covered,deterministic=True)
+                            result['covered_receptions']=work.execute('SELECT COUNT(*) FROM facts WHERE confirmed=1 AND recorded(at)').fetchone()[0]
                 result['diagnostics']=dict(source_rows=diagnostics.rows,parsed_routes=routes.parsed,route_cache_bytes=routes.used)
         with diagnostics.stage('render_series'):
             for bucket in range(int(start//3600)*3600,int(now//3600)*3600+1,3600):

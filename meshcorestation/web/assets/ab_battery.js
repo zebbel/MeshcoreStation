@@ -47,19 +47,15 @@ window.MeshcoreStationBattery = (() => {
             path+=`${joined?'L':'M'}${x(p.sampled_at).toFixed(2)},${y(value(p)).toFixed(2)} `;previous=p;
         }
         shape('path',{d:path,fill:'none',class:'voltage-line'});
-        const stride=Math.max(1,Math.ceil(good.length/600));
-        good.forEach((p,i)=>{if(i%stride&&i!==good.length-1)return;const outside=value(p)<low||value(p)>high;
-            shape('circle',{cx:x(p.sampled_at),cy:y(bounded(value(p))),r:outside?5:3,class:outside?'voltage-outside':'voltage-dot'});
-        });
-        let highlight,text;
-        function select(p){
+        let highlight,text,originalNote;
+        function select(p,mode='selected'){
             highlight?.remove();text?.remove();
             highlight=shape('circle',{cx:x(p.sampled_at),cy:y(bounded(value(p))),r:7,class:'telemetry-selected-point'});
             text=shape('text',{x:Math.max(left+90,Math.min(w-right-90,x(p.sampled_at))),
                 y:Math.max(top+30,Math.min(h-bottom-10,y(bounded(value(p)))-18)),
                 'text-anchor':'middle',class:'telemetry-selected-value'},format(p));
-            selections.set(box,{at:p.sampled_at,value:value(p)});
-            svg.setAttribute('aria-label',label+'. Selected '+format(p));
+            selections.set(box,{at:p.sampled_at,value:value(p),mode});
+            svg.setAttribute('aria-label',label+'. Selected '+format(p)+' · '+date(p.sampled_at));note.textContent=format(p)+' · '+date(p.sampled_at);
         }
         function pick(event){
             if(event.button!=null&&event.button!==0)return;
@@ -69,21 +65,28 @@ window.MeshcoreStationBattery = (() => {
             // Search all recorded values, including dots omitted for rendering speed.
             for(const p of good){const d=(x(p.sampled_at)-px)**2+(y(bounded(value(p)))-py)**2;
                 if(d<distance){nearest=p;distance=d;}}
-            select(nearest);
+            const mode=event.type==='pointermove'?'hover':'selected';
+            if(selections.get(box)?.at!==nearest.sampled_at||selections.get(box)?.value!==value(nearest)||selections.get(box)?.mode!==mode)select(nearest,mode);
         }
+        function clear(){highlight?.remove();text?.remove();highlight=text=null;selections.delete(box);if(originalNote)note.textContent=originalNote;svg.setAttribute('aria-label',label+'. Hover, tap or use arrow keys to inspect measurements.');}
+        svg.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')pick(event);});
+        svg.addEventListener('pointerleave',event=>{if(event.pointerType!=='touch'&&selections.get(box)?.mode==='hover')clear();});
+        svg.addEventListener('blur',()=>{if(svg.isConnected)clear();});
         svg.addEventListener('click',pick);svg.addEventListener('pointerdown',pick);
         svg.addEventListener('touchstart',pick,{passive:true});
         svg.addEventListener('keydown',event=>{
+            if(event.key==='Escape'){clear();return;}
             if(!['ArrowLeft','ArrowRight','Enter',' '].includes(event.key))return;event.preventDefault();
             const selected=selections.get(box),i=good.findIndex(p=>p.sampled_at===selected?.at);
             select(good[i<0?good.length-1:Math.max(0,Math.min(good.length-1,i+(event.key==='ArrowLeft'?-1:event.key==='ArrowRight'?1:0)))]);
         });
         box.append(svg);
         const saved=selections.get(box),point=good.find(p=>p.sampled_at===saved?.at&&value(p)===saved?.value);
-        if(point)select(point);else selections.delete(box);
+        if(!point)selections.delete(box);
         const outside=good.filter(p=>value(p)<low||value(p)>high).length;
         note.textContent=temperature?`${good.length} temperature readings · °C · ${zone}. Missing readings break the line.`:
-            `Fixed 1S LiPo scale: 3.0–4.2 V · ${good.length} valid / ${points.length} attempts · ${zone}. Gaps indicate failed readings or outages.${outside?' '+outside+' out-of-range reading(s), marked at the chart edge.':''} Percentages are approximate voltage-based estimates; charging, load and cell chemistry affect them.`;
+            `Fixed 1S LiPo scale: 3.0–4.2 V · ${good.length} valid / ${points.length} attempts · ${zone}. Gaps indicate failed readings or outages.${outside?' '+outside+' out-of-range reading(s), available through selection.':''} Percentages are approximate voltage-based estimates; charging, load and cell chemistry affect them.`;
+        originalNote=note.textContent;if(point)select(point,selections.get(box)?.mode);
     }
     function chart(box,note,samples,zone,days,end){seriesChart(box,note,samples,zone,days,end,'voltage');}
     function temperatureChart(box,note,samples,zone,days,end){seriesChart(box,note,samples,zone,days,end,'temperature');}

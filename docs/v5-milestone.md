@@ -257,3 +257,26 @@ local-only expansion, hidden-map resizing, spacing, telemetry and saved SNR mean
 Publication is explicitly authorized through the standing handover instruction;
 the existing CI gate must pass before creating the 5.3.0 prerelease. Actual-device
 guest access/firmware behavior remains unverified. See [details and limitations](v5-neighbor-snr.md).
+
+## Saved change comparisons and telemetry lines — 5.5.0
+
+A fourth exclusive main accordion contains a server-timestamped change journal
+and saved-only before/after comparison. Descriptions can be edited without
+changing time; confirmed deletions do not touch source statistics. Equal half-open
+windows share one immutable history snapshot and registry metadata. Matched full-key
+SNR means produce a neighbor-wise median dB difference, with independent sample
+counts, unknown/future history warnings and overlap information. Supporting traffic
+rates use only receptions inside verified recording intervals. No radio requests,
+new monitoring schedule or source-history migration/deletion is introduced.
+
+Voltage/temperature charts remove permanent dots while preserving line gaps,
+scales, dimensions and history. Temporary hover, tap and keyboard selection retains
+exact values/timestamps and refresh behavior. Existing Statistics stays separate.
+
+Local validation: the full 239-test Python regression suite passed before the last
+snapshot-concurrency test was added; all 8 focused comparison tests then passed,
+including recording during a shared snapshot. All 21 JavaScript suites passed;
+fresh-install, syntax and whitespace checks passed. The extended existing Chromium
+acceptance tests cover desktop/mobile journal create/edit/delete, server timestamps,
+period changes, preliminary results and layout. Publication as 5.5.0 is authorized
+by the standing handover instruction and gated on CI. See [semantics and limitations](v5-repeater-comparison.md).

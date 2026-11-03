@@ -166,7 +166,7 @@ def test_exact_dashboard_structure_and_closed_history_no_reads(station,monkeypat
     cards=next(n for n in nodes if getattr(n,'className',None)=='cards')
     assert [c.id for c in cards.children]==['station-card','companion-card','known-card']
     sections=[n.children.id for n in page.children if isinstance(n,html.Section) and isinstance(n.children,html.Details)]
-    assert sections==['bot-disclosure','repeater-management-disclosure','repeater-statistics-disclosure']
+    assert sections==['bot-disclosure','repeater-management-disclosure','repeater-statistics-disclosure','repeater-comparison-disclosure']
     assert ids['statistics-repeater'] is not ids['managed-repeater']
     bot=ids['bot-disclosure'];assert [n.id for n in walk(bot) if isinstance(n,html.Details)]==['bot-disclosure','bot-settings-disclosure','command-history-disclosure']
     ids_list=[n.id for n in nodes if getattr(n,'id',None)]

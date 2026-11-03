@@ -43,7 +43,7 @@ def open_worker_service():
     with WORKER_LOCK:CLOSING=False
 
 
-def aggregate(main_path,key,days):
+def aggregate(main_path,key,days,change_id=None):
     """Fresh exec avoids sharing the radio interpreter's GIL or SQLite handles.
 
     Keep the existing 8s calculation budget. The parent has a 9s bound including
@@ -53,7 +53,7 @@ def aggregate(main_path,key,days):
     started=time.monotonic()
     with WORKER_LOCK:
         if CLOSING:raise StatisticsWorkerError('Statistics service is stopping.')
-        process=subprocess.Popen([sys.executable,'-m','meshcorestation.web.statistics_worker',str(main_path),key,str(days)],
+        process=subprocess.Popen([sys.executable,'-m','meshcorestation.web.statistics_worker',str(main_path),key,str(days)]+([str(change_id)] if change_id is not None else []),
             stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,close_fds=True)
         WORKER=process
     try:
@@ -106,17 +106,17 @@ def _token(main_path,key):
     return tuple(values)
 
 
-def saved_view(main_path,key,days):
+def _saved_view(main_path,key,days,change_id=None):
     # Cheap managed-list/status preflight also keeps cache hits managed-only.
     key=passive_stats.snapshot(main_path,key)['selected']
-    token=_token(main_path,key);cache_key=(str(main_path),key,days)
+    token=_token(main_path,key);cache_key=(str(main_path),key,days) if change_id is None else (str(main_path),key,days,change_id)
     with LOCK:
         entry=CACHE.get(cache_key)
         if entry and entry[0]>time.monotonic() and entry[1]==token:
             CACHE.move_to_end(cache_key);return dict(entry[2],cached=True)
     if not SLOT.acquire(blocking=False):raise StatisticsBusy('Another saved statistics view is being calculated. Refresh after it finishes; recording status remains available.')
     try:
-        value=aggregate(main_path,key,days)
+        value=aggregate(main_path,key,days) if change_id is None else aggregate(main_path,key,days,change_id)
         # Cap both entries and serialized size. No persistent cache/schema migration.
         if len(json.dumps(value).encode())<=4*1024*1024:
             with LOCK:
@@ -125,3 +125,8 @@ def saved_view(main_path,key,days):
                 while len(CACHE)>2:CACHE.popitem(last=False)
         return dict(value,cached=False)
     finally:SLOT.release()
+
+
+def saved_view(main_path,key,days):return _saved_view(main_path,key,days)
+
+def comparison_view(main_path,key,change_id,days):return _saved_view(main_path,key,days,change_id)

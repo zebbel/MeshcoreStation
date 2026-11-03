@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.4.0
+# MeshcoreStation V5 — 5.5.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.4.0** adds opt-in neighbor SNR monitoring and independent dashboard/statistics accordions.
+Development branch: **`V5`**. Version **5.5.0** adds opt-in neighbor SNR monitoring and independent dashboard/statistics accordions.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -143,3 +143,11 @@ node tests/browser/v5_milestone.cjs
 
 See [milestone validation and limitations](docs/v5-milestone.md). Publishing,
 committing, pushing or deploying requires separate explicit authorization.
+
+The **Repeater Statistic Comparison** main section stores timestamped change
+notes and compares equal 24h/7d/30d windows using saved SNR and passive observations.
+It shows paired-neighbor median dB changes and coverage-aware traffic summaries,
+with explicit missing/future-data warnings. Journal timestamps are server-assigned;
+recording a change does not transmit a command. See [comparison semantics and limits](docs/v5-repeater-comparison.md).
+Voltage and temperature charts now use clean lines with temporary hover/tap/keyboard
+selection markers; historical telemetry and sampling remain unchanged.

@@ -69,9 +69,23 @@ def build_layout():
                 html.P('Route hashes can be ambiguous. Recorded routes do not prove receiver delivery or verified direct radio links.',className='muted')
             ],className='v5-section-body')
         ],id='repeater-statistics-disclosure',className='panel-disclosure'),className='history'),
+        html.Section(html.Details([
+            html.Summary(html.H2('Repeater Statistic Comparison')),
+            html.Div([
+                html.Div([html.Label(['Viewed Repeater',html.Select(id='comparison-repeater')]),html.Button('Refresh changes',id='comparison-refresh',type='button',className='secondary')],className='statistics-controls'),
+                html.Label(['Change Description',dcc.Input(id='comparison-description',type='text',maxLength=500,placeholder='Describe the repeater change')]),
+                html.Button('Save Change',id='comparison-save',type='button',className='info-button'),
+                html.P('The server records the current time when saved. Logging a change sends no repeater command.',className='muted'),
+                html.P(id='comparison-status',role='status'),html.P(id='comparison-error',role='alert'),
+                html.Div(id='comparison-journal',className='statistics-table-scroll'),
+                html.Button('Load more changes',id='comparison-more',type='button',className='secondary',hidden=True),
+                html.Div([html.Label(['Saved Change',html.Select(id='comparison-change')]),html.Label(['Comparison Period',html.Select([html.Option('24 hours',value='1'),html.Option('7 days',value='7'),html.Option('30 days',value='30')],id='comparison-period')]),html.Button('Compare saved history',id='comparison-run',type='button',className='info-button')],className='statistics-controls'),
+                html.Div(id='comparison-results',**{'aria-live':'polite'})
+            ],className='v5-section-body')
+        ],id='repeater-comparison-disclosure',className='panel-disclosure'),className='history'),
         html.Dialog([html.Div([html.H2('MeshcoreStation Settings'),html.Button('×',id='close-station-settings',type='button',**{'aria-label':'Close MeshcoreStation Settings'})],className='dialog-header'),html.Div(className='dialog-body')],id='station-settings-dialog'),
         popup([html.Div([html.Div([html.P('COMMAND DETAILS', className='eyebrow'), html.H2('Received command', id='detail-title')]), html.Button('×', id='close-details', **{'aria-label': 'Close details'})], className='dialog-header'), html.P('Reply text is recorded by the bot; it is not proof of delivery.', className='muted'), html.Section([html.H3('Packet route'), html.Div(id='route-summary', className='route-summary', **{'aria-live': 'polite'}), html.Div(id='route-paths', className='route-paths', role='group', **{'aria-label': 'Reception paths'}), html.Div(id='route-map', className='map-canvas', role='region', **{'aria-label': 'Packet route map'}), html.Div(id='route-notes', className='map-notes')], id='route-section', hidden=True), html.Dl(id='detail-fields')], id='details-dialog', **{'aria-labelledby': 'detail-title'}),
         popup([html.Div([html.H2('Known repeaters', id='repeaters-title'), html.Button('×', id='close-repeaters', **{'aria-label': 'Close repeater map'})], className='dialog-header'), html.Div(id='repeater-notes', className='map-notes', **{'aria-live': 'polite'}), html.Div(id='repeater-map', className='map-canvas', role='region', **{'aria-label': 'Known repeaters map'})], id='repeaters-dialog', **{'aria-labelledby': 'repeaters-title'}),
-        html.Footer([html.Span(id='footer-copyright'),html.Span('MeshcoreStation 5.4.0 · V5',id='footer-version'),html.Span('Companion firmware unavailable',id='footer-firmware'),html.Span('Checking for updates…',id='footer-update',role='status',**{'aria-live':'polite'}),html.Button('Update available',id='footer-update-button',hidden=True,type='button')],id='dashboard-footer'),
+        html.Footer([html.Span(id='footer-copyright'),html.Span('MeshcoreStation 5.5.0 · V5',id='footer-version'),html.Span('Companion firmware unavailable',id='footer-firmware'),html.Span('Checking for updates…',id='footer-update',role='status',**{'aria-live':'polite'}),html.Button('Update available',id='footer-update-button',hidden=True,type='button')],id='dashboard-footer'),
         dcc.Interval(id='refresh',interval=5000),dcc.Interval(id='history-refresh',interval=5000,disabled=True),dcc.Store(id='window-size',data=PAGE_SIZE),dcc.Store(id='last-render',data=None),dcc.Store(id='history-visible',data=False)
     ],className='shell')

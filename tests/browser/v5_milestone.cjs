@@ -10,7 +10,7 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   await page.goto('http://127.0.0.1:8050');await page.locator('#bot-status').filter({hasText:'Connected'}).waitFor();
   assert.equal(await page.locator('.cards > section').count(),3);
-  assert.equal(await page.locator('#bot-disclosure[open],#repeater-management-disclosure[open],#repeater-statistics-disclosure[open]').count(),0);
+  assert.equal(await page.locator('#bot-disclosure[open],#repeater-management-disclosure[open],#repeater-statistics-disclosure[open],#repeater-comparison-disclosure[open]').count(),0);
   const cards=await page.locator('.cards > section').evaluateAll(ns=>ns.map(n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y};}));
   assert(width>800?cards.every(c=>c.y===cards[0].y):cards.every(c=>c.x===cards[0].x)&&cards[0].y<cards[1].y&&cards[1].y<cards[2].y);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -104,6 +104,29 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   await openView('map');
   await page.screenshot({path:`browser-evidence/statistics-${width}-${colorScheme}.png`,fullPage:true});
   await page.locator('#repeater-statistics-disclosure > summary').click();
+  await page.locator('#repeater-comparison-disclosure > summary').click();
+  await page.locator('#comparison-repeater option').filter({hasText:'Hill'}).waitFor({state:'attached'});
+  await page.locator('#comparison-description').fill('Fixture antenna replacement');await page.locator('#comparison-save').click();
+  await page.locator('#comparison-journal').getByText('Fixture antenna replacement',{exact:true}).waitFor();
+  const journalURL='/api/repeater-comparison/changes?public_key='+await page.locator('#comparison-repeater').inputValue();
+  const saved=(await (await page.request.get(journalURL,{headers:{'X-Meshcore-Control':'1'}})).json()).changes[0];
+  assert(saved.recorded_at>Date.now()/1000-30&&saved.recorded_at<=Date.now()/1000+2);
+  for(const days of ['1','7','30']){
+   const loaded=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/repeater-comparison/view'&&new URL(response.url()).searchParams.get('days')===days);
+   if(await page.locator('#comparison-period').inputValue()===days)await page.locator('#comparison-run').click();else await page.locator('#comparison-period').selectOption(days);
+   assert.equal((await loaded).status(),200);
+   await page.locator('#comparison-status').filter({hasText:'Saved comparison loaded'}).waitFor();
+   assert((await page.locator('#comparison-results').textContent()).includes('Incomplete (future)'));
+   assert((await page.locator('#comparison-results .comparison-median').textContent()).includes('Insufficient Data'));
+  }
+  page.once('dialog',dialog=>dialog.accept('Fixture description corrected'));
+  await page.locator('#comparison-journal button').filter({hasText:'Edit'}).click();
+  await page.locator('#comparison-journal').getByText('Fixture description corrected',{exact:true}).waitFor();
+  const edited=(await (await page.request.get(journalURL,{headers:{'X-Meshcore-Control':'1'}})).json()).changes[0];assert.equal(edited.recorded_at,saved.recorded_at);
+  page.once('dialog',dialog=>dialog.accept());await page.locator('#comparison-journal button').filter({hasText:'Delete'}).click();
+  await page.locator('#comparison-journal').filter({hasText:'No changes recorded'}).waitFor();
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:`browser-evidence/comparison-${width}-${colorScheme}.png`,fullPage:true});
   assert.deepEqual(errors,[]);await page.close();
  }
  console.log('V5 actual-browser desktop/mobile layout, modal hosts, contact Manage, protected Bot channel, nested 200-row paging, details, offline registry map and managed-only Statistics status passed.');
