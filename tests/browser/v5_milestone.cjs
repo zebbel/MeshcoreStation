@@ -32,9 +32,14 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   assert(await overlays.evaluate(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0;}));
   assert.equal(await page.locator('#statistics-neighbor-map path[stroke="#15803d"]').count(),1);
   assert.equal(await page.locator('#statistics-neighbor-map path[stroke="#dc2626"]').count(),1);
-  await page.locator('#statistics-neighbor-map path[stroke="#15803d"]').click();
-  await page.locator('#statistics-neighbor-map .leaflet-popup-content').filter({hasText:'Last observation'}).waitFor();
-  await page.locator('#statistics-neighbor-map .leaflet-popup-close-button').click();
+  // Keep desktop line-click coverage separate from the real touch-marker check.
+  // Opening a tall line popup first pans the narrow map and obstructs its markers.
+  if(width>800){
+   await page.locator('#statistics-neighbor-map path[stroke="#15803d"]').click();
+   await page.locator('#statistics-neighbor-map .leaflet-popup-content').filter({hasText:'Last observation'}).waitFor();
+   await page.locator('#statistics-neighbor-map .leaflet-popup-close-button').click();
+   await page.locator('#statistics-neighbor-map .leaflet-popup').waitFor({state:'hidden'});
+  }
   const marker=page.locator('#statistics-neighbor-map .statistics-map-icon[title="Fixture north"]');
   if(width>800){
    await marker.hover();
