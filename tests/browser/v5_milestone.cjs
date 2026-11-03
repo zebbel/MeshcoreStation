@@ -44,15 +44,17 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   if(width>800){
    await marker.hover();
    await page.locator('.statistics-neighbor-tooltip').filter({hasText:'We hear: 1 times'}).waitFor();
-   assert((await page.locator('.statistics-neighbor-tooltip').innerText()).includes('They hear: 1 times'));
+   const counts=page.locator('.statistics-neighbor-tooltip .statistics-neighbor-count');
+   assert.deepEqual(await counts.allTextContents(),['We hear: 1 times','They hear: 1 times']);
+   assert(await counts.evaluateAll(rows=>rows.every(row=>{const [label,value]=row.children;const a=label.getBoundingClientRect(),b=value.getBoundingClientRect();return Math.abs(a.y-b.y)<2&&b.x>a.x;})),'tooltip label/value pairs stay on one row');
    await page.locator('#statistics-view-status').hover();
    await page.locator('.statistics-neighbor-tooltip').waitFor({state:'hidden'});
    await marker.click();
   }else await marker.tap();
   const popup=page.locator('#statistics-neighbor-map .leaflet-popup-content');
-  assert((await popup.innerText()).includes('We hear: 1 times'));
-  assert((await popup.innerText()).includes('They hear: 1 times'));
-  assert((await popup.innerText()).includes('Last observation'));
+  assert((await popup.textContent()).includes('We hear: 1 times'));
+  assert((await popup.textContent()).includes('They hear: 1 times'));
+  assert((await popup.textContent()).includes('Last observation'));
   for(const period of ['1','7','30']){
    await page.locator('#statistics-period').selectOption(period);
    await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();
