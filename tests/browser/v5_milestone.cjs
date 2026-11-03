@@ -6,7 +6,7 @@ fs.mkdirSync('browser-evidence',{recursive:true});
   const page=await browser.newPage({viewport:{width,height},colorScheme,hasTouch:width<800,isMobile:width<800}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   let savedRequests=0;page.on('request',request=>{if(new URL(request.url()).pathname==='/api/repeater-statistics/view')savedRequests++;});
-  const openView=async key=>{const pane=page.locator('#statistics-'+key+'-section');if(!await pane.evaluate(el=>el.open))await pane.locator(':scope > summary').click();await page.waitForFunction(()=>document.querySelectorAll('.statistics-accordion[open]').length===1);};
+  const openView=async key=>{const pane=page.locator('#statistics-'+key+'-section');if(!await pane.evaluate(el=>el.open))await pane.locator(':scope > summary').click();await page.waitForFunction(()=>document.querySelectorAll('.statistics-accordion[open]').length===1);await pane.locator('.statistics-panel-body').waitFor({state:'visible'});};
   await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   await page.goto('http://127.0.0.1:8050');await page.locator('#bot-status').filter({hasText:'Connected'}).waitFor();
   assert.equal(await page.locator('.cards > section').count(),3);
@@ -97,7 +97,8 @@ fs.mkdirSync('browser-evidence',{recursive:true});
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }
   await openView('regions');
-  assert(await page.locator('#statistics-regions').innerText().then(t=>t.includes('Unscoped')));
+  await page.locator('#statistics-regions').getByText('Unscoped',{exact:true}).first().waitFor();
+  assert(await page.locator('#statistics-regions').textContent().then(t=>t.includes('Unscoped')));
   await page.locator('#statistics-period').selectOption('7');
   await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();
   await openView('map');
