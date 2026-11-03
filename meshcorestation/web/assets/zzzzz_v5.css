@@ -52,3 +52,6 @@
 #statistics-ambiguous,#statistics-missing-coordinates {overflow-wrap:anywhere;max-height:300px;overflow-y:auto;}
 .statistics-error {color:var(--red);}
 @media(max-width:600px){#statistics-neighbor-map {height:300px;}.statistics-controls {align-items:stretch;flex-direction:column;}}
+#statistics-view-error {color:var(--red);overflow-wrap:anywhere;}
+.statistics-stale {opacity:.5;}
+#statistics-view-status[aria-busy="true"]::before {content:'◌ ';color:var(--accent);}

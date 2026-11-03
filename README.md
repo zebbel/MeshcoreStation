@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.2.0
+# MeshcoreStation V5 — 5.2.1
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.2.0** adds saved-data neighbor maps and statistics charts to the V5 prerelease.
+Development branch: **`V5`**. Version **5.2.1** improves saved Statistics loading and request reliability.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -88,6 +88,8 @@ deletion is included.
 
 See [passive statistics storage and limitations](docs/v5-repeater-statistics.md)
 and [visualization and scope interpretation](docs/v5-statistics-visualization.md).
+The performance correction and measured scale results are documented in
+[Statistics performance report](docs/v5-statistics-performance.md).
 
 ## Run locally for review
 

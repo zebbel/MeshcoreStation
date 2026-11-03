@@ -1,0 +1,1010 @@
+{
+  "date": "2026-11-03",
+  "environment": {
+    "machine": "x86_64",
+    "python": "3.12.14",
+    "sqlite": "3.53.1"
+  },
+  "baseline_commit": "e4790f2cee592d7291b8a5c80a26ff3640f8f884",
+  "dataset": "Synthetic, 257 registry identities, 512 route templates of 5\u201317+ hops, 8 configured scopes, group/direct text and other packet types, scoped/unscoped traffic, repeated digests, ambiguous and direct-routing exclusions. All requested observations fall within 24h to stress all filters.",
+  "baseline": [
+    {
+      "observations": 2500,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 0.2572,
+      "cpu_seconds": 0.2572,
+      "peak_rss_kib": 38168,
+      "error": null,
+      "confirmed": 2326
+    },
+    {
+      "observations": 2500,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 0.2484,
+      "cpu_seconds": 0.2481,
+      "peak_rss_kib": 38168,
+      "error": null,
+      "confirmed": 2326
+    },
+    {
+      "observations": 2500,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 0.2527,
+      "cpu_seconds": 0.2527,
+      "peak_rss_kib": 38168,
+      "error": null,
+      "confirmed": 2326
+    },
+    {
+      "observations": 10000,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 1.0311,
+      "cpu_seconds": 1.031,
+      "peak_rss_kib": 41232,
+      "error": null,
+      "confirmed": 9306
+    },
+    {
+      "observations": 10000,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 0.8262,
+      "cpu_seconds": 0.826,
+      "peak_rss_kib": 41232,
+      "error": null,
+      "confirmed": 9306
+    },
+    {
+      "observations": 10000,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 0.7282,
+      "cpu_seconds": 0.7281,
+      "peak_rss_kib": 41232,
+      "error": null,
+      "confirmed": 9306
+    },
+    {
+      "observations": 50000,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 5.9643,
+      "cpu_seconds": 5.9625,
+      "peak_rss_kib": 41252,
+      "error": null,
+      "confirmed": 46533
+    },
+    {
+      "observations": 50000,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 5.4608,
+      "cpu_seconds": 5.4593,
+      "peak_rss_kib": 41252,
+      "error": null,
+      "confirmed": 46533
+    },
+    {
+      "observations": 50000,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 5.6989,
+      "cpu_seconds": 5.6984,
+      "peak_rss_kib": 41252,
+      "error": null,
+      "confirmed": 46533
+    },
+    {
+      "observations": 100000,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 8.0101,
+      "cpu_seconds": 8.0084,
+      "peak_rss_kib": 41400,
+      "error": "OperationalError: interrupted",
+      "confirmed": null
+    },
+    {
+      "observations": 100000,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 8.0072,
+      "cpu_seconds": 8.003,
+      "peak_rss_kib": 41400,
+      "error": "OperationalError: interrupted",
+      "confirmed": null
+    },
+    {
+      "observations": 100000,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 8.0106,
+      "cpu_seconds": 8.0085,
+      "peak_rss_kib": 41400,
+      "error": "OperationalError: interrupted",
+      "confirmed": null
+    },
+    {
+      "observations": 2292,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 0.2013,
+      "cpu_seconds": 0.2013,
+      "peak_rss_kib": 37988,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {}
+    },
+    {
+      "observations": 2292,
+      "days": 1,
+      "repeat": 1,
+      "wall_seconds": 0.1894,
+      "cpu_seconds": 0.1892,
+      "peak_rss_kib": 37988,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {}
+    },
+    {
+      "observations": 2292,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 0.1965,
+      "cpu_seconds": 0.1905,
+      "peak_rss_kib": 37988,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {}
+    },
+    {
+      "observations": 2292,
+      "days": 7,
+      "repeat": 1,
+      "wall_seconds": 0.1923,
+      "cpu_seconds": 0.1923,
+      "peak_rss_kib": 37988,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {}
+    },
+    {
+      "observations": 2292,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 0.1863,
+      "cpu_seconds": 0.1862,
+      "peak_rss_kib": 37988,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {}
+    },
+    {
+      "observations": 2292,
+      "days": 30,
+      "repeat": 1,
+      "wall_seconds": 0.1889,
+      "cpu_seconds": 0.1889,
+      "peak_rss_kib": 37988,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {}
+    }
+  ],
+  "optimized": [
+    {
+      "observations": 2292,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 0.0721,
+      "cpu_seconds": 0.0712,
+      "peak_rss_kib": 37972,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {
+        "source_rows": 2292,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.252,
+          "classify": 56.278,
+          "indexes": 3.701,
+          "totals": 0.572,
+          "hourly": 0.705,
+          "hops": 1.533,
+          "regions": 1.253,
+          "neighbors": 2.652,
+          "coverage": 0.024,
+          "render_series": 0.059
+        }
+      }
+    },
+    {
+      "observations": 2292,
+      "days": 1,
+      "repeat": 1,
+      "wall_seconds": 0.0761,
+      "cpu_seconds": 0.0751,
+      "peak_rss_kib": 37972,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {
+        "source_rows": 2292,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.701,
+          "classify": 61.054,
+          "indexes": 3.67,
+          "totals": 0.457,
+          "hourly": 0.703,
+          "hops": 1.011,
+          "regions": 1.137,
+          "neighbors": 2.509,
+          "coverage": 0.019,
+          "render_series": 0.042
+        }
+      }
+    },
+    {
+      "observations": 2292,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 0.0657,
+      "cpu_seconds": 0.0646,
+      "peak_rss_kib": 37972,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {
+        "source_rows": 2292,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.719,
+          "classify": 51.276,
+          "indexes": 3.54,
+          "totals": 0.392,
+          "hourly": 0.865,
+          "hops": 0.963,
+          "regions": 1.058,
+          "neighbors": 2.865,
+          "coverage": 0.019,
+          "render_series": 0.3
+        }
+      }
+    },
+    {
+      "observations": 2292,
+      "days": 7,
+      "repeat": 1,
+      "wall_seconds": 0.0716,
+      "cpu_seconds": 0.0707,
+      "peak_rss_kib": 37972,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {
+        "source_rows": 2292,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.336,
+          "classify": 55.193,
+          "indexes": 4.933,
+          "totals": 0.609,
+          "hourly": 0.889,
+          "hops": 1.102,
+          "regions": 1.234,
+          "neighbors": 3.238,
+          "coverage": 0.02,
+          "render_series": 0.21
+        }
+      }
+    },
+    {
+      "observations": 2292,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 0.0708,
+      "cpu_seconds": 0.0699,
+      "peak_rss_kib": 37972,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {
+        "source_rows": 2292,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.849,
+          "classify": 56.358,
+          "indexes": 3.144,
+          "totals": 0.415,
+          "hourly": 0.808,
+          "hops": 0.979,
+          "regions": 1.129,
+          "neighbors": 2.557,
+          "coverage": 0.016,
+          "render_series": 0.746
+        }
+      }
+    },
+    {
+      "observations": 2292,
+      "days": 30,
+      "repeat": 1,
+      "wall_seconds": 0.0697,
+      "cpu_seconds": 0.0688,
+      "peak_rss_kib": 37972,
+      "error": null,
+      "confirmed": 2133,
+      "diagnostics": {
+        "source_rows": 2292,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.361,
+          "classify": 55.053,
+          "indexes": 3.412,
+          "totals": 0.4,
+          "hourly": 0.8,
+          "hops": 1.26,
+          "regions": 1.063,
+          "neighbors": 2.504,
+          "coverage": 0.018,
+          "render_series": 1.078
+        }
+      }
+    },
+    {
+      "observations": 2500,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 0.0781,
+      "cpu_seconds": 0.0771,
+      "peak_rss_kib": 39032,
+      "error": null,
+      "confirmed": 2326,
+      "diagnostics": {
+        "source_rows": 2500,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.702,
+          "classify": 62.731,
+          "indexes": 3.975,
+          "totals": 0.434,
+          "hourly": 0.773,
+          "hops": 1.066,
+          "regions": 1.223,
+          "neighbors": 2.647,
+          "coverage": 0.018,
+          "render_series": 0.068
+        }
+      }
+    },
+    {
+      "observations": 2500,
+      "days": 1,
+      "repeat": 1,
+      "wall_seconds": 0.076,
+      "cpu_seconds": 0.0749,
+      "peak_rss_kib": 39032,
+      "error": null,
+      "confirmed": 2326,
+      "diagnostics": {
+        "source_rows": 2500,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.946,
+          "classify": 60.204,
+          "indexes": 4.141,
+          "totals": 0.793,
+          "hourly": 0.777,
+          "hops": 1.244,
+          "regions": 1.245,
+          "neighbors": 2.516,
+          "coverage": 0.043,
+          "render_series": 0.045
+        }
+      }
+    },
+    {
+      "observations": 2500,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 0.0722,
+      "cpu_seconds": 0.0711,
+      "peak_rss_kib": 39032,
+      "error": null,
+      "confirmed": 2326,
+      "diagnostics": {
+        "source_rows": 2500,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.142,
+          "classify": 57.844,
+          "indexes": 3.478,
+          "totals": 0.417,
+          "hourly": 0.741,
+          "hops": 0.993,
+          "regions": 1.137,
+          "neighbors": 2.107,
+          "coverage": 0.014,
+          "render_series": 0.207
+        }
+      }
+    },
+    {
+      "observations": 2500,
+      "days": 7,
+      "repeat": 1,
+      "wall_seconds": 0.0799,
+      "cpu_seconds": 0.0789,
+      "peak_rss_kib": 39032,
+      "error": null,
+      "confirmed": 2326,
+      "diagnostics": {
+        "source_rows": 2500,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.716,
+          "classify": 62.504,
+          "indexes": 4.078,
+          "totals": 0.424,
+          "hourly": 1.008,
+          "hops": 1.153,
+          "regions": 1.413,
+          "neighbors": 3.388,
+          "coverage": 0.032,
+          "render_series": 0.386
+        }
+      }
+    },
+    {
+      "observations": 2500,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 0.0876,
+      "cpu_seconds": 0.0865,
+      "peak_rss_kib": 39032,
+      "error": null,
+      "confirmed": 2326,
+      "diagnostics": {
+        "source_rows": 2500,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 5.574,
+          "classify": 69.215,
+          "indexes": 3.931,
+          "totals": 0.444,
+          "hourly": 0.831,
+          "hops": 1.109,
+          "regions": 1.301,
+          "neighbors": 2.504,
+          "coverage": 0.019,
+          "render_series": 0.991
+        }
+      }
+    },
+    {
+      "observations": 2500,
+      "days": 30,
+      "repeat": 1,
+      "wall_seconds": 0.0901,
+      "cpu_seconds": 0.089,
+      "peak_rss_kib": 39032,
+      "error": null,
+      "confirmed": 2326,
+      "diagnostics": {
+        "source_rows": 2500,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.31,
+          "classify": 72.903,
+          "indexes": 3.939,
+          "totals": 0.602,
+          "hourly": 0.78,
+          "hops": 1.209,
+          "regions": 1.569,
+          "neighbors": 2.674,
+          "coverage": 0.022,
+          "render_series": 0.976
+        }
+      }
+    },
+    {
+      "observations": 10000,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 0.3022,
+      "cpu_seconds": 0.2959,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 9306,
+      "diagnostics": {
+        "source_rows": 10000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 9.695,
+          "classify": 231.021,
+          "indexes": 28.795,
+          "totals": 2.766,
+          "hourly": 4.403,
+          "hops": 6.759,
+          "regions": 7.315,
+          "neighbors": 8.698,
+          "coverage": 0.051,
+          "render_series": 0.078
+        }
+      }
+    },
+    {
+      "observations": 10000,
+      "days": 1,
+      "repeat": 1,
+      "wall_seconds": 0.3153,
+      "cpu_seconds": 0.3109,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 9306,
+      "diagnostics": {
+        "source_rows": 10000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.48,
+          "classify": 261.851,
+          "indexes": 22.767,
+          "totals": 2.173,
+          "hourly": 3.721,
+          "hops": 5.462,
+          "regions": 5.486,
+          "neighbors": 7.198,
+          "coverage": 0.148,
+          "render_series": 0.053
+        }
+      }
+    },
+    {
+      "observations": 10000,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 0.2935,
+      "cpu_seconds": 0.2886,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 9306,
+      "diagnostics": {
+        "source_rows": 10000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.69,
+          "classify": 235.693,
+          "indexes": 24.474,
+          "totals": 2.291,
+          "hourly": 3.889,
+          "hops": 5.086,
+          "regions": 7.718,
+          "neighbors": 8.36,
+          "coverage": 0.036,
+          "render_series": 0.37
+        }
+      }
+    },
+    {
+      "observations": 10000,
+      "days": 7,
+      "repeat": 1,
+      "wall_seconds": 0.2802,
+      "cpu_seconds": 0.2752,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 9306,
+      "diagnostics": {
+        "source_rows": 10000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.989,
+          "classify": 226.161,
+          "indexes": 21.636,
+          "totals": 2.207,
+          "hourly": 4.333,
+          "hops": 5.438,
+          "regions": 5.729,
+          "neighbors": 7.314,
+          "coverage": 0.03,
+          "render_series": 0.268
+        }
+      }
+    },
+    {
+      "observations": 10000,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 0.2741,
+      "cpu_seconds": 0.2695,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 9306,
+      "diagnostics": {
+        "source_rows": 10000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 5.123,
+          "classify": 219.887,
+          "indexes": 22.665,
+          "totals": 1.72,
+          "hourly": 3.847,
+          "hops": 5.428,
+          "regions": 5.937,
+          "neighbors": 6.865,
+          "coverage": 0.027,
+          "render_series": 0.817
+        }
+      }
+    },
+    {
+      "observations": 10000,
+      "days": 30,
+      "repeat": 1,
+      "wall_seconds": 0.3405,
+      "cpu_seconds": 0.3323,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 9306,
+      "diagnostics": {
+        "source_rows": 10000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.361,
+          "classify": 244.611,
+          "indexes": 53.976,
+          "totals": 1.798,
+          "hourly": 9.56,
+          "hops": 7.097,
+          "regions": 7.571,
+          "neighbors": 8.775,
+          "coverage": 0.041,
+          "render_series": 1.476
+        }
+      }
+    },
+    {
+      "observations": 50000,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 1.399,
+      "cpu_seconds": 1.3768,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 46533,
+      "diagnostics": {
+        "source_rows": 50000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.071,
+          "classify": 1062.184,
+          "indexes": 143.491,
+          "totals": 10.811,
+          "hourly": 38.228,
+          "hops": 48.802,
+          "regions": 56.437,
+          "neighbors": 31.098,
+          "coverage": 0.041,
+          "render_series": 0.061
+        }
+      }
+    },
+    {
+      "observations": 50000,
+      "days": 1,
+      "repeat": 1,
+      "wall_seconds": 1.6131,
+      "cpu_seconds": 1.5895,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 46533,
+      "diagnostics": {
+        "source_rows": 50000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.448,
+          "classify": 1249.93,
+          "indexes": 140.357,
+          "totals": 10.541,
+          "hourly": 47.047,
+          "hops": 57.919,
+          "regions": 63.717,
+          "neighbors": 34.143,
+          "coverage": 0.043,
+          "render_series": 0.064
+        }
+      }
+    },
+    {
+      "observations": 50000,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 1.9825,
+      "cpu_seconds": 1.9575,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 46533,
+      "diagnostics": {
+        "source_rows": 50000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 5.289,
+          "classify": 1560.126,
+          "indexes": 209.925,
+          "totals": 10.747,
+          "hourly": 46.906,
+          "hops": 54.53,
+          "regions": 59.572,
+          "neighbors": 30.902,
+          "coverage": 0.049,
+          "render_series": 0.241
+        }
+      }
+    },
+    {
+      "observations": 50000,
+      "days": 7,
+      "repeat": 1,
+      "wall_seconds": 1.6062,
+      "cpu_seconds": 1.5844,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 46533,
+      "diagnostics": {
+        "source_rows": 50000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.152,
+          "classify": 1242.261,
+          "indexes": 152.219,
+          "totals": 12.303,
+          "hourly": 42.354,
+          "hops": 55.366,
+          "regions": 62.402,
+          "neighbors": 30.235,
+          "coverage": 0.041,
+          "render_series": 0.234
+        }
+      }
+    },
+    {
+      "observations": 50000,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 1.6181,
+      "cpu_seconds": 1.5966,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 46533,
+      "diagnostics": {
+        "source_rows": 50000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.168,
+          "classify": 1263.625,
+          "indexes": 152.921,
+          "totals": 10.681,
+          "hourly": 40.821,
+          "hops": 56.691,
+          "regions": 52.541,
+          "neighbors": 30.785,
+          "coverage": 0.054,
+          "render_series": 1.159
+        }
+      }
+    },
+    {
+      "observations": 50000,
+      "days": 30,
+      "repeat": 1,
+      "wall_seconds": 1.5945,
+      "cpu_seconds": 1.5728,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 46533,
+      "diagnostics": {
+        "source_rows": 50000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.361,
+          "classify": 1299.216,
+          "indexes": 126.734,
+          "totals": 9.508,
+          "hourly": 35.361,
+          "hops": 47.298,
+          "regions": 43.489,
+          "neighbors": 23.991,
+          "coverage": 0.042,
+          "render_series": 0.857
+        }
+      }
+    },
+    {
+      "observations": 100000,
+      "days": 1,
+      "repeat": 0,
+      "wall_seconds": 4.4808,
+      "cpu_seconds": 4.4144,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 93067,
+      "diagnostics": {
+        "source_rows": 100000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 6.44,
+          "classify": 3568.971,
+          "indexes": 356.046,
+          "totals": 25.85,
+          "hourly": 129.617,
+          "hops": 153.58,
+          "regions": 178.833,
+          "neighbors": 55.04,
+          "coverage": 0.043,
+          "render_series": 0.068
+        }
+      }
+    },
+    {
+      "observations": 100000,
+      "days": 1,
+      "repeat": 1,
+      "wall_seconds": 4.4552,
+      "cpu_seconds": 4.4076,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 93067,
+      "diagnostics": {
+        "source_rows": 100000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.251,
+          "classify": 3383.927,
+          "indexes": 364.359,
+          "totals": 23.308,
+          "hourly": 113.401,
+          "hops": 249.334,
+          "regions": 231.937,
+          "neighbors": 78.294,
+          "coverage": 0.044,
+          "render_series": 0.096
+        }
+      }
+    },
+    {
+      "observations": 100000,
+      "days": 7,
+      "repeat": 0,
+      "wall_seconds": 3.4728,
+      "cpu_seconds": 3.4278,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 93067,
+      "diagnostics": {
+        "source_rows": 100000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 8.891,
+          "classify": 2694.447,
+          "indexes": 277.438,
+          "totals": 22.595,
+          "hourly": 104.416,
+          "hops": 132.38,
+          "regions": 155.089,
+          "neighbors": 70.246,
+          "coverage": 0.041,
+          "render_series": 0.262
+        }
+      }
+    },
+    {
+      "observations": 100000,
+      "days": 7,
+      "repeat": 1,
+      "wall_seconds": 3.4146,
+      "cpu_seconds": 3.3682,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 93067,
+      "diagnostics": {
+        "source_rows": 100000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 4.639,
+          "classify": 2616.578,
+          "indexes": 307.84,
+          "totals": 22.994,
+          "hourly": 104.081,
+          "hops": 159.654,
+          "regions": 128.839,
+          "neighbors": 62.69,
+          "coverage": 0.041,
+          "render_series": 0.266
+        }
+      }
+    },
+    {
+      "observations": 100000,
+      "days": 30,
+      "repeat": 0,
+      "wall_seconds": 3.4701,
+      "cpu_seconds": 3.4221,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 93067,
+      "diagnostics": {
+        "source_rows": 100000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 5.263,
+          "classify": 2715.165,
+          "indexes": 285.126,
+          "totals": 23.618,
+          "hourly": 100.289,
+          "hops": 134.666,
+          "regions": 138.411,
+          "neighbors": 59.814,
+          "coverage": 0.043,
+          "render_series": 1.233
+        }
+      }
+    },
+    {
+      "observations": 100000,
+      "days": 30,
+      "repeat": 1,
+      "wall_seconds": 3.5112,
+      "cpu_seconds": 3.4626,
+      "peak_rss_kib": 41628,
+      "error": null,
+      "confirmed": 93067,
+      "diagnostics": {
+        "source_rows": 100000,
+        "parsed_routes": 512,
+        "route_cache_bytes": 4820164,
+        "stages_ms": {
+          "metadata": 3.643,
+          "classify": 2756.806,
+          "indexes": 290.091,
+          "totals": 22.678,
+          "hourly": 106.366,
+          "hops": 132.885,
+          "regions": 132.289,
+          "neighbors": 59.103,
+          "coverage": 0.042,
+          "render_series": 1.405
+        }
+      }
+    }
+  ]
+}

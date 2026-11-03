@@ -24,14 +24,24 @@ def register_statistics_routes(server):
 
     @server.get('/api/repeater-statistics/view')
     def statistics_view():
-        from meshcorestation.storage.statistics_view import aggregate
+        from meshcorestation.storage.statistics_view import QueryTimeout
+        from meshcorestation.web.statistics_service import saved_view,StatisticsBusy
         from meshcorestation.web.http import json_response
         try:
             raw=request.args.get('days','1')
             if raw not in {'1','7','30'}:raise ValueError('Choose 24 hours, 7 days or 30 days.')
-            return json_response(aggregate(config.DB_PATH,request.args.get('public_key') or None,int(raw)))
+            return json_response(saved_view(config.DB_PATH,request.args.get('public_key') or None,int(raw)))
         except ValueError as exc:return json_response(dict(ok=False,error=str(exc)),400)
-        except (OSError,sqlite3.Error):return json_response(dict(ok=False,error='Saved statistics could not be read within the query limit. Try a shorter period; recorded data is preserved.'),503)
+        except QueryTimeout as exc:
+            return json_response(dict(ok=False,error_code='QUERY_TIMEOUT',stage=exc.stage,error='The server query budget was reached during '+exc.stage+'. Try a shorter period. Recording continues; saved data is preserved.'),504)
+        except StatisticsBusy as exc:
+            response=json_response(dict(ok=False,error_code='STATISTICS_BUSY',error=str(exc)),429)
+            response.headers['Retry-After']='2';return response
+        except sqlite3.Error as exc:
+            busy=getattr(exc,'sqlite_errorcode',None) in (sqlite3.SQLITE_BUSY,sqlite3.SQLITE_LOCKED)
+            return json_response(dict(ok=False,error_code='DATABASE_BUSY' if busy else 'DATABASE_ERROR',error='Saved statistics database is busy. Try again shortly; collection continues.' if busy else 'Saved statistics database could not be read. Check storage and application logs; existing history is preserved.'),503)
+        except OSError:
+            return json_response(dict(ok=False,error_code='STORAGE_ERROR',error='Statistics storage or scratch space is unavailable. Check free space; the collection reserve and existing history are preserved.'),503)
 
     @server.route('/api/repeater-statistics/regions',methods=['GET','POST'])
     def statistics_regions():

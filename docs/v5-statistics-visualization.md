@@ -96,10 +96,21 @@ not bridge restarts. The local heartbeat sends no radio traffic. Coverage tracks
 application recording uptime, not RF reception completeness or packet delivery.
 Collection files, raw observations and existing history are preserved.
 
-SQLite timestamp-filtered queries perform aggregation. The browser receives
-bounded hourly series and grouped neighbors/rankings, not complete packet
-histories. Read queries have an eight-second execution budget; unavailable or
-corrupt databases produce errors, not zero-filled charts. Scope edits can
+A single indexed source scan classifies observations once and writes compact,
+disposable SQLite facts for exact aggregation. The browser receives bounded hourly
+series and grouped neighbors/rankings, not complete packet histories. Calculations
+have an unchanged eight-second budget, with per-stage timing diagnostics that never
+log packet contents. One expensive calculation runs at a time; unchanged results
+can be reused for two seconds. New writes, identity/settings changes and membership
+changes invalidate the cache. This is a local application cache, not active polling.
+
+Recording status has an independent five-second browser timeout. Saved statistics
+get a fresh ten-second browser budget after status appears. Browser timeout, server
+query timeout, database errors and calculation overload are distinct. Loading marks
+previous charts as stale, with an explicit snapshot label. Unavailable or corrupt
+databases produce errors, not zero-filled charts. Scratch work preserves the local
+collector free-space reserve and never modifies original observation history.
+See the [performance measurements and regression report](v5-statistics-performance.md). Scope edits can
 reclassify saved observations when the view is refreshed. No performance score,
 delivery percentage, automatic data deletion or active neighbor collection is
 introduced.

@@ -51,7 +51,7 @@
         const selected=data.selected_repeater;
         window.MeshcoreStationRepeaterNames?.ingest([selected,...data.neighbors].filter(Boolean));
         for(const r of data.neighbors)if(!position(r))missing.append(text('li',`${name(r)} — ${r.incoming} incoming / ${r.outgoing} outgoing observations; coordinates unavailable.`));
-        for(const r of data.ambiguous)uncertain.append(text('li',`${r.direction==='incoming'?r.identity.split(' → ').reverse().join(' → '):r.identity} · ${r.direction} · ${r.receptions} receptions · last ${stamp(r.last_observed)} · ambiguous/unresolved hash evidence; ${r.candidates.length} current neighbor candidates.`));
+        for(const r of data.ambiguous)uncertain.append(text('li',`${r.direction==='incoming'?r.identity.split(' → ').reverse().join(' → '):r.identity} · ${r.direction} · ${r.receptions} receptions · last ${stamp(r.last_observed)} · ambiguous/unresolved hash evidence; ${r.candidate_count??r.candidates.length} current neighbor candidates.`));
         if(!data.ambiguous.length)uncertain.append(text('li','No ambiguous adjacent-path relationships recorded in this period.'));
         if(!selected){note.append(text('p','Select a managed repeater to view saved path relationships.'));return;}
         if(!position(selected))note.append(text('p','Selected repeater coordinates are unavailable. Relationship lines cannot be positioned.'));
@@ -74,7 +74,11 @@
             requestAnimationFrame(()=>{if(ticket===generation)map?.invalidateSize();});
         }catch(error){if(ticket===generation)note.append(text('p','Map unavailable: '+error.message+'. Saved charts and relationship lists remain available.','statistics-error'));}
     }
-    window.MeshcoreStationStatisticsVisuals={dispose,render(data){
+    window.MeshcoreStationStatisticsVisuals={dispose,stale(){
+        dispose();for(const id of ['statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.add('statistics-stale');
+        if($('statistics-coverage')?.textContent&&!$('statistics-coverage').textContent.startsWith('Previous snapshot'))$('statistics-coverage').textContent='Previous snapshot — '+$('statistics-coverage').textContent;
+    },render(data){
+        for(const id of ['statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.remove('statistics-stale');
         if($('statistics-coverage'))$('statistics-coverage').textContent=`${stamp(data.start)} — ${stamp(data.end)}. Recorded collection coverage: ${data.coverage_known?(100*data.coverage_seconds/data.coverage_expected).toFixed(1)+'% with recorded uptime; the remainder is unknown.':'Unknown (no saved uptime evidence for this history).'} ${data.excluded} ambiguous, unverified or non-forwarding receptions excluded from confirmed totals. Historical hours without uptime records have unknown coverage.`;
         hourly(data);ranking('statistics-hops',data.hops,r=>`${r.hop_count} ${r.hop_count===1?'hop':'hops'}`,'Observed total route hop count');ranking('statistics-regions',data.regions,r=>r.name,'MeshCore regional traffic',true);neighborMap(data);
     }};

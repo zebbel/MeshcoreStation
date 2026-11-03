@@ -135,3 +135,20 @@ replaced for deterministic checks. The actual Chromium test includes chart/map c
 before the authorized 5.2.0 prerelease can publish. Chromium is unavailable locally;
 local test counts above do not include that browser run. Physical RF collection
 is not verified here. V3/V4 are not publication targets.
+
+
+## Saved-view performance correction — 5.2.1
+
+The repeated wide-row JSON queries and shared browser deadline were replaced by
+one source scan, compact disposable SQL facts, bounded route reuse and independent
+status/view requests. Per-stage diagnostics, typed errors, a small invalidated cache
+and calculation backpressure preserve status availability and passive recording.
+The eight-second server budget is unchanged. No source history migration, deletion,
+radio polling or extra radio request is introduced.
+
+See [performance report](v5-statistics-performance.md) for root-cause evidence,
+all sizes/periods, CPU/RSS measurements, changed files and limitations. The synthetic
+2,292-row workload succeeds, but the device-specific field timeout was not reproduced
+without the user's original database/hardware. This correction is included in the
+authorized 5.2.1 prerelease; publication is gated on regression, scale, fresh-install
+and Chromium validation. V3/V4 are not publication targets.
