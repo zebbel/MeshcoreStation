@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.3.0
+# MeshcoreStation V5 — 5.4.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.3.0** adds opt-in neighbor SNR monitoring and independent dashboard/statistics accordions.
+Development branch: **`V5`**. Version **5.4.0** adds opt-in neighbor SNR monitoring and independent dashboard/statistics accordions.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 

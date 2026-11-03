@@ -32,6 +32,7 @@
             $('neighbor-monitor-status').textContent=(cfg.enabled?'Enabled · '+cfg.interval_minutes+' minutes · '+(data.running?cfg.state:'worker unavailable / Companion disconnected'):'Disabled')+
                 (cfg.last_success?' · Last complete poll: '+(window.meshcorestationFormatDate?.(cfg.last_success)||new Date(cfg.last_success*1000).toLocaleString()):'')+
                 (cfg.error?' · '+cfg.error:'');
+            if($('neighbor-monitor-summary'))$('neighbor-monitor-summary').textContent=$('neighbor-monitor-status').textContent+' · Interval: '+cfg.interval_minutes+' min · Last success: '+(cfg.last_success?(window.meshcorestationFormatDate?.(cfg.last_success)||cfg.last_success):'None');
         }catch(error){if(ticket===sequence)$('neighbor-monitor-status').textContent='Monitoring settings unavailable: '+error.message;}
     }
     async function load(){
@@ -53,7 +54,7 @@
             selected=data.selected;picker.value=selected;picker.disabled=!data.repeaters.length;
             if(!selected){picker.add(new Option('No managed repeaters',''));$('statistics-status').textContent='Add a repeater in Repeater Management to begin passive recording.';}
             else{
-                const health=data.health,state=!health.running?'Collector stopped':!health.connected?'Companion disconnected; saved history remains available':'Recording passive Companion observations';
+                const health=data.health,state=!health.running?'Collector stopped':!health.connected?'Companion disconnected; saved history remains available':'Recording';
                 const count=data.observation_count===null?'Saved count unavailable':`${data.observation_count} saved observations (all time)`;
                 const last=data.last_recorded_at?(window.meshcorestationFormatDate?.(data.last_recorded_at)||new Date(data.last_recorded_at*1000).toLocaleString('en-GB')):'No observations recorded yet';
                 $('statistics-status').textContent=`${state}. ${count}. Last recorded: ${last}.`;
@@ -77,7 +78,7 @@
                 if(ticket!==sequence||!section.open)return;
                 if(view.selected!==selected)throw Error('Managed repeater selection changed. Refresh the saved view.');
                 window.MeshcoreStationStatisticsVisuals?.render(view);
-                if(progress)progress.textContent='Saved observations loaded. Refresh this view to see newer records; no radio requests are made.';
+                if(progress)progress.textContent='Saved observations loaded.';
             }
         }catch(error){
             if(ticket!==sequence||!section.open)return;
@@ -90,6 +91,7 @@
         const section=$('repeater-statistics-disclosure');if(attached||!section)return;attached=true;
         section.addEventListener('toggle',()=>{if(section.open)load();else{stop();}});
         function clearView(){window.MeshcoreStationStatisticsVisuals?.dispose();for(const id of ['statistics-neighbor-snr','statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-coverage','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.replaceChildren();}
+        if($('statistics-one-way-host')){const input=document.createElement('input');input.type='checkbox';input.id='statistics-show-one-way';input.checked=true;$('statistics-one-way-host').append(input);}
         if($('neighbor-monitor-checkbox-host')){
             const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.id='neighbor-monitor-enabled';$('neighbor-monitor-checkbox-host').append(checkbox);
         }

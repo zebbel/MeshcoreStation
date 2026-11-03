@@ -40,7 +40,7 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
  const donut=[...d.querySelectorAll('.statistics-donut-segment')];assert.equal(donut.length,2);assert.equal(donut[0].dataset.count,'3');donut[1].dispatchEvent(new w.Event('click'));assert(d.querySelector('#statistics-packet-types .statistics-hover-value').textContent.includes('Advertisement origin (not forwarding)'));assert(d.querySelector('#statistics-packet-types .statistics-hover-value').textContent.includes('25.0%'));
  const lines=Object.values(current._layers).filter(l=>l instanceof L.Polyline);assert.equal(lines.length,2);assert(lines.some(l=>l.options.color==='#15803d'));assert(lines.some(l=>l.options.color==='#dc2626'));
  assert.equal(host.querySelectorAll('svg path.leaflet-interactive').length,2,'actual Leaflet SVG overlays exist');
- assert.equal(Object.values(current._layers).filter(l=>l instanceof L.Marker&&l.options.icon.options.className==='route-arrow-icon').length,3);
+ assert.equal(Object.values(current._layers).filter(l=>l instanceof L.Marker&&l.options.icon.options.className.split(' ').includes('route-arrow-icon')).length,3);
  assert(!host.querySelector('img.leaflet-marker-icon'),'markers do not depend on image assets');
  const neighbor=Object.values(current._layers).find(l=>l instanceof L.Marker&&l.options.title==='Two-way');
  neighbor.fire('mouseover');assert(host.querySelector('.statistics-neighbor-tooltip').textContent.includes('We hear: 2 times'));assert(host.querySelector('.statistics-neighbor-tooltip').textContent.includes('They hear: 4 times'));

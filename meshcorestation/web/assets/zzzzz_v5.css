@@ -76,3 +76,12 @@
  .statistics-accordion[open]::details-content {block-size:auto;}
  @media(prefers-reduced-motion:reduce){.statistics-accordion::details-content{transition:none;}}
 }
+
+#statistics-neighbor-map {width:100%;height:auto;min-height:0;aspect-ratio:1;}
+#statistics-neighbor-map.hide-one-way .statistics-one-way {display:none!important;}
+#repeater-statistics-disclosure .statistics-controls {align-items:end;}
+#repeater-statistics-disclosure .statistics-controls label {display:grid;gap:6px;}
+#repeater-statistics-disclosure .statistics-controls :is(select,button) {min-height:40px;}
+#neighbor-monitor-disclosure,#statistics-recording-details {margin:12px 0;border:1px solid var(--border);border-radius:8px;padding:12px;}
+.statistics-hour-bar.statistics-incomplete {fill-opacity:1;}
+#repeater-statistics-disclosure > .v5-section-body > .statistics-controls :is(select,button) {height:42px;min-height:42px;}

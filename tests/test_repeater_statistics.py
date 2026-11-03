@@ -287,3 +287,16 @@ def test_api_management_removal_preserves_statistics_and_invalidates_queue(stati
     assert stats.store_batch(database.DB_FILE,[queued])==({}, {})
     write(packet(path='aa11'))
     assert len(records(A))==2
+
+
+def test_healthy_queue_preserves_coverage_and_losses_break_it(station,monkeypatch):
+    clock=[100.,100.];saved=[]
+    monkeypatch.setattr('meshcorestation.radio.statistics_collector.time.time',lambda:clock[0])
+    monkeypatch.setattr('meshcorestation.radio.statistics_collector.time.monotonic',lambda:clock[1])
+    monkeypatch.setattr(stats,'record_coverage',lambda *args:saved.append(args[1:]))
+    async def scenario():
+        worker=Collector(database.DB_FILE,Mock());worker.connected=True
+        await worker.coverage();worker.queue.put_nowait(object());clock[:]=[106.,106.]
+        await worker.coverage();assert saved[-1]==(100.,106.)
+        worker.invalid+=1;clock[:]=[112.,112.];await worker.coverage();assert saved[-1]==(112.,112.)
+    asyncio.run(scenario())

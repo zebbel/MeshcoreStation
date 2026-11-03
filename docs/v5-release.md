@@ -1,39 +1,23 @@
-# MeshcoreStation 5.3.0 — Neighbor SNR Monitoring and Dashboard Accordions
+# MeshcoreStation 5.4.0 — Statistics Coverage and Interface Improvements
 
-Repeater Management resolves neighbor prefixes against the complete known repeater
-registry on Refresh, Load more and every page. Unique identities carry their full
-public key to the shared name display; collisions and unknown prefixes are explicit.
-Names are resolved locally without extra radio requests.
+Known identities are ingested before chart rendering and labels update locally
+when additional names become available. Prefix ambiguity safeguards remain.
+Healthy queued packet processing no longer breaks coverage. Real losses,
+disconnections, write failures and clock changes remain gaps; historical unknown
+periods are not backfilled. Boundary-hour coverage uses actual elapsed duration.
 
-Repeater Statistics adds opt-in automatic neighbor SNR monitoring per managed
-repeater, disabled by default with a suggested 30-minute interval (5–1440 allowed).
-The worker runs while the dashboard is closed, shares the existing control lock,
-paces requests, retrieves neighbor pages, skips disconnected Companions and avoids
-immediate retries. Settings and next due times persist; shutdown/configuration and
-membership changes cancel or invalidate queued work. Blank-password guest access
-and an existing Companion repeater contact are required.
+Packet distribution displays individual recorded MeshCore types and numeric
+reserved codes. Advertisement origins remain separate from flood-path evidence;
+existing direct-route, ambiguous and uninterpreted TRACE exclusions remain.
+Hourly bars are solid and borderless; coverage remains in tooltips/details and
+unknown intervals remain hatched.
 
-Raw polling responses and deduplicated measurements are retained in each existing
-repeater statistics database. Overlapping equal-SNR last-heard estimates count once.
-Neighbor SNR — Average shows separate identified-neighbor means, valid samples and
-estimated Last Heard, with unknown/ambiguous prefixes separate. No reception IDs or
-packet-delivery rates are invented. Original histories remain preserved.
+The neighbor map is square and resizes on expansion. Show one-way connections
+defaults on; switching it off locally hides red lines/arrows/exclusive markers
+without changing counts, zoom or stored observations. No radio requests result.
+Statistics controls share a responsive desktop row. Monitoring controls and
+Recording Details are independently collapsed with compact visible summaries.
+Monitoring configuration, scheduled collection and saved histories are preserved.
 
-Bot, Management and Statistics are exclusive main accordions. Statistics has eight
-exclusive visualization subsections in the requested order, initially collapsed.
-Global Statistics controls remain visible. Local expansion resizes saved maps and
-charts without initiating radio requests or extra saved-view calculations. Main
-panels use 16 px spacing. Voltage and temperature charts are always visible inside
-expanded Management and retain the shared history selector and interactions.
-
-Passive recording, current V5 data, telemetry, Bot, authentication and protected
-configuration readback are preserved. Schema additions are non-destructive. No
-automatic historical deletion is introduced. See docs/v5-neighbor-snr.md for timing,
-identity and deduplication limitations.
-
-Validation uses focused simulated-radio/storage tests, Python and JavaScript
-regressions, fresh-install smoke and the existing Chromium desktop/mobile release
-gate. Physical repeater guest access and firmware behavior still require actual
-hardware confirmation; the test fixtures send no mesh traffic.
-
-V5 remains a prerelease. V3 main and V4 v4.0.0 remain unchanged.
+V5 remains a prerelease. V3 main and V4 are unchanged. Publication remains gated
+on Python/JavaScript, fresh-install and Chromium desktop/mobile validation.

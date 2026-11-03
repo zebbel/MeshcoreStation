@@ -293,11 +293,10 @@ def aggregate(main_path,key,days=1,now=None):
                     activity={r['bucket']:dict(r) for r in work.execute('SELECT calendar_bucket(at) AS bucket,'+count_sql+' FROM facts WHERE confirmed=1 AND origin=0 GROUP BY calendar_bucket(at)')}
                 with diagnostics.stage('packet_types'):
                     result['packet_types']=[dict(r) for r in work.execute('''SELECT
-                      CASE kind WHEN 5 THEN 'Group messages' WHEN 2 THEN 'Direct text messages'
-                      WHEN 4 THEN 'Advertisements' ELSE 'Other MeshCore packet types' END AS category,
+                      kind AS packet_type,CAST(kind AS TEXT) AS category,
                       CASE WHEN origin=1 THEN 'advertisement-origin' ELSE 'observed-flood-route' END AS evidence,
                       '''+count_sql+''' FROM facts WHERE confirmed=1 OR origin=1
-                      GROUP BY category,evidence ORDER BY category,evidence''')]
+                      GROUP BY kind,evidence ORDER BY kind,evidence''')]
                     total=sum(r['receptions'] for r in result['packet_types'])
                     for row in result['packet_types']:row['percentage']=100*row['receptions']/total if total else 0
                 with diagnostics.stage('hops'):

@@ -40,26 +40,24 @@ def build_layout():
         html.Section(html.Details([
             html.Summary(html.H2('Repeater Statistics')),
             html.Div([
-                html.Label(['Viewed repeater', html.Select(id='statistics-repeater', **{'aria-label':'Statistics repeater'})]),
-                html.P('Passive Companion observations are recorded for every managed repeater, independently of this selection and telemetry settings.',className='muted'),
-                html.Div([
+                html.Div([html.Label(['Viewed Repeater',html.Select(id='statistics-repeater',**{'aria-label':'Statistics repeater'})]),
                     html.Label(['Observation period',html.Select([html.Option('24 hours',value='1'),html.Option('7 days',value='7'),html.Option('30 days',value='30')],id='statistics-period')]),
                     html.Button('Refresh saved view',id='statistics-refresh',type='button',className='info-button')
                 ],className='statistics-controls'),
-                html.Fieldset([
+                html.Details([html.Summary(['Automatic neighbor SNR monitoring · ',html.Span(id='neighbor-monitor-summary')]),html.Fieldset([
                     html.Legend('Automatic neighbor SNR monitoring'),
                     html.Label([html.Span(id='neighbor-monitor-checkbox-host'), ' Enable for this repeater']),
                     html.Label(['Interval (minutes)',dcc.Input(id='neighbor-monitor-interval',type='number',min=5,max=1440,step=1,value=30)]),
                     html.Button('Save monitoring settings',id='neighbor-monitor-save',type='button',className='info-button'),
                     html.P('Disabled by default. Enabling sends paced read-only guest neighbor requests even while this dashboard is closed. Passive recording is independent.',className='muted'),
                     html.P(id='neighbor-monitor-status',role='status')
-                ],id='neighbor-monitor-settings',className='statistics-controls',disabled=True),
+                ],id='neighbor-monitor-settings',className='statistics-controls',disabled=True)],id='neighbor-monitor-disclosure'),
                 html.P(id='statistics-status' ,role='status',**{'aria-live':'polite'}),
                 html.P(id='statistics-error',role='alert'),
                 html.P(id='statistics-view-status',role='status',**{'aria-live':'polite'}),
                 html.P(id='statistics-view-error',role='alert'),
-                html.P(id='statistics-coverage',className='muted'),
-                statistics_panel('Observed Neighbor Map','map',[html.Div(id='statistics-map-notes'),html.Div(id='statistics-neighbor-map',className='map-canvas',role='region',**{'aria-label':'Observed Neighbor Map'}),html.H4('Neighbors without coordinates'),html.Ul(id='statistics-missing-coordinates'),html.Details([html.Summary('Ambiguous connections'),html.Ul(id='statistics-ambiguous')])]),
+                html.P(id='statistics-coverage-summary',className='muted'),html.Details([html.Summary('Recording Details'),html.P('Passive recording and scheduled SNR monitoring are independent.'),html.P(id='statistics-coverage',className='muted')],id='statistics-recording-details'),
+                statistics_panel('Observed Neighbor Map','map',[html.Label([html.Span(id='statistics-one-way-host'),' Show one-way connections']),html.Div(id='statistics-map-notes'),html.Div(id='statistics-neighbor-map',className='map-canvas',role='region',**{'aria-label':'Observed Neighbor Map'}),html.H4('Neighbors without coordinates'),html.Ul(id='statistics-missing-coordinates'),html.Details([html.Summary('Ambiguous connections'),html.Ul(id='statistics-ambiguous')])]),
                 statistics_panel('Most Active Neighbors','active',[html.Div(id='statistics-active-neighbors',className='statistics-chart')]),
                 statistics_panel('Traffic Activity Heatmap','activity',[html.Div(id='statistics-heatmap',className='statistics-chart')]),
                 statistics_panel('Packet Type Distribution','types',[html.Div(id='statistics-packet-types',className='statistics-chart')]),
@@ -74,6 +72,6 @@ def build_layout():
         html.Dialog([html.Div([html.H2('MeshcoreStation Settings'),html.Button('×',id='close-station-settings',type='button',**{'aria-label':'Close MeshcoreStation Settings'})],className='dialog-header'),html.Div(className='dialog-body')],id='station-settings-dialog'),
         popup([html.Div([html.Div([html.P('COMMAND DETAILS', className='eyebrow'), html.H2('Received command', id='detail-title')]), html.Button('×', id='close-details', **{'aria-label': 'Close details'})], className='dialog-header'), html.P('Reply text is recorded by the bot; it is not proof of delivery.', className='muted'), html.Section([html.H3('Packet route'), html.Div(id='route-summary', className='route-summary', **{'aria-live': 'polite'}), html.Div(id='route-paths', className='route-paths', role='group', **{'aria-label': 'Reception paths'}), html.Div(id='route-map', className='map-canvas', role='region', **{'aria-label': 'Packet route map'}), html.Div(id='route-notes', className='map-notes')], id='route-section', hidden=True), html.Dl(id='detail-fields')], id='details-dialog', **{'aria-labelledby': 'detail-title'}),
         popup([html.Div([html.H2('Known repeaters', id='repeaters-title'), html.Button('×', id='close-repeaters', **{'aria-label': 'Close repeater map'})], className='dialog-header'), html.Div(id='repeater-notes', className='map-notes', **{'aria-live': 'polite'}), html.Div(id='repeater-map', className='map-canvas', role='region', **{'aria-label': 'Known repeaters map'})], id='repeaters-dialog', **{'aria-labelledby': 'repeaters-title'}),
-        html.Footer([html.Span(id='footer-copyright'),html.Span('MeshcoreStation 5.3.0 · V5',id='footer-version'),html.Span('Companion firmware unavailable',id='footer-firmware'),html.Span('Checking for updates…',id='footer-update',role='status',**{'aria-live':'polite'}),html.Button('Update available',id='footer-update-button',hidden=True,type='button')],id='dashboard-footer'),
+        html.Footer([html.Span(id='footer-copyright'),html.Span('MeshcoreStation 5.4.0 · V5',id='footer-version'),html.Span('Companion firmware unavailable',id='footer-firmware'),html.Span('Checking for updates…',id='footer-update',role='status',**{'aria-live':'polite'}),html.Button('Update available',id='footer-update-button',hidden=True,type='button')],id='dashboard-footer'),
         dcc.Interval(id='refresh',interval=5000),dcc.Interval(id='history-refresh',interval=5000,disabled=True),dcc.Store(id='window-size',data=PAGE_SIZE),dcc.Store(id='last-render',data=None),dcc.Store(id='history-visible',data=False)
     ],className='shell')

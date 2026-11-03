@@ -183,3 +183,13 @@ The service-context correction runs saved-view calculation in one bounded
 read-only worker interpreter, preserving the eight-second calculation budget.
 Recording, status and radio handles remain in the main application. See
 [worker isolation and lifecycle](v5-statistics-service-context.md).
+
+## 5.4 corrections
+
+Healthy queued processing preserves coverage. Genuine loss/failure gaps remain,
+and partial boundary hours are evaluated using elapsed time, without backfilling
+legacy gaps. Solid borderless hourly bars retain coverage tooltips. The donut
+uses individual stored packet codes with numeric reserved categories. The square
+map supports local one-way visibility filtering. Names are ingested before chart
+rendering and refresh locally when identities change. Monitoring settings and
+recording explanations are collapsed separately, without stopping collection.

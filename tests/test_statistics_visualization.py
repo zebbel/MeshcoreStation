@@ -208,12 +208,12 @@ def test_packet_distribution_origin_forwarding_unknown_and_repeated(station):
     add(payload=b'outside',at=NOW-2*86400)
     view=aggregate(database.DB_FILE,A,1,now=NOW)
     rows={(r['category'],r['evidence']):r for r in view['packet_types']}
-    group=rows['Group messages','observed-flood-route']
+    group=rows['5','observed-flood-route']
     assert (group['receptions'],group['unique_packets'],group['repeated'])==(2,1,1)
-    advert=rows['Advertisements','advertisement-origin']
+    advert=rows['4','advertisement-origin']
     assert (advert['receptions'],advert['unique_packets'],advert['repeated'])==(2,1,1)
-    assert rows['Advertisements','observed-flood-route']['receptions']==1
-    assert rows['Other MeshCore packet types','observed-flood-route']['receptions']==1
+    assert rows['4','observed-flood-route']['receptions']==1
+    assert rows['15','observed-flood-route']['receptions']==1
     assert sum(r['receptions'] for r in view['packet_types'])==7
     assert sum(r['percentage'] for r in view['packet_types'])==pytest.approx(100)
     assert sum(r['receptions'] or 0 for r in view['activity_hourly'])==5
@@ -224,7 +224,7 @@ def test_packet_distribution_origin_forwarding_unknown_and_repeated(station):
     path=store.statistics_path(database.DB_FILE,A)
     with sqlite3.connect(path) as db:
         db.execute("UPDATE observations SET packet_digest=NULL WHERE packet_type=15")
-    unknown=next(r for r in aggregate(database.DB_FILE,A,1,now=NOW)['packet_types'] if r['category']=='Other MeshCore packet types')
+    unknown=next(r for r in aggregate(database.DB_FILE,A,1,now=NOW)['packet_types'] if r['packet_type']==15)
     assert unknown['unidentified']==1 and unknown['unique_packets']==0
 
 
@@ -272,3 +272,11 @@ def test_ambiguous_routes_stay_out_of_new_confirmed_views_but_origin_remains(sta
     assert len(view['packet_types'])==1
     assert view['packet_types'][0]['evidence']=='advertisement-origin'
     assert view['packet_types'][0]['receptions']==1
+
+
+def test_individual_packet_codes_keep_trace_exclusion(station):
+    for kind in range(16):add(kind=kind,payload=bytes([kind]))
+    rows=aggregate(database.DB_FILE,A,1,now=NOW)['packet_types']
+    assert {r['packet_type'] for r in rows}==set(range(16))-{9}
+    assert all(r['receptions']==1 for r in rows)
+    assert sum(r['percentage'] for r in rows)==pytest.approx(100)

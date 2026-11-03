@@ -56,7 +56,7 @@
             else{
                 const barWidth=Math.min(20,Math.max(3,(f.spacing-6)/2)),center=left+f.spacing/2;
                 for(const[field,color,offset]of[['unique_packets','#2563eb',-barWidth-1],['repeated','#c75c0d',1]]){
-                    const value=r[field],bar=svg('rect',{x:center+offset,y:f.y(value),width:barWidth,height:f.base-f.y(value),fill:color,stroke:color,'stroke-width':r.complete?0:1.5,'stroke-dasharray':r.complete?'':'3 2',class:'statistics-hour-bar'+(r.complete?'':' statistics-incomplete'),'data-series':field,'data-value':value});
+                    const value=r[field],bar=svg('rect',{x:center+offset,y:f.y(value),width:barWidth,height:f.base-f.y(value),fill:color,stroke:'none','stroke-width':0,class:'statistics-hour-bar'+(r.complete?'':' statistics-incomplete'),'data-series':field,'data-value':value});
                     f.interactive(bar,`${stamp(r.at)} · ${field==='unique_packets'?'Unique packets':'Repeated receptions'}: ${value}. ${countDescription(r)}. ${coverage}.`);group.append(bar);
                 }
                 if(r.receptions===0&&r.complete){const zero=svg('text',{x:center,y:f.base-5,'text-anchor':'middle',class:'statistics-confirmed-zero'},'0');f.interactive(zero,`${stamp(r.at)} · 0 text receptions during a fully recorded interval.`);group.append(zero);}
@@ -67,7 +67,7 @@
             if(i%interval===0||i===rows.length-1){const last=i===rows.length-1;if(last&&i%interval<interval/2&&i!==0)return;const tick=svg('text',{x:left+f.spacing/2,y:244,'text-anchor':i===0?'start':last?'end':'middle',class:'statistics-time-tick'}),parts=stamp(r.at).split(' ');tick.append(svg('tspan',{x:left+f.spacing/2},parts.shift()),svg('tspan',{x:left+f.spacing/2,dy:17},parts.join(' ')));f.s.append(tick);}
         });
         f.s.append(svg('text',{x:f.width/2,y:289,'text-anchor':'middle',class:'statistics-axis-title'},'Hour · '+(window.meshcorestationDisplaySettings?.timezone||'dashboard time zone')));
-        legend(host,false);host.append(text('p','Group and direct-text payloads on confidently attributed flood paths. Dashed bars are incomplete lower bounds; hatched gaps are unknown, not zero traffic. Unidentified receptions remain in the table. Unique/repeated counts are calculated within each hour.','muted'));
+        legend(host,false);host.append(text('p','Group and direct-text payloads on confidently attributed flood paths. Incomplete counts are lower bounds (see tooltips); hatched gaps are unknown, not zero traffic. Unidentified receptions remain in the table. Unique/repeated counts are calculated within each hour.','muted'));
         if(!rows.some(r=>r.receptions!=null))host.append(text('p','No confirmed text observations or verified collection coverage in this period.','statistics-empty'));
         exactCounts(host,rows,r=>stamp(r.at),{coverage:true});
     }
@@ -113,7 +113,7 @@
         let i=0;for(const [day,entry]of days){const y=top+i++*cell;s.append(svg('text',{x:left-8,y:y+19,'text-anchor':'end'},window.meshcorestationFormatDate?.(entry.at,zone,{dateOnly:true})||day));
             for(let h=0;h<24;h++){
                 const intervals=entry.hours.get(h)||[],positive=intervals.filter(r=>r.receptions!=null),count=positive.reduce((n,r)=>n+r.receptions,0),unknown=positive.length!==intervals.length||!intervals.length;
-                const complete=intervals.length>0&&!unknown&&intervals.every(r=>r.complete&&r.expected_seconds>=(r.interval_seconds||3600)),partial=positive.length>0&&!complete;
+                const complete=intervals.length>0&&!unknown&&intervals.every(r=>r.complete),partial=positive.length>0&&!complete;
                 const state=!intervals.length?'Outside selected window or skipped clock hour':!positive.length?'Unknown recording gap':complete?(count?'Recorded traffic':'Recorded zero traffic'):'Incomplete observation coverage; counts are lower bounds';
                 const rect=svg('rect',{x:left+h*cell,y,width:cell-2,height:cell-2,rx:3,fill:!positive.length?'url(#statistics-heatmap-gap)':count?'#2563eb':'var(--panel)',stroke:'var(--border)','stroke-dasharray':partial?'3 2':'','fill-opacity':count?.22+.78*Math.sqrt(Math.min(1,count/maximum)):1,class:'statistics-heatmap-cell'+(partial?' statistics-heatmap-incomplete':''),'data-day':day,'data-hour':h,'data-state':complete?'complete':partial?'incomplete':'unknown','data-count':positive.length?count:''});
                 const details=`${window.meshcorestationFormatDate?.(entry.at,zone,{dateOnly:true})||day} · ${String(h).padStart(2,'0')}:00 · ${positive.length?count+' observed receptions':'Count unknown'}. ${state}. ${intervals.length>1?'Repeated clock hour; intervals are combined. ':''}`+intervals.map(r=>`${stamp(Math.max(r.at,data.start))} — ${stamp(Math.min(r.until||r.at+3600,data.end))}: ${r.receptions??'unknown'} receptions, recording ${Math.round(r.coverage_seconds||0)}/${Math.round(r.expected_seconds||0)} seconds`).join('; ');
@@ -122,21 +122,23 @@
         }
         s.append(svg('text',{x:left+12*cell,y:height-8,'text-anchor':'middle'},'Hour of day · '+zone));
         const key=text('div','','statistics-heatmap-key');for(const [label,kind]of [['Recorded zero','zero'],[`Observed traffic: lighter → darker (1–${maximum})`,'traffic'],['Incomplete coverage','incomplete'],['Unknown / outside period','unknown']]){const item=text('span',label),sample=text('i','','statistics-heatmap-sample '+kind);item.prepend(sample);key.append(item);}host.append(key);
-        host.append(text('p','All confidently attributed flood-path packet types; advertisement origins are excluded. Calendar-hour intervals use the dashboard time zone. Partial boundary hours and missing recording remain incomplete; repeated daylight-saving hours are combined with their original intervals available above.','muted'));
+        host.append(text('p','All confidently attributed flood-path packet types; advertisement origins are excluded. Calendar-hour intervals use the dashboard time zone. Coverage uses elapsed time within the selected window; repeated daylight-saving hours are combined with their original intervals available above.','muted'));
     }
     function packetTypes(data){
         const host=$('statistics-packet-types');if(!host)return;host.replaceChildren();const rows=data.packet_types||[],total=rows.reduce((n,r)=>n+r.receptions,0);
         if(!total){host.append(text('p','No confidently attributed flood-path or full-key advertisement-origin observations in this period.','statistics-empty'));return;}
-        const categories=[['Group messages','#2563eb'],['Direct text messages','#c75c0d'],['Advertisements','#168c6b'],['Other MeshCore packet types','#a855f7']],frame=text('div','','statistics-donut-layout'),s=svg('svg',{viewBox:'0 0 260 260',role:'img','aria-label':'Packet type distribution',class:'statistics-donut'}),list=text('div','','statistics-donut-legend');frame.append(s,list);host.append(frame);const interactive=inspect(host);let offset=0;
+        const typeNames=['Request','Response','Direct text message','ACK / Acknowledgment','Advertisement','Group text message','Group data','Anonymous request','Path response','Trace','Multipart packet','Control / Discovery','Reserved code 12','Reserved code 13','Reserved code 14','Raw custom packet'];
+        const colors=['#2563eb','#c75c0d','#168c6b','#a855f7','#be185d','#0891b2','#ca8a04','#4f46e5','#65a30d','#dc2626','#0f766e','#9333ea','#b45309','#64748b','#db2777','#0284c7'];
+        const categories=[...new Set(rows.map(r=>String(r.packet_type??r.category)))].map(code=>[code,colors[Number(code)]||'#64748b']),frame=text('div','','statistics-donut-layout'),s=svg('svg',{viewBox:'0 0 260 260',role:'img','aria-label':'Packet type distribution',class:'statistics-donut'}),list=text('div','','statistics-donut-legend');frame.append(s,list);host.append(frame);const interactive=inspect(host);let offset=0;
         const circumference=2*Math.PI*82;
-        for(const [category,color]of categories){const records=rows.filter(r=>r.category===category),count=records.reduce((n,r)=>n+r.receptions,0),percent=100*count/total;
-            const detail=records.map(r=>`${r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':r.category==='Advertisements'?'Advertisement flood-path observations (route evidence)':'Confirmed flood-path observations'}: ${countDescription(r)}`).join('; '),description=`${category}: ${count} observations (${percent.toFixed(1)}%). ${detail}`;
+        for(const [category,color]of categories){const records=rows.filter(r=>String(r.packet_type??r.category)===category),count=records.reduce((n,r)=>n+r.receptions,0),percent=100*count/total;
+            const detail=records.map(r=>`${r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':r.category==='Advertisements'?'Advertisement flood-path observations (route evidence)':'Confirmed flood-path observations'}: ${countDescription(r)}`).join('; '),description=`${typeNames[Number(category)]||category}: ${count} observations (${percent.toFixed(1)}%). ${detail}`;
             if(count){const segment=svg('circle',{cx:130,cy:130,r:82,fill:'none',stroke:color,'stroke-width':34,'stroke-dasharray':`${circumference*count/total} ${circumference}`,'stroke-dashoffset':-offset,transform:'rotate(-90 130 130)',class:'statistics-donut-segment','data-category':category,'data-count':count});interactive(segment,description);s.append(segment);offset+=circumference*count/total;}
-            const item=text('button','','statistics-packet-category');item.type='button';const swatch=text('i','','statistics-category-swatch');swatch.style.background=color;item.append(swatch,text('strong',category),text('span',`${count} · ${percent.toFixed(1)}%`));if(category==='Advertisements'){const origins=records.filter(r=>r.evidence==='advertisement-origin').reduce((n,r)=>n+r.receptions,0);item.append(text('small',`Origin (not forwarding): ${origins} · Flood path: ${count-origins}`,'statistics-evidence-split'));}item.title=description;item.addEventListener('click',()=>{host.querySelector('.statistics-hover-value').textContent=description;});list.append(item);
+            const item=text('button','','statistics-packet-category');item.type='button';const swatch=text('i','','statistics-category-swatch');swatch.style.background=color;item.append(swatch,text('strong',typeNames[Number(category)]||'Unknown code '+category),text('span',`${count} · ${percent.toFixed(1)}%`));if(Number(category)===4){const origins=records.filter(r=>r.evidence==='advertisement-origin').reduce((n,r)=>n+r.receptions,0);item.append(text('small',`Origin (not forwarding): ${origins} · Flood path: ${count-origins}`,'statistics-evidence-split'));}item.title=description;item.addEventListener('click',()=>{host.querySelector('.statistics-hover-value').textContent=description;});list.append(item);
         }
         s.append(svg('text',{x:130,y:128,'text-anchor':'middle',class:'statistics-donut-total'},total),svg('text',{x:130,y:151,'text-anchor':'middle'},'observations'));
-        host.append(text('p','Receptions are counted, including repeated copies. Advertisement origins are full-key source observations, never forwarding events. Advertisements seen on flood paths are separately identified in the exact table. Ambiguous/unverified routes are excluded; unknown or unsupported types remain Other. Percentages use only included observations and do not measure delivery success.','muted'));
-        exactCounts(host,rows,r=>r.category+' · '+(r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':'Confirmed flood-path observation'),{percent:true});
+        host.append(text('p','Receptions are counted, including repeated copies. Advertisement origins are full-key source observations, never forwarding events. Advertisements seen on flood paths are separately identified in the exact table. Ambiguous/unverified routes are excluded; Reserved and unknown codes retain their numeric identifiers. Percentages use only included observations and do not measure delivery success.','muted'));
+        exactCounts(host,rows,r=>(typeNames[r.packet_type]||'Unknown code '+r.category)+' · '+(r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':'Confirmed flood-path observation'),{percent:true});
     }
     function neighborSnr(data){
         const host=$('statistics-neighbor-snr');if(!host)return;host.replaceChildren();
@@ -169,6 +171,8 @@
         });legend(host);
         exactCounts(host,rows,labelOf,{percent});
     }
+    document.addEventListener('change',event=>{if(event.target.id==='statistics-show-one-way')$('statistics-neighbor-map')?.classList.toggle('hide-one-way',!event.target.checked);});
+    document.addEventListener('repeater-names-updated',()=>{if(!lastData)return;activeNeighbors(lastData);neighborSnr(lastData);if(map)for(const item of Object.values(map._layers)){if(item.options?.identityKey)item.getElement()?.setAttribute('title',name({public_key:item.options.identityKey}));}});
     function disposeMap(){generation++;resize?.disconnect();resize=null;map?.remove();map=null;}
     function dispose(){disposeMap();chartResize?.disconnect();chartResize=null;}
     function observeCharts(data){
@@ -198,18 +202,18 @@
         try{
             await window.meshcorestationLoadMapLibrary();if(ticket!==generation)return;
             map=L.map(host,{maxZoom:19});mapNeedsFit=!host.clientWidth||!host.clientHeight;const layer=L.layerGroup().addTo(map),points=[];
-            function marker(r,selectedMarker=false){const p=position(r);if(!p)return;points.push(p);const dot=text('span',selectedMarker?'S':'R',selectedMarker?'statistics-marker selected':'statistics-marker');const marker=L.marker(p,{title:name(r),icon:L.divIcon({html:dot,className:'statistics-map-icon',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(layer);
-                if(!selectedMarker)marker.bindTooltip(neighborSummary(r),{direction:'top',offset:[0,-16],opacity:1,className:'statistics-neighbor-tooltip'});
+            function marker(r,selectedMarker=false){const p=position(r);if(!p)return;points.push(p);const dot=text('span',selectedMarker?'S':'R',selectedMarker?'statistics-marker selected':'statistics-marker');const marker=L.marker(p,{title:name(r),identityKey:r.public_key,icon:L.divIcon({html:dot,className:'statistics-map-icon'+(!selectedMarker&&(!r.incoming||!r.outgoing)?' statistics-one-way':''),iconSize:[28,28],iconAnchor:[14,14]})}).addTo(layer);
+                if(!selectedMarker)marker.bindTooltip(()=>neighborSummary(r),{direction:'top',offset:[0,-16],opacity:1,className:'statistics-neighbor-tooltip'});
                 marker.bindPopup(selectedMarker?text('strong',name(r)):popup(selected,r));
                 // Tap/click retains the detailed popup with the same summary,
                 // and closes the hover balloon so the two do not overlap.
                 if(!selectedMarker)marker.on('click',()=>marker.closeTooltip());}
             marker(selected,true);for(const r of data.neighbors)marker(r);
-            for(const r of data.neighbors){const a=position(selected),b=position(r);if(!a||!b)continue;const color=r.incoming&&r.outgoing?'#15803d':'#dc2626';L.polyline([a,b],{color,weight:4,opacity:.95}).addTo(layer).bindPopup(popup(selected,r));
+            for(const r of data.neighbors){const a=position(selected),b=position(r);if(!a||!b)continue;const color=r.incoming&&r.outgoing?'#15803d':'#dc2626';L.polyline([a,b],{color,weight:4,opacity:.95,className:(!r.incoming||!r.outgoing)?'statistics-one-way':''}).addTo(layer).bindPopup(()=>popup(selected,r));
                 const pa=map.project(a,8),pb=map.project(b,8);
                 for(const outgoing of [true,false])if(outgoing?r.outgoing:r.incoming){const angle=Math.atan2(pb.y-pa.y,pb.x-pa.x)+(outgoing?0:Math.PI),ratio=outgoing?.6:.4;
                     const mid=map.unproject(L.point(pa.x+(pb.x-pa.x)*ratio,pa.y+(pb.y-pa.y)*ratio),8),arrow=text('span','','route-direction-arrow');arrow.style.borderLeftColor=color;arrow.style.transform=`rotate(${angle}rad)`;
-                    L.marker(mid,{interactive:false,icon:L.divIcon({html:arrow,className:'route-arrow-icon',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(layer);
+                    L.marker(mid,{interactive:false,icon:L.divIcon({html:arrow,className:'route-arrow-icon'+((!r.incoming||!r.outgoing)?' statistics-one-way':''),iconSize:[20,20],iconAnchor:[10,10]})}).addTo(layer);
                 }
             }
             mapPoints=points;
@@ -221,10 +225,13 @@
     }
     window.MeshcoreStationStatisticsVisuals={dispose,resize:resizeVisible,stale(){
         dispose();for(const id of ['statistics-neighbor-snr','statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.add('statistics-stale');
+        if($('statistics-coverage-summary')?.textContent&&!$('statistics-coverage-summary').textContent.startsWith('Previous snapshot'))$('statistics-coverage-summary').textContent='Previous snapshot · '+$('statistics-coverage-summary').textContent;
         if($('statistics-coverage')?.textContent&&!$('statistics-coverage').textContent.startsWith('Previous snapshot'))$('statistics-coverage').textContent='Previous snapshot — '+$('statistics-coverage').textContent;
     },render(data){
+        window.MeshcoreStationRepeaterNames?.ingest([data.selected_repeater,...data.neighbors,...(data.neighbor_snr||[])].filter(Boolean));
         lastData=data;
         for(const id of ['statistics-neighbor-snr','statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.remove('statistics-stale');
+        if($('statistics-coverage-summary'))$('statistics-coverage-summary').textContent='Recorded collection coverage: '+(data.coverage_known?(100*data.coverage_seconds/data.coverage_expected).toFixed(1)+'%':'Unknown');
         if($('statistics-coverage'))$('statistics-coverage').textContent=`${stamp(data.start)} — ${stamp(data.end)}. Recorded collection coverage: ${data.coverage_known?(100*data.coverage_seconds/data.coverage_expected).toFixed(1)+'% with recorded uptime; the remainder is unknown.':'Unknown (no saved uptime evidence for this history).'} ${data.excluded} ambiguous, unverified or non-forwarding receptions excluded from confirmed totals. Historical hours without uptime records have unknown coverage.`;
         neighborSnr(data);hourly(data);hopColumns(data);activeNeighbors(data);heatmap(data);packetTypes(data);ranking('statistics-regions',data.regions,r=>r.name,'MeshCore regional traffic',true);neighborMap(data);observeCharts(data);
     }};

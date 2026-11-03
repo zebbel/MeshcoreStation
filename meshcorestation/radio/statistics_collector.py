@@ -27,8 +27,8 @@ class Collector:
 
     @connected.setter
     def connected(self, value):
+        if self._connected != bool(value):self._coverage_start = None
         self._connected = bool(value)
-        self._coverage_start = None
 
     async def coverage(self):
         now,mono=time.time(),time.monotonic()
@@ -44,10 +44,10 @@ class Collector:
         losses=(self.dropped,self.invalid)
         clock_gap=self._coverage_clock and abs((now-self._coverage_clock[0])-(mono-self._coverage_clock[1]))>2
         self._coverage_clock=(now,mono)
-        if not self.connected or self.error or self.errors or not self.queue.empty() or losses!=self._coverage_losses or clock_gap:
+        if not self.connected or self.error or self.errors or losses!=self._coverage_losses or clock_gap:
             self._coverage_start=None
         self._coverage_losses=losses
-        if not self.connected or self.error or self.errors or not self.queue.empty():return
+        if not self.connected or self.error or self.errors:return
         if self._coverage_start is None:self._coverage_start=now
         if mono-self._coverage_tick<5:return
         self._coverage_tick=mono
