@@ -204,7 +204,7 @@
             map=L.map(host,{maxZoom:19});mapNeedsFit=!host.clientWidth||!host.clientHeight;const layer=L.layerGroup().addTo(map),points=[];
             function marker(r,selectedMarker=false){const p=position(r);if(!p)return;points.push(p);const dot=text('span',selectedMarker?'S':'R',selectedMarker?'statistics-marker selected':'statistics-marker');const marker=L.marker(p,{title:name(r),identityKey:r.public_key,icon:L.divIcon({html:dot,className:'statistics-map-icon'+(!selectedMarker&&(!r.incoming||!r.outgoing)?' statistics-one-way':''),iconSize:[28,28],iconAnchor:[14,14]})}).addTo(layer);
                 if(!selectedMarker)marker.bindTooltip(()=>neighborSummary(r),{direction:'top',offset:[0,-16],opacity:1,className:'statistics-neighbor-tooltip'});
-                marker.bindPopup(selectedMarker?text('strong',name(r)):popup(selected,r));
+                marker.bindPopup(()=>selectedMarker?text('strong',name(r)):popup(selected,r));
                 // Tap/click retains the detailed popup with the same summary,
                 // and closes the hover balloon so the two do not overlap.
                 if(!selectedMarker)marker.on('click',()=>marker.closeTooltip());}

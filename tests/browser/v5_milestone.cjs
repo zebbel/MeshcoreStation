@@ -85,13 +85,14 @@ fs.mkdirSync('browser-evidence',{recursive:true});
    assert(await page.locator('#statistics-heatmap .statistics-heatmap-cell').count()>0);
    await openView('types');
    assert.equal(await page.locator('#statistics-packet-types .statistics-donut-segment').count(),1);
-   assert((await page.locator('#statistics-packet-types').innerText()).includes('100.0%'));
+   await page.locator('#statistics-packet-types .statistics-packet-category').filter({hasText:'100.0%'}).waitFor();
+   assert((await page.locator('#statistics-packet-types').textContent()).includes('100.0%'));
    await openView('hops');
    const pair=await page.locator('#statistics-hops rect[data-hop="2"]').evaluateAll(nodes=>nodes.map(n=>Number(n.getAttribute('x'))));assert(pair[0]<pair[1]);
    const hops=await page.locator('#statistics-hops .statistics-hop-tick').allTextContents();
    assert.deepEqual(hops.map(Number),hops.map(Number).sort((a,b)=>a-b));
    await openView('snr');
-   assert((await page.locator('#statistics-neighbor-snr').innerText()).includes('3.75 dB'));
+   await page.locator('#statistics-neighbor-snr td').filter({hasText:'3.75 dB'}).waitFor();
    assert.equal(savedRequests,requestsBefore,'inner accordion must not calculate saved views or request radio data');
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }

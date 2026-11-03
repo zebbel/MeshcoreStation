@@ -56,7 +56,7 @@ def build_layout():
                 html.P(id='statistics-error',role='alert'),
                 html.P(id='statistics-view-status',role='status',**{'aria-live':'polite'}),
                 html.P(id='statistics-view-error',role='alert'),
-                html.P(id='statistics-coverage-summary',className='muted'),html.Details([html.Summary('Recording Details'),html.P('Passive recording and scheduled SNR monitoring are independent.'),html.P(id='statistics-coverage',className='muted')],id='statistics-recording-details'),
+                html.P('Recorded collection coverage: Unavailable',id='statistics-coverage-summary',className='muted'),html.Details([html.Summary('Recording Details'),html.P('Passive recording and scheduled SNR monitoring are independent.'),html.P(id='statistics-coverage',className='muted')],id='statistics-recording-details'),
                 statistics_panel('Observed Neighbor Map','map',[html.Label([html.Span(id='statistics-one-way-host'),' Show one-way connections']),html.Div(id='statistics-map-notes'),html.Div(id='statistics-neighbor-map',className='map-canvas',role='region',**{'aria-label':'Observed Neighbor Map'}),html.H4('Neighbors without coordinates'),html.Ul(id='statistics-missing-coordinates'),html.Details([html.Summary('Ambiguous connections'),html.Ul(id='statistics-ambiguous')])]),
                 statistics_panel('Most Active Neighbors','active',[html.Div(id='statistics-active-neighbors',className='statistics-chart')]),
                 statistics_panel('Traffic Activity Heatmap','activity',[html.Div(id='statistics-heatmap',className='statistics-chart')]),
