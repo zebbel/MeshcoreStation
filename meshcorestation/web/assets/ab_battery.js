@@ -37,6 +37,7 @@ window.MeshcoreStationBattery = (() => {
         const x=t=>left+(t-start)/(end-start)*(w-left-right),y=v=>top+(high-v)/(high-low)*(h-top-bottom);
         const bounded=v=>Math.max(low,Math.min(high,v));
         const date=t=>window.meshcorestationFormatDate(t,zone,{seconds:false});
+        const selectedDate=t=>window.meshcorestationFormatDate(t,zone,{seconds:true});
         function shape(tag,attrs,text){const n=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;svg.append(n);return n;}
         for(let i=0;i<=6;i++){const v=low+i*(high-low)/6;shape('line',{x1:left,y1:y(v),x2:w-right,y2:y(v),class:'voltage-grid'});shape('text',{x:left-10,y:y(v)+4,'text-anchor':'end'},`${v.toFixed(1)} ${unit}`);}
         for(let i=0;i<=3;i++){const t=start+(end-start)*i/3;shape('text',{x:x(t),y:h-17,'text-anchor':i===0?'start':i===3?'end':'middle'},date(t));}
@@ -55,7 +56,7 @@ window.MeshcoreStationBattery = (() => {
                 y:Math.max(top+30,Math.min(h-bottom-10,y(bounded(value(p)))-18)),
                 'text-anchor':'middle',class:'telemetry-selected-value'},format(p));
             selections.set(box,{at:p.sampled_at,value:value(p),mode});
-            svg.setAttribute('aria-label',label+'. Selected '+format(p)+' · '+date(p.sampled_at));note.textContent=format(p)+' · '+date(p.sampled_at);
+            svg.setAttribute('aria-label',label+'. Selected '+format(p)+' · '+selectedDate(p.sampled_at));note.textContent=format(p)+' · '+selectedDate(p.sampled_at);
         }
         function pick(event){
             if(event.button!=null&&event.button!==0)return;

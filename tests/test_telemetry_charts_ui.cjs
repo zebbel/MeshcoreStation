@@ -18,7 +18,7 @@ for(const field of ['voltage','temperature']){
  assert.equal(svg.querySelectorAll('circle').length,0,'clean line has no permanent markers');assert.equal(svg.querySelectorAll('title').length,0,'No hover popup or timestamp');
  svg.dispatchEvent(new w.MouseEvent('click',{bubbles:true,...coordinates(field,0)}));
  assert.equal(svg.querySelector('.telemetry-selected-value').textContent,field==='voltage'?'3.92 V':'24.6 °C');
- assert(d.getElementById(field==='voltage'?'vn':'tn').textContent.includes('2023'),'selected measurement includes its timestamp');
+ assert(d.getElementById(field==='voltage'?'vn':'tn').textContent.includes(w.meshcorestationFormatDate(samples[0].sampled_at,'Europe/Berlin',{seconds:true})),'selected timestamp retains seconds');
  const touch=new w.Event('touchstart',{bubbles:true});Object.defineProperty(touch,'touches',{value:[coordinates(field,1)]});svg.dispatchEvent(touch);
  assert.equal(svg.querySelector('.telemetry-selected-value').textContent,field==='voltage'?'4.01 V':'0.0 °C');
  svg.dispatchEvent(new w.MouseEvent('pointerdown',{bubbles:true,...coordinates(field,2)}));
