@@ -97,7 +97,7 @@ fs.mkdirSync('browser-evidence',{recursive:true});
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }
   await openView('regions');
-  await page.locator('#statistics-regions').getByText('Unscoped',{exact:true}).first().waitFor();
+  await page.locator('#statistics-regions svg text').filter({hasText:'Unscoped'}).first().waitFor();
   assert(await page.locator('#statistics-regions').textContent().then(t=>t.includes('Unscoped')));
   await page.locator('#statistics-period').selectOption('7');
   await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();
