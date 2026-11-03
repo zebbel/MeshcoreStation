@@ -69,3 +69,10 @@
 #neighbor-monitor-settings legend {padding:0 6px;}
 #neighbor-monitor-settings input[type=number] {width:100px;max-width:100%;}
 #neighbor-monitor-settings p {flex-basis:100%;margin:3px 0;}
+/* Native height interpolation animates collapse too; older browsers retain the reveal fallback. */
+@supports (interpolate-size:allow-keywords) and selector(details::details-content) {
+ .statistics-accordion {interpolate-size:allow-keywords;}
+ .statistics-accordion::details-content {block-size:0;overflow:clip;transition:block-size .15s ease,content-visibility .15s allow-discrete;}
+ .statistics-accordion[open]::details-content {block-size:auto;}
+ @media(prefers-reduced-motion:reduce){.statistics-accordion::details-content{transition:none;}}
+}

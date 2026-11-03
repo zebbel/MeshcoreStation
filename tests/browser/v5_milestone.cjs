@@ -93,6 +93,7 @@ fs.mkdirSync('browser-evidence',{recursive:true});
    assert.equal(savedRequests,requestsBefore,'inner accordion must not calculate saved views or request radio data');
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }
+  await openView('regions');
   assert(await page.locator('#statistics-regions').innerText().then(t=>t.includes('Unscoped')));
   await page.locator('#statistics-period').selectOption('7');
   await page.locator('#statistics-view-status').filter({hasText:'Saved observations loaded'}).waitFor();
