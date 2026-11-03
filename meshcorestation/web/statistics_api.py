@@ -25,7 +25,7 @@ def register_statistics_routes(server):
     @server.get('/api/repeater-statistics/view')
     def statistics_view():
         from meshcorestation.storage.statistics_view import QueryTimeout
-        from meshcorestation.web.statistics_service import saved_view,StatisticsBusy
+        from meshcorestation.web.statistics_service import saved_view,StatisticsBusy,StatisticsWorkerError
         from meshcorestation.web.http import json_response
         try:
             raw=request.args.get('days','1')
@@ -33,7 +33,9 @@ def register_statistics_routes(server):
             return json_response(saved_view(config.DB_PATH,request.args.get('public_key') or None,int(raw)))
         except ValueError as exc:return json_response(dict(ok=False,error=str(exc)),400)
         except QueryTimeout as exc:
-            return json_response(dict(ok=False,error_code='QUERY_TIMEOUT',stage=exc.stage,error='The server query budget was reached during '+exc.stage+'. Try a shorter period. Recording continues; saved data is preserved.'),504)
+            return json_response(dict(ok=False,error_code='QUERY_TIMEOUT',stage=exc.stage,diagnostics=exc.diagnostics,error='The server query budget was reached during '+exc.stage+'. Try a shorter period. Recording continues; saved data is preserved.'),504)
+        except StatisticsWorkerError:
+            return json_response(dict(ok=False,error_code='WORKER_ERROR',error='The isolated statistics worker is unavailable. Refresh the saved view; recording status remains available.'),503)
         except StatisticsBusy as exc:
             response=json_response(dict(ok=False,error_code='STATISTICS_BUSY',error=str(exc)),429)
             response.headers['Retry-After']='2';return response

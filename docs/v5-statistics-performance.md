@@ -152,3 +152,14 @@ for a saved copy of the v5.2.0 module, plus `--sizes`, `--periods`, `--repeats` 
 - `scripts/benchmark_statistics.py`, `tests/test_statistics_performance.py`,
   `tests/test_statistics_requests_ui.cjs` — scale, concurrency and timing coverage.
 - Relevant README/V5 documentation and this measured report.
+
+
+## Follow-up: real data fast in CLI, slow in service
+
+The user subsequently measured the actual 2,517-row database at 0.8568 seconds
+(classify 677.975 ms), while the HTTP request still timed out. A local busy-thread
+reproducer demonstrates this failure mode. The worker-isolation correction
+and its limitations are documented in
+[Statistics service-context timeout](v5-statistics-service-context.md).
+This correction is included in the authorized 5.2.2 follow-up and remains
+unverified on the user device until that service update is tested there.

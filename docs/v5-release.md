@@ -1,39 +1,32 @@
-# MeshcoreStation 5.2.1 — Repeater Statistics Performance Fix
+# MeshcoreStation 5.2.2 — Statistics Worker Isolation
 
-Fixes redundant aggregation work and separates recording-status and statistics
-request deadlines. One indexed source scan classifies saved observations into
-compact disposable SQL facts, reusing route decoding and exact distinct counts.
-The backend's 8-second limit is unchanged; original history is never rewritten,
-truncated or deleted by the view.
+Addresses a saved-view failure specific to the running service: the user's actual
+2,517-row query completed in 0.8568 seconds in a separate CLI interpreter while
+its HTTP calculation still timed out during classify.
 
-Recording status appears immediately, with its own 5-second browser budget.
-Saved statistics receive a fresh 10-second budget. Loading/stale snapshots and
-browser timeout, server query timeout, database/storage errors and overload are
-clearly distinguished. Bounded calculation concurrency and a small invalidated
-cache protect status responsiveness; passive WAL writes continue independently.
+A local busy-Python-thread reproduction makes the threaded view fail after
+8.461 seconds. Running the same calculation in a fresh interpreter completes in
+0.173–0.204 seconds under the modeled contention. This demonstrates a failure
+mode consistent with the field report; the actual busy thread/device cause has
+not been independently identified.
 
-Synthetic 24-hour measurements on the development workstation:
+Saved-view calculation now uses one bounded read-only worker process, launched
+only for an uncached calculation. It imports no Companion/radio runtime, inherits
+no radio handles, sends no radio/network requests and exits after returning.
+Recording, recording status and management remain in the main application.
 
-| Observations | Before | After |
-| --- | --- | --- |
-| 2,292 | 0.195s | 0.074s |
-| 2,500 | 0.257s | 0.077s |
-| 10,000 | 1.031s | 0.309s |
-| 50,000 | 5.964s | 1.506s |
-| 100,000 | 8s timeout | 4.468s |
+The eight-second core query budget remains unchanged. The parent bounds worker
+startup/execution to nine seconds; the browser retains separate status/view
+budgets. Shutdown and parent timeout reap the child. Result size is bounded, and
+safe CPU/RSS/roundtrip diagnostics and WARNING-level failure details are available.
+Original histories, schemas, scope matching, ambiguity, counts, coverage and all
+visualizations are preserved. No data migration or deletion is introduced.
 
-All 24-hour, 7-day and 30-day scale cases pass. These are synthetic container
-measurements, not guarantees for the user's device. The exact field timeout at
-2,292 observations was not reproduced without the original database/hardware.
-Per-stage timings log no sensitive packet contents.
+Validation: 218 Python tests, 18 JavaScript suites, fresh-install smoke, and the
+existing desktop/light and mobile/dark Chromium release gate. Tests cover thread
+contention, child import isolation, termination/reaping, corrupted-file safety,
+all three periods on 100,000 observations and recording during the calculation.
 
-Validation: 208 Python tests, 18 JavaScript suites, scale/concurrency tests,
-isolated fresh-install smoke and the mandatory existing Chromium desktop/light
-and mobile/dark release gate. Directional neighbors, missing coordinates,
-ambiguity, message counts, hop/scope rankings and coverage gaps are preserved.
-No new radio requests, active polling or automatic data deletion are introduced.
-
-See [the full performance report](https://github.com/zebbel/MeshcoreStation/blob/v5.2.1/docs/v5-statistics-performance.md).
-
-V5 remains a prerelease. Live RF operation and user-device performance are
-unverified. V3 main and V4 v4.0.0 are unchanged. No deployment is performed.
+Includes a read-only actual-data diagnostic script. This remains a prerelease;
+the corrected running service still needs confirmation on the user's device.
+V3 main and V4 v4.0.0 remain unchanged. No deployment is performed automatically.

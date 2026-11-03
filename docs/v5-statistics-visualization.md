@@ -114,3 +114,9 @@ See the [performance measurements and regression report](v5-statistics-performan
 reclassify saved observations when the view is refreshed. No performance score,
 delivery percentage, automatic data deletion or active neighbor collection is
 introduced.
+
+
+The service-context correction runs saved-view calculation in one bounded
+read-only worker interpreter, preserving the eight-second calculation budget.
+Recording, status and radio handles remain in the main application. See
+[worker isolation and lifecycle](v5-statistics-service-context.md).

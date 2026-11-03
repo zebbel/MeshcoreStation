@@ -78,18 +78,22 @@ LOGGER = logging.getLogger('meshcorestation.statistics')
 
 
 class QueryTimeout(RuntimeError):
-    def __init__(self,stage):
+    def __init__(self,stage,diagnostics=None):
         self.stage=stage
+        self.diagnostics=diagnostics or {}
         super().__init__('Saved statistics exceeded the query budget during '+stage+'.')
 
 
 class Diagnostics:
     def __init__(self,budget):
-        self.started=time.monotonic();self.deadline=self.started+budget
+        self.started=time.monotonic();self.cpu_started=time.process_time();self.deadline=self.started+budget
         self.current='setup';self.times={};self.rows=0
 
+    def report(self):
+        return dict(source_rows=self.rows,elapsed_ms=round((time.monotonic()-self.started)*1000,3),cpu_ms=round((time.process_time()-self.cpu_started)*1000,3),stages_ms=self.times)
+
     def check(self):
-        if time.monotonic()>=self.deadline:raise QueryTimeout(self.current)
+        if time.monotonic()>=self.deadline:raise QueryTimeout(self.current,self.report())
 
     @contextmanager
     def stage(self,name):
@@ -98,7 +102,7 @@ class Diagnostics:
             self.check();yield;self.check()
         except sqlite3.OperationalError as exc:
             if getattr(exc,'sqlite_errorcode',None)==sqlite3.SQLITE_INTERRUPT or time.monotonic()>=self.deadline:
-                raise QueryTimeout(name) from None
+                raise QueryTimeout(name,self.report()) from None
             raise
         finally:
             elapsed=round((time.monotonic()-start)*1000,3);self.times[name]=elapsed
@@ -293,4 +297,4 @@ def aggregate(main_path,key,days=1,now=None):
         completed=True
         return result
     finally:
-        LOGGER.info('Statistics aggregation outcome=%s rows=%d total_ms=%.3f stages_ms=%s','complete' if completed else 'failed',diagnostics.rows,(time.monotonic()-diagnostics.started)*1000,diagnostics.times)
+        (LOGGER.info if completed else LOGGER.warning)('Statistics aggregation outcome=%s rows=%d total_ms=%.3f stages_ms=%s','complete' if completed else 'failed',diagnostics.rows,(time.monotonic()-diagnostics.started)*1000,diagnostics.times)

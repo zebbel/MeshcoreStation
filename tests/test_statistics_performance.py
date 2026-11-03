@@ -53,7 +53,7 @@ def test_2292_rows_load_and_diagnostics_never_log_packet_contents(tmp_path,caplo
 
 def test_cache_reuses_work_but_invalidates_on_new_saved_observation(tmp_path,monkeypatch):
     path=create_fixture(tmp_path,2500);calls=[]
-    real=service.aggregate
+    real=view.aggregate
     def counted(*args):calls.append(1);return real(*args,now=NOW)
     monkeypatch.setattr(service,'aggregate',counted)
     with service.LOCK:service.CACHE.clear()

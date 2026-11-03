@@ -152,3 +152,23 @@ all sizes/periods, CPU/RSS measurements, changed files and limitations. The synt
 without the user's original database/hardware. This correction is included in the
 authorized 5.2.1 prerelease; publication is gated on regression, scale, fresh-install
 and Chromium validation. V3/V4 are not publication targets.
+
+
+## Service-context classification timeout — 5.2.2
+
+The user's actual 2,517-row query completes in 0.8568 seconds outside the service,
+while its HTTP calculation still times out. A busy-interpreter reproduction shows
+the threaded calculation failing during classify after 8.461 seconds, while one
+isolated read-only worker completes in 0.173–0.204 seconds under the same modeled
+contention. This identifies a reproducible failure mode; the particular busy
+thread on the user's device has not been identified.
+
+The saved view now runs in one bounded fresh worker interpreter. Recording/status,
+radio handles and management remain in the application. Core eight-second query,
+parent nine-second execution and browser ten-second saved-view budgets stay bounded.
+Shutdown/timeout reap the child, source data/schema are preserved, and failure
+diagnostics survive the default WARNING threshold. Actual-device confirmation is
+still required after installation. See [service-context evidence](v5-statistics-service-context.md).
+
+Local validation: 218 Python tests, 18 JavaScript suites and fresh-install smoke.
+The authorized publication still requires the existing Chromium release gate.

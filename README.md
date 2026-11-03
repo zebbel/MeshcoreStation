@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.2.1
+# MeshcoreStation V5 — 5.2.2
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.2.1** improves saved Statistics loading and request reliability.
+Development branch: **`V5`**. Version **5.2.2** isolates saved Statistics calculations from radio-service thread contention.
 V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -90,6 +90,10 @@ See [passive statistics storage and limitations](docs/v5-repeater-statistics.md)
 and [visualization and scope interpretation](docs/v5-statistics-visualization.md).
 The performance correction and measured scale results are documented in
 [Statistics performance report](docs/v5-statistics-performance.md).
+The service-context correction is described in
+[Statistics worker isolation](docs/v5-statistics-service-context.md).
+Recording/status stay in the application; at most one temporary read-only worker
+calculates a saved view, with no radio access.
 
 ## Run locally for review
 

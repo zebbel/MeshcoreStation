@@ -3,14 +3,89 @@ from collections import OrderedDict
 import json
 from pathlib import Path
 import threading
+import subprocess
+import sys
+import logging
+import sqlite3
 import time
 from meshcorestation.storage import passive_stats
-from meshcorestation.storage.statistics_view import aggregate
+from meshcorestation.storage.statistics_view import QueryTimeout
 
 SLOT=threading.BoundedSemaphore(1)
 LOCK=threading.Lock()
 CACHE=OrderedDict()
 CACHE_SECONDS=2.0
+WORKER_TIMEOUT_SECONDS=9.0
+WORKER_LOCK=threading.Lock()
+WORKER=None
+CLOSING=False
+LOGGER=logging.getLogger('meshcorestation.statistics')
+
+
+class StatisticsWorkerError(RuntimeError):pass
+
+
+def close_worker():
+    """Called by WebServer shutdown; no child retains radio/HTTP descriptors."""
+    global CLOSING
+    with WORKER_LOCK:
+        CLOSING=True
+        process=WORKER
+    if process and process.poll() is None:
+        try:process.terminate()
+        except ProcessLookupError:return
+        try:process.wait(timeout=1)
+        except subprocess.TimeoutExpired:process.kill();process.wait(timeout=1)
+
+
+def open_worker_service():
+    global CLOSING
+    with WORKER_LOCK:CLOSING=False
+
+
+def aggregate(main_path,key,days):
+    """Fresh exec avoids sharing the radio interpreter's GIL or SQLite handles.
+
+    Keep the existing 8s calculation budget. The parent has a 9s bound including
+    worker startup/IPC, below the independent 10s browser saved-view deadline.
+    """
+    global WORKER
+    started=time.monotonic()
+    with WORKER_LOCK:
+        if CLOSING:raise StatisticsWorkerError('Statistics service is stopping.')
+        process=subprocess.Popen([sys.executable,'-m','meshcorestation.web.statistics_worker',str(main_path),key,str(days)],
+            stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,close_fds=True)
+        WORKER=process
+    try:
+        try:output,diagnostics=process.communicate(timeout=WORKER_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            process.kill();process.communicate()
+            raise QueryTimeout('worker execution') from None
+        if process.returncode!=0:raise StatisticsWorkerError('Statistics worker stopped before returning a result.')
+        if len(output)>8*1024*1024:raise StatisticsWorkerError('Statistics result exceeded the response limit.')
+        try:value=json.loads(output)
+        except (ValueError,UnicodeError):raise StatisticsWorkerError('Statistics worker returned an unreadable result.') from None
+        if not isinstance(value,dict):raise StatisticsWorkerError('Statistics worker returned an invalid result.')
+        code=value.get('error_code')
+        if code=='QUERY_TIMEOUT':
+            LOGGER.warning('Statistics worker timeout stage=%s diagnostics=%s',value.get('stage'),value.get('diagnostics',{}))
+            raise QueryTimeout(value.get('stage','worker execution'),value.get('diagnostics',{}))
+        if code=='SQLITE_ERROR':
+            error=sqlite3.OperationalError('Saved statistics database could not be read.')
+            error.sqlite_errorcode=value.get('sqlite_code');raise error
+        if code=='STORAGE_ERROR':raise OSError('Statistics scratch storage unavailable.')
+        if code=='INVALID_SELECTION':raise ValueError('Select a managed repeater.')
+        if not value.get('ok'):raise StatisticsWorkerError('Statistics worker could not return a bounded result.')
+        # Forward only controlled numeric diagnostics, never arbitrary child stderr.
+        info=value.setdefault('diagnostics',{})
+        info['worker_roundtrip_ms']=round((time.monotonic()-started)*1000,3)
+        LOGGER.info('Statistics worker complete rows=%s stages_ms=%s',info.get('source_rows'),info.get('stages_ms'))
+        return value
+    finally:
+        if process.poll() is None:process.kill();process.communicate()
+        with WORKER_LOCK:
+            if WORKER is process:WORKER=None
+
 
 
 class StatisticsBusy(RuntimeError):pass

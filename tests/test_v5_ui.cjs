@@ -6,7 +6,7 @@ w.TextEncoder=TextEncoder;w.AbortSignal.timeout=()=>undefined;w.confirm=()=>true
 w.dash_clientside={set_props:(id,value)=>props.push([id,value])};let managed,protectedChannel=false,scopeRows=[];
 w.meshcorestationManageRepeater=value=>managed=value;
 w.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null;requests.push({url,body});let data={ok:true};
- if(url==='/api/update')data={...data,version:'5.2.1',revision:'a'.repeat(40),branch:'V5',ready:false,check:{},status:{},branches:{V5:'V5'}};
+ if(url==='/api/update')data={...data,version:'5.2.2',revision:'a'.repeat(40),branch:'V5',ready:false,check:{},status:{},branches:{V5:'V5'}};
  else if(url==='/api/companion')data.settings={public_key:identity,name:'Fixture',adv_lat:49,adv_lon:8,tx_power:10,max_tx_power:22,radio_freq:869.525,radio_bw:125,radio_sf:7,radio_cr:5};
  else if(url==='/api/companion/network')data.network={public_key:identity,path_hash_size:1,default_scope:{name:'',key:''}};
  else if(url==='/api/bot/runtime')data={...data,settings:{serial_port:'/dev/fixture',channel_name:'Bot'},ports:[{device:'/dev/fixture',description:'Simulated'}]};

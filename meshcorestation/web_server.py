@@ -14,9 +14,13 @@ class WebServer:
         self.thread = threading.Thread(target=self.server.run, name='meshcorestation-http', daemon=True)
 
     def start(self):
+        from meshcorestation.web.statistics_service import open_worker_service
+        open_worker_service()
         self.thread.start()
 
     def close(self):
+        from meshcorestation.web.statistics_service import close_worker
+        close_worker()
         self.server.task_dispatcher.shutdown(timeout=5)
         wasyncore.close_all(self.sockets)
         self.thread.join(timeout=5)

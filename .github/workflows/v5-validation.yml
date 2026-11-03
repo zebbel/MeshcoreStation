@@ -40,7 +40,7 @@ jobs:
             browser-server.log
   publish:
     needs: verify
-    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.2.1:')
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.2.2:')
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -49,4 +49,4 @@ jobs:
       - name: Publish authorized V5 statistics prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create v5.2.1 --target "$GITHUB_SHA" --title "MeshcoreStation 5.2.1 — Statistics Performance Fix" --notes-file docs/v5-release.md --prerelease --latest=false
+        run: gh release create v5.2.2 --target "$GITHUB_SHA" --title "MeshcoreStation 5.2.2 — Statistics Worker Isolation" --notes-file docs/v5-release.md --prerelease --latest=false
