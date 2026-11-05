@@ -36,6 +36,10 @@ def build_layout():
             html.Section([html.P('Known Repeaters',className='eyebrow'),html.Div('0',id='repeater-count',className='metric'),html.P('Saved locally and available even when the Companion disconnects.',id='repeater-detail',className='muted'),html.Button('Open Map',id='open-repeaters',className='info-button',type='button')],className='card v5-card',id='known-card')
         ],className='cards'),html.Div(id='error',role='status'),
         html.Section(html.Details([html.Summary(html.H2('Bot')),html.Div([bot_settings,history.children[0]],className='v5-section-body')],id='bot-disclosure',className='panel-disclosure'),className='history'),
+        html.Section(html.Details([
+            html.Summary(html.H2('Room Server')),
+            html.Div(html.Iframe(id='room-server-frame',title='Room Server administration',style={'height':'120px'}, **{'data-src':'/rooms?embedded=1'}),className='v5-section-body room-server-inline')
+        ],id='room-server-disclosure',className='panel-disclosure'),className='history'),
         management,
         html.Section(html.Details([
             html.Summary(html.H2('Repeater Statistics')),
@@ -86,6 +90,6 @@ def build_layout():
         html.Dialog([html.Div([html.H2('MeshcoreStation Settings'),html.Button('×',id='close-station-settings',type='button',**{'aria-label':'Close MeshcoreStation Settings'})],className='dialog-header'),html.Div(className='dialog-body')],id='station-settings-dialog'),
         popup([html.Div([html.Div([html.P('COMMAND DETAILS', className='eyebrow'), html.H2('Received command', id='detail-title')]), html.Button('×', id='close-details', **{'aria-label': 'Close details'})], className='dialog-header'), html.P('Reply text is recorded by the bot; it is not proof of delivery.', className='muted'), html.Section([html.H3('Packet route'), html.Div(id='route-summary', className='route-summary', **{'aria-live': 'polite'}), html.Div(id='route-paths', className='route-paths', role='group', **{'aria-label': 'Reception paths'}), html.Div(id='route-map', className='map-canvas', role='region', **{'aria-label': 'Packet route map'}), html.Div(id='route-notes', className='map-notes')], id='route-section', hidden=True), html.Dl(id='detail-fields')], id='details-dialog', **{'aria-labelledby': 'detail-title'}),
         popup([html.Div([html.H2('Known repeaters', id='repeaters-title'), html.Button('×', id='close-repeaters', **{'aria-label': 'Close repeater map'})], className='dialog-header'), html.Div(id='repeater-notes', className='map-notes', **{'aria-live': 'polite'}), html.Div(id='repeater-map', className='map-canvas', role='region', **{'aria-label': 'Known repeaters map'})], id='repeaters-dialog', **{'aria-labelledby': 'repeaters-title'}),
-        html.Footer([html.Span(id='footer-copyright'),html.Span('MeshcoreStation 5.5.0 · V5',id='footer-version'),html.Span('Companion firmware unavailable',id='footer-firmware'),html.Span('Checking for updates…',id='footer-update',role='status',**{'aria-live':'polite'}),html.Button('Update available',id='footer-update-button',hidden=True,type='button')],id='dashboard-footer'),
+        html.Footer([html.Span(id='footer-copyright'),html.Span('MeshcoreStation 5.6.0 · V5',id='footer-version'),html.Span('Companion firmware unavailable',id='footer-firmware'),html.Span('Checking for updates…',id='footer-update',role='status',**{'aria-live':'polite'}),html.Button('Update available',id='footer-update-button',hidden=True,type='button')],id='dashboard-footer'),
         dcc.Interval(id='refresh',interval=5000),dcc.Interval(id='history-refresh',interval=5000,disabled=True),dcc.Store(id='window-size',data=PAGE_SIZE),dcc.Store(id='last-render',data=None),dcc.Store(id='history-visible',data=False)
     ],className='shell')

@@ -1,8 +1,8 @@
-# MeshcoreStation V5 — 5.5.0
+# MeshcoreStation V5 — 5.6.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.5.0** adds opt-in neighbor SNR monitoring and independent dashboard/statistics accordions.
-V3 `main` and V4 `v4.0.0` are separate and unchanged. V4.4.1 supplies the protocol and dialog
+Development branch: **`V5`**. Version **5.6.0** restores the V4-compatible Room Server, room Bot commands and room report destinations.
+V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
 The first row has exactly **MeshcoreStation**, **Connected Companion**, and
@@ -13,10 +13,10 @@ installed-branch update check. V5 updates cannot switch to an incompatible branc
 and never install automatically.
 
 Below the cards, **Bot** contains only **Bot Settings** and **Command History**,
-independently collapsible. **Repeater Management** follows as a separate section.
+independently collapsible. **Room Server** follows Bot, then **Repeater Management**.
 An independent **Repeater Statistics** section follows Management, with a managed-only
 selector, recording status and saved-data visualizations. There is no Optimizer, Analyzer, Performance,
-Network Monitoring or Room Server.
+or Network Monitoring. The Room Server is described below.
 
 ## Fresh storage only
 
@@ -151,3 +151,22 @@ with explicit missing/future-data warnings. Journal timestamps are server-assign
 recording a change does not transmit a command. See [comparison semantics and limits](docs/v5-repeater-comparison.md).
 Voltage and temperature charts now use clean lines with temporary hover/tap/keyboard
 selection markers; historical telemetry and sampling remain unchanged.
+
+
+## Room Server
+
+The Room Server accordion below Bot restores V4.4.1's four independent encrypted
+MeshCore rooms using the existing Companion. New rooms start disabled and require
+a password. Existing `rooms.db` identities, passwords, participants, messages,
+replay protection, client synchronization state and bot-room selection are reused.
+No V4 application-database migration is required or performed.
+
+Rooms continue running while the dashboard is closed. Administration supports
+QR/contact links, participant Read/Write permissions, the latest 100 messages,
+local posting, and selecting an enabled room for configured Bot commands. Room
+commands use shared persistent Command History; room membership grants no repeater
+or host administration. Scheduled battery reports can follow the bot chat/room or
+use an explicit enabled room or private Companion channel, without silent fallback.
+Queued room replies/reports are not confirmed recipient delivery.
+
+See [Room Server setup, firmware requirements, backups and troubleshooting](docs/room-server-development.md).

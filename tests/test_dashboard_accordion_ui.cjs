@@ -1,5 +1,5 @@
 const {JSDOM}=require('jsdom'),fs=require('fs'),assert=require('node:assert/strict');
-const main=['bot-disclosure','repeater-management-disclosure','repeater-statistics-disclosure','repeater-comparison-disclosure'];
+const main=['bot-disclosure','room-server-disclosure','repeater-management-disclosure','repeater-statistics-disclosure','repeater-comparison-disclosure'];
 const dom=new JSDOM(main.map(id=>`<details id="${id}"><summary>${id}</summary><input value="retained"></details>`).join('')+['one','two'].map(id=>`<details id="${id}" class="statistics-accordion"><summary>${id}</summary><div>Saved content</div></details>`).join(''),{runScripts:'outside-only',pretendToBeVisual:true});
 const w=dom.window,d=w.document;let resize=0;w.requestAnimationFrame=fn=>fn();w.MeshcoreStationStatisticsVisuals={resize:()=>resize++};
 w.eval(fs.readFileSync('meshcorestation/web/assets/dashboard_accordion.js','utf8'));

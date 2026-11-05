@@ -66,6 +66,17 @@ def begin(db, command_id, message, name, key, stamp, scope, scope_key, now=None,
     return cursor.lastrowid
 
 
+def room_reply(db, command_id, room, name, text, stamp):
+    with db:
+        db.execute("""INSERT INTO command_replies
+            (command_id,created_at,timestamp,channel_key_hash,raw_text,message,scope,
+             send_status,detail,retry_status,retry_detail)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (command_id,time.time(),stamp,'room:'+str(room),text,text,'Room: '+name,
+             'queued','Stored in the room message board; recipient delivery unconfirmed.',
+             'room synchronization','The Room Worker handles per-session delivery and ACK retries; channel flood retries do not apply.'))
+
+
 def finish(db, reply_id, status, detail=''):
     with db:
         db.execute('UPDATE command_replies SET send_status=?,detail=? WHERE id=?',(status,str(detail)[:300],reply_id))

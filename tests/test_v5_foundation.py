@@ -144,9 +144,10 @@ def test_http_preferences_commands_scopes_managed_removal_offline_map_and_exclus
     add=c.post('/api/bot/scopes',headers=h,json={'operation':'add','name':'local','expected_revision':scopes['revision']})
     assert add.status_code==200 and len(add.json['scopes'])==1
     rules={rule.rule for rule in c.application.url_map.iter_rules()}
-    for path in ['/rooms','/repeater-optimizer','/api/repeater-network','/api/repeater-performance']:
+    assert c.get('/rooms').status_code == 200
+    for path in ['/repeater-optimizer','/api/repeater-network','/api/repeater-performance']:
         assert c.get(path).status_code==404
-    assert not {'/api/repeater-network','/api/repeater-performance','/api/rooms','/repeater-optimizer','/api/repeater-statistics'}&rules
+    assert not {'/api/repeater-network','/api/repeater-performance','/repeater-optimizer','/api/repeater-statistics'}&rules
     assert {p.name for p in database.DB_FILE.parent.glob('*.db')}=={'meshcorestation.db','knownRepeaters.db'}
 
 
@@ -166,7 +167,7 @@ def test_exact_dashboard_structure_and_closed_history_no_reads(station,monkeypat
     cards=next(n for n in nodes if getattr(n,'className',None)=='cards')
     assert [c.id for c in cards.children]==['station-card','companion-card','known-card']
     sections=[n.children.id for n in page.children if isinstance(n,html.Section) and isinstance(n.children,html.Details)]
-    assert sections==['bot-disclosure','repeater-management-disclosure','repeater-statistics-disclosure','repeater-comparison-disclosure']
+    assert sections==['bot-disclosure','room-server-disclosure','repeater-management-disclosure','repeater-statistics-disclosure','repeater-comparison-disclosure']
     assert ids['statistics-repeater'] is not ids['managed-repeater']
     bot=ids['bot-disclosure'];assert [n.id for n in walk(bot) if isinstance(n,html.Details)]==['bot-disclosure','bot-settings-disclosure','command-history-disclosure']
     ids_list=[n.id for n in nodes if getattr(n,'id',None)]

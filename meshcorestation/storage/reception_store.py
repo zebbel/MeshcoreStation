@@ -30,6 +30,11 @@ def channel_identity(key, stamp, text):
 
 
 
+def room_identity(room, post):
+    return hashlib.sha256(json.dumps(['room', room, post['author'],
+        post['sender_timestamp'], post['text']], separators=(',', ':')).encode()).hexdigest()
+
+
 def authenticate(rx, key, scopes=()):
     """Do not trust channel-name/one-byte-key-hash matches for history binding."""
     payload = rx.get('pkt_payload')

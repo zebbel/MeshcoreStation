@@ -17,7 +17,7 @@ async def execute(bot, action, message, matched_rx=None):
         return Outcome(True)
     if action == 'position':
         parts = message['message'].strip().split(maxsplit=1)
-        return await sender_position(bot, message['name'], matched_rx, parts[1] if len(parts) > 1 else '')
+        return await sender_position(bot, message['name'], matched_rx, parts[1] if len(parts) > 1 else '', message=message)
     if action == 'scope':
         args = message['message'].strip().split(maxsplit=1)
         name = args[1].strip() if len(args) > 1 else ''
@@ -49,7 +49,7 @@ def parse_coordinates(arguments):
     return lat, lon
 
 
-async def sender_position(bot, name, matched_rx=None, arguments=''):
+async def sender_position(bot, name, matched_rx=None, arguments='', *, message=None):
     if bot.position_update_running:
         return Outcome(False, 'Position update already running; try again shortly.')
     bot.position_update_running = True
@@ -59,22 +59,26 @@ async def sender_position(bot, name, matched_rx=None, arguments=''):
                 lat, lon = parse_coordinates(arguments)
             except ValueError as exc:
                 return Outcome(False, f'{exc} Saved position unchanged.')
-            contact = await bot.companion.get_sender_contact(name)
+            key = message.get('sender_public_key') if message and message.get('room_id') is not None else None
+            contact = await bot.companion.get_sender_contact_by_key(key) if key else await bot.companion.get_sender_contact(name)
             if contact is None:
                 return Outcome(False, 'Sender contact is unknown or ambiguous; saved position unchanged.')
             bot.database.save_companion_position(contact['public_key'], contact['adv_name'], lat, lon, None)
             return Outcome(True, f'Position saved: {lat:.6f}, {lon:.6f}.', {'latitude':lat,'longitude':lon,'altitude':None,'sender_public_key':contact['public_key']})
-        scope_name, _ = bot.companion._get_reply_scope(matched_rx)
-        if scope_name is None:
-            return Outcome(False, 'Request scope is unknown; telemetry was not requested.')
-        from meshcorestation.commands.templates import split_reply
-        acknowledgment = f"@[{name}] | Position request received. Requesting telemetry…"
-        for part in split_reply(acknowledgment):
-            sent = await bot.companion.send_channel_message(bot.companion.channel_idx, part, matched_rx)
-            if sent is False or sent != scope_name:
-                return Outcome(False, 'Could not send the position acknowledgment; telemetry was not requested.')
-        # Await radio acceptance of the acknowledgment before requesting telemetry.
-        response = await bot.companion.get_telemetry(name, matched_rx)
+        if message and message.get('room_id') is not None:
+            response = await bot.companion.get_room_telemetry(message['sender_public_key'], matched_rx or {})
+        else:
+            scope_name, _ = bot.companion._get_reply_scope(matched_rx)
+            if scope_name is None:
+                return Outcome(False, 'Request scope is unknown; telemetry was not requested.')
+            from meshcorestation.commands.templates import split_reply
+            acknowledgment = f"@[{name}] | Position request received. Requesting telemetry…"
+            for part in split_reply(acknowledgment):
+                sent = await bot.companion.send_channel_message(bot.companion.channel_idx, part, matched_rx)
+                if sent is False or sent != scope_name:
+                    return Outcome(False, 'Could not send the position acknowledgment; telemetry was not requested.')
+            # Await radio acceptance of the acknowledgment before requesting telemetry.
+            response = await bot.companion.get_telemetry(name, matched_rx)
         if response is None:
             return Outcome(False, 'Could not retrieve telemetry; contact unknown, ambiguous, unavailable or telemetry denied. Saved position unchanged.')
         gps = next((item.get('value') for item in response['telemetry'] if item.get('type') == 'gps' and item.get('channel') == 1), None)

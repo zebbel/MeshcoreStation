@@ -61,7 +61,9 @@
     function filter() { const q=el('voltage-search').value.trim().toLowerCase(); el('voltage-repeaters').querySelectorAll('li').forEach(n=>n.hidden=!n.dataset.name.includes(q)); }
     function reportDestinations(data) {
         const select = el('voltage-target'), selected = data.config.report_target || 'bot';
-        select.replaceChildren(new Option('Follow Bot channel', 'bot'));
+        select.replaceChildren(new Option('Follow bot chat / room', 'bot'));
+        for (const room of (data.rooms || []).filter(r => r.enabled))
+            select.append(new Option('Room: ' + room.name, 'room:' + room.id));
         for (const chat of channelsCache.filter(c => c.type === 'private'))
             select.append(new Option('Chat: ' + chat.name + ' (slot ' + chat.index + ')', 'channel:' + chat.name));
         if (![...select.options].some(option => option.value === selected))
@@ -97,7 +99,7 @@
         el('temperature-latest').textContent=temperature ? `Temperature: ${Number.isFinite(temperature.temperature)?temperature.temperature.toFixed(1)+' °C':'Not available'} · ${date(temperature.sampled_at,data.config.timezone)}${temperature.temperature_error?' · '+temperature.temperature_error:''}` : 'Temperature: No readings yet.';
         const worker=data.worker, active=worker && worker.state!=='stopped' && data.server_time-worker.heartbeat<150;
         const target = data.config.report_target || 'bot';
-        const destination = target === 'bot' ? 'Bot channel' : target.startsWith('channel:') ? 'chat ' + target.slice(8) : target;
+        const destination = target === 'bot' ? 'Bot chat / room' : target.startsWith('channel:') ? 'chat ' + target.slice(8) : target;
         el('voltage-worker').textContent=`${active?'Bot monitor: '+worker.state:'Bot monitor offline'} · Reports to: ${destination}.`;
         el('voltage-chart-note').textContent=''; chart(data.samples,data.config.timezone,Number(el('voltage-days').value));
         window.MeshcoreStationBattery.temperatureChart(el('temperature-chart'),el('temperature-chart-note'),data.temperature_samples||[],data.config.timezone,Number(el('voltage-days').value),data.server_time);

@@ -89,8 +89,18 @@ def register_callbacks(app):
             with closing(connect(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
                 channel=db.execute('SELECT channel_name FROM bot_settings WHERE id=1').fetchone()[0]
         except (sqlite3.Error,OSError):return 'Bot configuration unavailable','Saved channel could not be read.','Companion firmware unavailable'
+        from meshcorestation.config import DATA_DIR
+        selected_room = None
+        if (DATA_DIR / 'rooms.db').exists():
+            from meshcorestation.rooms.service import RoomService
+            service = RoomService(DATA_DIR / 'rooms.db')
+            rid = service.bot_room()
+            if rid is not None:
+                selected_room = service.config(rid)
         running=bridge.status[0]=='Running'
         runtime=bridge.runtime
         parts=[runtime.device_info.get(k) for k in ('ver','fw_build')] if runtime and running else []
         firmware='Companion firmware '+' · '.join(str(v) for v in parts if v) if any(parts) else 'Companion firmware unavailable'
+        if selected_room:
+            return ('Running' if running and selected_room['enabled'] else 'Room disabled' if running else 'Disconnected'), ('Bot room: ' + selected_room['name'] + (' (disabled)' if not selected_room['enabled'] else '')), firmware
         return ('Running' if running and channel else 'No Bot channel selected' if running else 'Disconnected'),('Bot channel: '+channel if channel else 'Select the Bot channel in Companion Channels.'),firmware

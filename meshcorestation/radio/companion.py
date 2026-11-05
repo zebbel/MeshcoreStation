@@ -32,6 +32,8 @@ class Companion:
         self.tracking_key = None
         self.reply_lock = asyncio.Lock()
         self.control_lock = asyncio.Lock()
+        self.room_bot_id = self.room_bot_name = self.room_bot_public_key = None
+        self.room_worker = None
         self.active_command_hops = None
         self._reply_timestamp = 0
         from meshcorestation.radio.reply_retries import ReplyRetries
@@ -286,6 +288,8 @@ class Companion:
             await self._process_channel_message(event)
 
     async def _process_channel_message(self, event):
+        if self.room_bot_id is not None:
+            return
         if self.channel_idx is None:
             return
         message_data = dict(event.payload or {})
@@ -378,7 +382,7 @@ class Companion:
                 if evidence:
                     identity, scope, text = evidence
                     _, message = self._parse_channel_message(text)
-                    if self.bot.match_command(message) is not None:
+                    if self.room_bot_id is None and self.bot.match_command(message) is not None:
                         reception_store.record(self.database.db, identity, rx, scope)
             except Exception as exc:
                 self.logger.warning('Command reception could not be recorded: %s', exc)
@@ -458,6 +462,53 @@ class Companion:
 ################################################
 # TELEMETRY FUNCTIONS
 ################################################
+
+    async def get_sender_contact_by_key(self, public_key):
+        result = await self.mc.commands.get_contacts()
+        if result is None or result.type != EventType.CONTACTS:
+            return None
+        matches = [c for c in (result.payload or {}).values() if isinstance(c, dict)
+                   and str(c.get('public_key', '')).lower() == public_key.lower()]
+        return matches[0] if len(matches) == 1 else None
+
+    async def room_sender_name(self, public_key):
+        if not isinstance(public_key, str):
+            return 'room-user'
+        result = await self.mc.commands.get_contacts()
+        if result is not None and result.type == EventType.CONTACTS:
+            key = public_key.lower()
+            matches = [contact for contact in (result.payload or {}).values()
+                       if str(contact.get('public_key', '')).lower() == key]
+            if len(matches) == 1:
+                return matches[0].get('adv_name') or key[:12]
+        return public_key[:12]
+
+    async def get_room_telemetry(self, public_key, rx):
+        """Explicit configured position command, preserving its authenticated scope."""
+        from meshcorestation.rooms.wire import Packet
+        from meshcorestation.rooms.server import RoomEndpoint
+        try:
+            packet = Packet.parse(bytes.fromhex(rx.get('raw_hex', '')))
+        except (ValueError, TypeError):
+            return None
+        key = RoomEndpoint.request_scope(packet, self.database.get_scopes())
+        if packet.route == 0 and key is None:
+            return None
+        contact = await self.get_sender_contact_by_key(public_key)
+        if contact is None:
+            return None
+        if packet.route in (2, 3) and (type(contact.get('out_path_len')) is not int or contact['out_path_len'] < 0):
+            return None
+        async with self.reply_lock:
+            try:
+                if packet.route in (0, 1):
+                    scope = await self.mc.commands.set_flood_scope(key if key is not None else '*')
+                    if scope is None or scope.type != EventType.OK:
+                        return None
+                telemetry = await asyncio.wait_for(self.mc.commands.req_telemetry_sync(contact, timeout=60), 70)
+                return {'contact': contact, 'telemetry': telemetry} if telemetry is not None else None
+            finally:
+                await self.mc.commands.set_flood_scope(None)
 
     async def get_sender_contact(self, contact_name):
         result = await self.mc.commands.get_contacts()

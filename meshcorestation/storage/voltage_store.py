@@ -100,6 +100,10 @@ def validate(value, db):
         raise ValueError('Choose a battery report destination.')
     if target == 'bot':
         pass
+    elif target.startswith('room:'):
+        room_id = target[5:]
+        if not room_id.isdecimal() or room_id.startswith('0') or not 1 <= int(room_id) <= 2147483647:
+            raise ValueError('Choose an existing room.')
     elif target.startswith('channel:'):
         name = target[8:]
         if (not name or name.strip() != name or len(name.encode('utf-8')) > 31

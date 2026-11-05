@@ -6,3 +6,6 @@ waitress==3.0.2
 
 # Pure-Python QR generation; no image or native build dependency.
 qrcode==8.2
+
+# Native MeshCore room identities and encrypted packets (V4-compatible).
+cryptography==50.0.2

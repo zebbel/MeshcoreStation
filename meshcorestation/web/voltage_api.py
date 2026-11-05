@@ -30,7 +30,9 @@ def payload(db, selected_key, days):
     worker = db.execute('SELECT * FROM voltage_worker WHERE id=1').fetchone()
     reports = [dict(r) for r in db.execute('SELECT * FROM voltage_reports WHERE public_key=? ORDER BY attempted_at DESC LIMIT 6', (key,))]
     managed_keys = [c['public_key'] for c in configurations(db)]
-    return {'ok': True, 'config': cfg, 'repeaters': repeaters, 'managed_repeaters': managed_keys, 'history_key': key,
+    from meshcorestation.rooms.service import RoomService
+    rooms = RoomService(DATA_DIR / 'rooms.db').rooms() if (DATA_DIR / 'rooms.db').exists() else []
+    return {'rooms': rooms, 'ok': True, 'config': cfg, 'repeaters': repeaters, 'managed_repeaters': managed_keys, 'history_key': key,
             'samples': samples, 'temperature_samples':temperature_samples,
             'latest_temperature':latest_temperature(db,dict(cfg,public_key=key)), 'latest': latest(db, dict(cfg, public_key=key)),
             'bot_channel': row['channel_name'] if row else None,
@@ -90,6 +92,11 @@ def voltage_request(request):
                     value = validate(body.get('value'), db)
                     if key and value['public_key'] != key:
                         raise ValueError('Selected repeater changed. Reload its settings.')
+                    if value['report_target'].startswith('room:'):
+                        from meshcorestation.rooms.service import RoomService
+                        room = RoomService(DATA_DIR / 'rooms.db').config(int(value['report_target'][5:]))
+                        if not room['enabled']:
+                            raise ValueError('Enable the chosen room before selecting it for reports.')
                     cfg = ensure_repeater(db, value['public_key'])
                     assignments = ','.join(f'{field}=?' for field in FIELDS)
                     db.execute(f'UPDATE voltage_config SET {assignments},revision=revision+1,updated_at=?,handled_seq=request_seq WHERE id=?',

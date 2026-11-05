@@ -50,6 +50,8 @@ class Commands:
     async def set_radio(self,freq,bw,sf,cr):
         if not self.ignore_writes:self.mc.self_info.update(radio_freq=freq,radio_bw=bw,radio_sf=sf,radio_cr=cr)
         return event(EventType.OK)
+    async def send_raw_packet(self,raw,priority=3):
+        self.calls.append(('send_raw_packet',raw,priority));return event(EventType.OK)
     async def set_flood_scope(self,value):return event(EventType.OK)
     async def get_default_flood_scope(self):return event(EventType.DEFAULT_FLOOD_SCOPE)
     async def set_path_hash_mode(self,value):return event(EventType.OK)
@@ -87,6 +89,7 @@ class FakeMeshCore:
     def subscribe(self,kind,callback):
         self.subscriptions.setdefault(kind,[]).append(callback)
         return NS(unsubscribe=lambda:self.subscriptions[kind].remove(callback))
+    def unsubscribe(self, subscription):subscription.unsubscribe()
     def set_decrypt_channel_logs(self,*args):pass
     async def start_auto_message_fetching(self):pass
     async def disconnect(self):self.connection_manager.is_connected=False
