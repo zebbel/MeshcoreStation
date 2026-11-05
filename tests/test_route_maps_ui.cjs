@@ -28,7 +28,10 @@ const settle=()=>new Promise(r=>setImmediate(r));
         assert.equal(lines.at(-2).color,'#ef5350');
         assert.equal(lines.at(-1).color,'#4d8eff');
         assert.equal(lines.at(-2).dashArray,'9 8');
-        assert.equal(arrows.at(-1).icon.html.style.transform,'rotate(-0.7853981633974483rad)');
+        // CSSOM serializers may round angles; verify direction, not formatting.
+        const rotation=/^rotate\(([-+\d.eE]+)rad\)$/.exec(arrows.at(-1).icon.html.style.transform);
+        assert(rotation,'Route arrows use one rotation in radians');
+        assert(Math.abs(Number(rotation[1])+Math.PI/4)<1e-6,'Route arrow points along the observed segment');
     }
     assert.equal(calls.length,5);
     assert(order.indexOf('line')<order.indexOf('tiles'),'Routes draw before background tiles');
