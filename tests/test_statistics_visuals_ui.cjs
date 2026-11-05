@@ -65,6 +65,50 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
   assert.equal(JSON.stringify(hourly),snapshot,'render does not alter saved counts');
   assert.equal(data.hops[0].hop_count,10,'numeric display sorting preserves API input order');
  }
+ // Regional counting modes use existing digest-based counts, never a refetch.
+ const regional=[{name:'Alpha',receptions:20,unique_packets:5,repeated:15,unidentified:0},{name:'Beta',receptions:12,unique_packets:10,repeated:2,unidentified:0},{name:'Unscoped',receptions:6,unique_packets:4,repeated:2,unidentified:0}];
+ const regionalSource=JSON.stringify(regional);
+ w.MeshcoreStationStatisticsVisuals.render({...data,regions:regional});await settle();
+ let regionBars=[...d.querySelectorAll('.statistics-region-bar')];
+ assert.deepEqual(regionBars.map(r=>r.dataset.name),['Beta','Alpha','Unscoped']);
+ assert.deepEqual(regionBars.map(r=>r.dataset.count),['10','5','4']);
+ assert.equal(regionBars[0].dataset.mode,'unique');assert(Math.abs(Number(regionBars[0].dataset.percentage)-1000/19)<1e-9);
+ assert(regionBars.every(r=>r.getAttribute('fill')==='#2563eb'));
+ const mapCount=maps,otherChart=d.getElementById('statistics-hourly').innerHTML;
+ let external=0;w.fetch=()=>{external++;throw Error('Unexpected request');};
+ let all=d.getElementById('statistics-regions-all');assert(!all.checked);all.checked=true;all.dispatchEvent(new w.Event('change'));
+ regionBars=[...d.querySelectorAll('.statistics-region-bar')];
+ assert.deepEqual(regionBars.filter((r,i)=>i%3===0).map(r=>r.dataset.name),['Alpha','Beta','Unscoped']);
+ assert.equal(regionBars[0].dataset.count,'20');assert(Math.abs(Number(regionBars[0].dataset.percentage)-2000/38)<1e-9);
+ assert(regionBars.some(r=>r.getAttribute('fill')==='#c75c0d'));
+ assert.equal(external,0);assert.equal(maps,mapCount);assert.equal(d.getElementById('statistics-hourly').innerHTML,otherChart);
+ for(const days of [1,7,30]){w.MeshcoreStationStatisticsVisuals.render({...data,days,selected:B,regions:regional});await settle();assert(d.getElementById('statistics-regions-all').checked);assert.equal(d.querySelector('.statistics-region-value').textContent,'20 · 52.6%');}
+ all=d.getElementById('statistics-regions-all');all.checked=false;all.dispatchEvent(new w.Event('change'));
+ assert.equal(d.querySelector('.statistics-region-value').textContent,'10 · 52.6%');assert.equal(JSON.stringify(regional),regionalSource);
+ // Donut and legend order aggregate origins/floods by code, with stable code ties.
+ const types=[{packet_type:15,evidence:'observed-flood-route',receptions:20,unique_packets:10,repeated:10,unidentified:0},{packet_type:0,evidence:'observed-flood-route',receptions:2,unique_packets:2,repeated:0,unidentified:0},{packet_type:4,evidence:'advertisement-origin',receptions:8,unique_packets:8,repeated:0,unidentified:0},{packet_type:5,evidence:'observed-flood-route',receptions:20,unique_packets:20,repeated:0,unidentified:0},{packet_type:4,evidence:'observed-flood-route',receptions:2,unique_packets:2,repeated:0,unidentified:0}];
+ for(const r of types)r.percentage=100*r.receptions/52;
+ const typeSource=JSON.stringify(types);
+ w.MeshcoreStationStatisticsVisuals.render({...data,packet_types:types});await settle();
+ assert.deepEqual([...d.querySelectorAll('.statistics-donut-segment')].map(r=>r.dataset.category),['5','15','4','0']);
+ assert.deepEqual([...d.querySelectorAll('.statistics-packet-category strong')].map(r=>r.textContent),['Group text message','Raw custom packet','Advertisement','Request']);
+ assert.deepEqual([...d.querySelectorAll('.statistics-donut-segment')].map(r=>r.getAttribute('stroke')),['#0891b2','#0284c7','#be185d','#2563eb']);
+ assert(d.getElementById('statistics-packet-types').textContent.includes('Origin (not forwarding): 8 · Flood path: 2'));
+ const changed=types.map(r=>r.packet_type===0?{...r,receptions:50}:r);
+ w.MeshcoreStationStatisticsVisuals.render({...data,packet_types:changed});await settle();
+ assert.equal(d.querySelector('.statistics-donut-segment').dataset.category,'0');assert.equal(d.querySelector('.statistics-packet-category strong').textContent,'Request');assert.equal(JSON.stringify(types),typeSource);
+ // At least 20 distinct traffic colors; scale is continuous, adaptive, and preserves exact counts.
+ const begin=Date.parse('2026-11-01T00:00:00Z')/1000;
+ const activity=Array.from({length:40},(_,i)=>({at:begin+i*3600,until:begin+(i+1)*3600,receptions:i+1,complete:true,coverage_seconds:3600,expected_seconds:3600}));
+ const activitySource=JSON.stringify(activity);
+ w.MeshcoreStationStatisticsVisuals.render({...data,start:begin,end:begin+40*3600,activity_hourly:activity});await settle();
+ const measured=[...d.querySelectorAll('.statistics-heatmap-cell')].filter(r=>Number(r.dataset.count)>0);
+ assert.equal(measured.length,40);assert(new Set(measured.map(r=>r.getAttribute('fill'))).size>=20);
+ assert.deepEqual(measured.map(r=>Number(r.dataset.count)),activity.map(r=>r.receptions));
+ const firstColor=measured[0].getAttribute('fill');assert(d.querySelector('.statistics-heatmap-ramp').style.background.includes('linear-gradient'));
+ w.MeshcoreStationStatisticsVisuals.render({...data,start:begin,end:begin+40*3600,activity_hourly:activity.map(r=>({...r,receptions:r.receptions*2}))});await settle();
+ assert.equal(d.querySelector('.statistics-heatmap-cell[data-count="2"]').getAttribute('fill'),firstColor,'color domain adapts to the current period maximum');assert.equal(JSON.stringify(activity),activitySource);
+ w.MeshcoreStationStatisticsVisuals.render(data);await settle();
  const many=Array.from({length:24},(_,i)=>({public_key:String(i).padStart(64,'0'),name:'Neighbor '+i,incoming:i,outgoing:2*i,last_observed:100}));
  w.MeshcoreStationStatisticsVisuals.render({...data,neighbors:many,activity_hourly:[],packet_types:[]});await settle();
  const top=[...d.querySelectorAll('#statistics-active-neighbors .statistics-neighbor-bar')];assert.equal(top.length,40);assert.equal(top[0].dataset.value,'23');assert.equal(top[1].dataset.value,'46');assert(d.querySelector('#statistics-heatmap').textContent.includes('No saved activity'));assert(d.querySelector('#statistics-packet-types').textContent.includes('No confidently attributed'));

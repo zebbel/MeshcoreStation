@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.6.0
+# MeshcoreStation V5 — 5.6.1
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.6.0** restores the V4-compatible Room Server, room Bot commands and room report destinations.
+Development branch: **`V5`**. Version **5.6.1** corrects cross-hop duplicate counting and improves saved Statistics rankings, heatmap detail and comparison percentages.
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 

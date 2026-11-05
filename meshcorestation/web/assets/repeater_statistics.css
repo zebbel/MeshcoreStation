@@ -93,3 +93,7 @@
 .statistics-category-swatch {width:12px;height:12px;border-radius:3px;flex:none;}
 
 .statistics-evidence-split {flex-basis:100%;color:var(--muted);overflow-wrap:anywhere;}
+
+.statistics-heatmap-sample.statistics-heatmap-ramp { width: 140px; max-width: 30vw; }
+#statistics-regions > label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+#statistics-regions-all { width: auto; }

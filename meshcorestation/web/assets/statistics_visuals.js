@@ -1,7 +1,7 @@
 /* Saved passive observations only; native chart SVGs never style Leaflet SVGs. */
 (() => {
     const $=id=>document.getElementById(id),ns='http://www.w3.org/2000/svg';
-    let map=null,resize=null,chartResize=null,generation=0,lastData=null,mapPoints=[],mapNeedsFit=false;
+    let map=null,resize=null,chartResize=null,generation=0,lastData=null,mapPoints=[],mapNeedsFit=false,regionalAll=false;
     const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;};
     const stamp=value=>window.meshcorestationFormatDate?.(value)||new Date(value*1000).toLocaleString('en-GB');
     const name=r=>window.MeshcoreStationRepeaterNames?.label(r.public_key)||r.name||`Unknown Repeater (${r.public_key.slice(0,8)}…)`;
@@ -80,7 +80,7 @@
             for(const[field,color,offset]of[['unique_packets','#2563eb',-width-1],['repeated','#c75c0d',1]]){const value=r[field],bar=svg('rect',{x:center+offset,y:f.y(value),width,height:f.base-f.y(value),fill:color,class:'statistics-hop-bar','data-hop':r.hop_count,'data-series':field,'data-value':value});f.interactive(bar,description);f.s.append(bar);}
             f.s.append(svg('text',{x:center,y:246,'text-anchor':'middle',class:'statistics-hop-tick','data-hop':r.hop_count},r.hop_count));
         });f.s.append(svg('text',{x:f.width/2,y:282,'text-anchor':'middle',class:'statistics-axis-title'},'Total route hop count'));
-        legend(host,false);host.append(text('p','Observed hop categories are ordered numerically. Side-by-side columns show unique and repeated receptions; unidentified counts remain in the exact-count table. No missing hop categories are invented.','muted'));exactCounts(host,rows,r=>`${r.hop_count} ${r.hop_count===1?'hop':'hops'}`);
+        legend(host,false);host.append(text('p','Observed hop categories are ordered numerically. Side-by-side columns show unique and repeated receptions; unidentified counts remain in the exact-count table. Unique/repeated classification spans the complete selected period, including copies observed with different hop counts. No missing hop categories are invented.','muted'));exactCounts(host,rows,r=>`${r.hop_count} ${r.hop_count===1?'hop':'hops'}`);
     }
     function inspect(host){
         const message=text('p','Hover, focus or tap a measurement for details.','statistics-hover-value');message.setAttribute('role','status');message.setAttribute('aria-live','polite');host.append(message);
@@ -97,6 +97,14 @@
         });s.append(svg('text',{x:445,y:rows.length*64+42,'text-anchor':'middle'},'Observed receptions'));
         host.append(text('p','Blue: We hear (incoming) · Orange: They hear (outgoing). Top '+rows.length+' neighbors by combined directional observations. Includes neighbors without coordinates. Ambiguous identities remain in the separate map list; this is not a ranking of RF link reliability.','muted'));
         for(const note of data.notes||[])if(note.startsWith('Neighbor output'))host.append(text('p',note+' Ranking uses this bounded summary.','muted'));
+    }
+    const activityColors=['#eff6ff','#93c5fd','#3b82f6','#1d4ed8','#172554'];
+    function activityColor(value,maximum){
+        const scaled=Math.sqrt(Math.max(0,Math.min(1,value/maximum)))*(activityColors.length-1);
+        const index=Math.min(activityColors.length-2,Math.floor(scaled)),fraction=scaled-index;
+        const channel=(color,offset)=>parseInt(color.slice(offset,offset+2),16);
+        const rgb=[1,3,5].map(offset=>Math.round(channel(activityColors[index],offset)*(1-fraction)+channel(activityColors[index+1],offset)*fraction));
+        return `rgb(${rgb.join(',')})`;
     }
     function heatmap(data){
         const host=$('statistics-heatmap');if(!host)return;host.replaceChildren();const rows=data.activity_hourly||[];
@@ -115,21 +123,21 @@
                 const intervals=entry.hours.get(h)||[],positive=intervals.filter(r=>r.receptions!=null),count=positive.reduce((n,r)=>n+r.receptions,0),unknown=positive.length!==intervals.length||!intervals.length;
                 const complete=intervals.length>0&&!unknown&&intervals.every(r=>r.complete),partial=positive.length>0&&!complete;
                 const state=!intervals.length?'Outside selected window or skipped clock hour':!positive.length?'Unknown recording gap':complete?(count?'Recorded traffic':'Recorded zero traffic'):'Incomplete observation coverage; counts are lower bounds';
-                const rect=svg('rect',{x:left+h*cell,y,width:cell-2,height:cell-2,rx:3,fill:!positive.length?'url(#statistics-heatmap-gap)':count?'#2563eb':'var(--panel)',stroke:'var(--border)','stroke-dasharray':partial?'3 2':'','fill-opacity':count?.22+.78*Math.sqrt(Math.min(1,count/maximum)):1,class:'statistics-heatmap-cell'+(partial?' statistics-heatmap-incomplete':''),'data-day':day,'data-hour':h,'data-state':complete?'complete':partial?'incomplete':'unknown','data-count':positive.length?count:''});
+                const rect=svg('rect',{x:left+h*cell,y,width:cell-2,height:cell-2,rx:3,fill:!positive.length?'url(#statistics-heatmap-gap)':count?activityColor(count,maximum):'var(--panel)',stroke:'var(--border)','stroke-dasharray':partial?'3 2':'','fill-opacity':1,class:'statistics-heatmap-cell'+(partial?' statistics-heatmap-incomplete':''),'data-day':day,'data-hour':h,'data-state':complete?'complete':partial?'incomplete':'unknown','data-count':positive.length?count:''});
                 const details=`${window.meshcorestationFormatDate?.(entry.at,zone,{dateOnly:true})||day} · ${String(h).padStart(2,'0')}:00 · ${positive.length?count+' observed receptions':'Count unknown'}. ${state}. ${intervals.length>1?'Repeated clock hour; intervals are combined. ':''}`+intervals.map(r=>`${stamp(Math.max(r.at,data.start))} — ${stamp(Math.min(r.until||r.at+3600,data.end))}: ${r.receptions??'unknown'} receptions, recording ${Math.round(r.coverage_seconds||0)}/${Math.round(r.expected_seconds||0)} seconds`).join('; ');
                 interactive(rect,details);s.append(rect);
             }
         }
         s.append(svg('text',{x:left+12*cell,y:height-8,'text-anchor':'middle'},'Hour of day · '+zone));
-        const key=text('div','','statistics-heatmap-key');for(const [label,kind]of [['Recorded zero','zero'],[`Observed traffic: lighter → darker (1–${maximum})`,'traffic'],['Incomplete coverage','incomplete'],['Unknown / outside period','unknown']]){const item=text('span',label),sample=text('i','','statistics-heatmap-sample '+kind);item.prepend(sample);key.append(item);}host.append(key);
-        host.append(text('p','All confidently attributed flood-path packet types; advertisement origins are excluded. Calendar-hour intervals use the dashboard time zone. Coverage uses elapsed time within the selected window; repeated daylight-saving hours are combined with their original intervals available above.','muted'));
+        const key=text('div','','statistics-heatmap-key');for(const [label,kind]of [['Recorded zero','zero'],[`Observed traffic: lighter → darker (1–${maximum})`,'traffic'],['Incomplete coverage','incomplete'],['Unknown / outside period','unknown']]){const item=text('span',label),sample=text('i','','statistics-heatmap-sample '+kind);if(kind==='traffic'){sample.style.background='linear-gradient(90deg,'+activityColors.join(',')+')';sample.classList.add('statistics-heatmap-ramp');}item.prepend(sample);key.append(item);}host.append(key);
+        host.append(text('p','All confidently attributed flood-path packet types; advertisement origins are excluded. A continuous, data-adaptive blue color scale preserves count precision; lighter cells indicate less traffic and darker cells more. Calendar-hour intervals use the dashboard time zone. Coverage uses elapsed time within the selected window; repeated daylight-saving hours are combined with their original intervals available above.','muted'));
     }
     function packetTypes(data){
         const host=$('statistics-packet-types');if(!host)return;host.replaceChildren();const rows=data.packet_types||[],total=rows.reduce((n,r)=>n+r.receptions,0);
         if(!total){host.append(text('p','No confidently attributed flood-path or full-key advertisement-origin observations in this period.','statistics-empty'));return;}
         const typeNames=['Request','Response','Direct text message','ACK / Acknowledgment','Advertisement','Group text message','Group data','Anonymous request','Path response','Trace','Multipart packet','Control / Discovery','Reserved code 12','Reserved code 13','Reserved code 14','Raw custom packet'];
         const colors=['#2563eb','#c75c0d','#168c6b','#a855f7','#be185d','#0891b2','#ca8a04','#4f46e5','#65a30d','#dc2626','#0f766e','#9333ea','#b45309','#64748b','#db2777','#0284c7'];
-        const categories=[...new Set(rows.map(r=>String(r.packet_type??r.category)))].map(code=>[code,colors[Number(code)]||'#64748b']),frame=text('div','','statistics-donut-layout'),s=svg('svg',{viewBox:'0 0 260 260',role:'img','aria-label':'Packet type distribution',class:'statistics-donut'}),list=text('div','','statistics-donut-legend');frame.append(s,list);host.append(frame);const interactive=inspect(host);let offset=0;
+        const categories=[...new Set(rows.map(r=>String(r.packet_type??r.category)))].map(code=>[code,colors[Number(code)]||'#64748b',rows.filter(r=>String(r.packet_type??r.category)===code).reduce((n,r)=>n+r.receptions,0)]).sort((a,b)=>b[2]-a[2]||(Number(a[0])-Number(b[0]))||a[0].localeCompare(b[0],'en')),frame=text('div','','statistics-donut-layout'),s=svg('svg',{viewBox:'0 0 260 260',role:'img','aria-label':'Packet type distribution',class:'statistics-donut'}),list=text('div','','statistics-donut-legend');frame.append(s,list);host.append(frame);const interactive=inspect(host);let offset=0;
         const circumference=2*Math.PI*82;
         for(const [category,color]of categories){const records=rows.filter(r=>String(r.packet_type??r.category)===category),count=records.reduce((n,r)=>n+r.receptions,0),percent=100*count/total;
             const detail=records.map(r=>`${r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':r.category==='Advertisements'?'Advertisement flood-path observations (route evidence)':'Confirmed flood-path observations'}: ${countDescription(r)}`).join('; '),description=`${typeNames[Number(category)]||category}: ${count} observations (${percent.toFixed(1)}%). ${detail}`;
@@ -138,7 +146,8 @@
         }
         s.append(svg('text',{x:130,y:128,'text-anchor':'middle',class:'statistics-donut-total'},total),svg('text',{x:130,y:151,'text-anchor':'middle'},'observations'));
         host.append(text('p','Receptions are counted, including repeated copies. Advertisement origins are full-key source observations, never forwarding events. Advertisements seen on flood paths are separately identified in the exact table. Ambiguous/unverified routes are excluded; Reserved and unknown codes retain their numeric identifiers. Percentages use only included observations and do not measure delivery success.','muted'));
-        exactCounts(host,rows,r=>(typeNames[r.packet_type]||'Unknown code '+r.category)+' · '+(r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':'Confirmed flood-path observation'),{percent:true});
+        const order=new Map(categories.map((r,i)=>[r[0],i]));
+        exactCounts(host,[...rows].sort((a,b)=>order.get(String(a.packet_type??a.category))-order.get(String(b.packet_type??b.category))),r=>(typeNames[r.packet_type]||'Unknown code '+r.category)+' · '+(r.evidence==='advertisement-origin'?'Advertisement origin (not forwarding)':'Confirmed flood-path observation'),{percent:true});
     }
     function neighborSnr(data){
         const host=$('statistics-neighbor-snr');if(!host)return;host.replaceChildren();
@@ -159,17 +168,32 @@
         if(map&&host?.clientWidth&&host?.clientHeight){map.invalidateSize();if(mapNeedsFit&&mapPoints.length){map.fitBounds(mapPoints,{padding:[30,30],maxZoom:13});mapNeedsFit=false;}}
         if(lastData&&$('statistics-hourly')?.clientWidth){hourly(lastData);hopColumns(lastData);}
     }
-    function ranking(id,rows,labelOf,title,percent=false){
-        const host=$(id);if(!host)return;
-        host.replaceChildren();if(!rows.length){host.append(text('p','No confidently attributed observations in this period.','statistics-empty'));return;}
-        const height=Math.max(140,rows.length*48+40),s=chart(host,title,height),max=Math.max(1,...rows.map(r=>r.receptions));
-        rows.forEach((r,i)=>{
-            const y=20+i*48,label=labelOf(r),values=[r.unique_packets,r.repeated,r.unidentified];let x=185;
-            const category=svg('text',{x:8,y:y+15},label.length>22?label.slice(0,20)+'…':label);category.append(svg('title',{},label));s.append(category);
-            values.forEach((value,j)=>{const width=value/max*480;const bar=svg('rect',{x,y,width,height:22,fill:['#2563eb','#c75c0d','#64748b'][j],tabindex:'0'});bar.append(svg('title',{},`${label}: ${r.receptions} receptions; ${r.unique_packets} unique; ${r.repeated} repeated; ${r.unidentified} unidentified${percent?`; ${r.percentage.toFixed(1)}% of confirmed receptions`:''}`));s.append(bar);x+=width;});
-            s.append(svg('text',{x:680,y:y+16},`${r.receptions}${percent?' · '+r.percentage.toFixed(1)+'%':''}`));
-        });legend(host);
-        exactCounts(host,rows,labelOf,{percent});
+    function regionalTraffic(data){
+        const host=$('statistics-regions');if(!host)return;host.replaceChildren();
+        const label=document.createElement('label'),check=document.createElement('input');
+        check.type='checkbox';check.id='statistics-regions-all';check.checked=regionalAll;
+        label.append(check,document.createTextNode(' Show all messages (including duplicates)'));
+        const plot=text('div','','statistics-regional-plot');host.append(label,plot);
+        function draw(){
+            const count=r=>regionalAll?r.receptions:r.unique_packets;
+            const total=data.regions.reduce((n,r)=>n+count(r),0);
+            const rows=data.regions.map(r=>({...r,percentage:total?100*count(r)/total:0})).sort((a,b)=>count(b)-count(a)||a.name.localeCompare(b.name,'en'));
+            plot.replaceChildren();
+            if(!rows.length){plot.append(text('p','No confidently attributed observations in this period.','statistics-empty'));return;}
+            const s=chart(plot,'MeshCore regional traffic',Math.max(140,rows.length*48+40)),maximum=Math.max(1,...rows.map(count));
+            rows.forEach((r,i)=>{
+                const y=20+i*48,values=regionalAll?[r.unique_packets,r.repeated,r.unidentified]:[r.unique_packets];let x=185;
+                const category=svg('text',{x:8,y:y+15},r.name.length>22?r.name.slice(0,20)+'…':r.name);category.append(svg('title',{},r.name));s.append(category);
+                const description=`${r.name}: ${count(r)} ${regionalAll?'recorded receptions':'unique packets'} · ${r.percentage.toFixed(1)}% in this mode. Saved observations: ${countDescription(r)}.`;
+                values.forEach((value,j)=>{const width=value/maximum*480,bar=svg('rect',{x,y,width,height:22,fill:['#2563eb','#c75c0d','#64748b'][j],tabindex:'0',class:'statistics-region-bar','data-name':r.name,'data-count':count(r),'data-percentage':r.percentage,'data-mode':regionalAll?'all':'unique'});bar.append(svg('title',{},description));s.append(bar);x+=width;});
+                s.append(svg('text',{x:680,y:y+16,class:'statistics-region-value'},`${count(r)} · ${r.percentage.toFixed(1)}%`));
+            });
+            if(regionalAll)legend(plot);else plot.append(text('p','Unique packets · blue','statistics-chart-legend'));
+            plot.append(text('p',regionalAll?'All confirmed regional receptions, including duplicate and forwarded copies.':'Unique packet digests within each region; repeated copies are excluded from the ranking. Unidentified payloads remain in the exact-count table.','muted'));
+            plot.append(text('p','Percentages use the selected counting mode. Saved counts below retain every included reception; ambiguous and unverified observations remain excluded.','muted'));
+            exactCounts(plot,rows,r=>r.name,{percent:true});
+        }
+        check.addEventListener('change',()=>{regionalAll=check.checked;draw();});draw();
     }
     document.addEventListener('change',event=>{if(event.target.id==='statistics-show-one-way')$('statistics-neighbor-map')?.classList.toggle('hide-one-way',!event.target.checked);});
     document.addEventListener('repeater-names-updated',()=>{if(!lastData)return;activeNeighbors(lastData);neighborSnr(lastData);if(map)for(const item of Object.values(map._layers)){if(item.options?.identityKey)item.getElement()?.setAttribute('title',name({public_key:item.options.identityKey}));}});
@@ -233,6 +257,6 @@
         for(const id of ['statistics-neighbor-snr','statistics-active-neighbors','statistics-heatmap','statistics-packet-types','statistics-hourly','statistics-hops','statistics-regions','statistics-neighbor-map','statistics-map-notes','statistics-missing-coordinates','statistics-ambiguous'])$(id)?.classList.remove('statistics-stale');
         if($('statistics-coverage-summary'))$('statistics-coverage-summary').textContent='Recorded collection coverage: '+(data.coverage_known?(100*data.coverage_seconds/data.coverage_expected).toFixed(1)+'%':'Unknown');
         if($('statistics-coverage'))$('statistics-coverage').textContent=`${stamp(data.start)} — ${stamp(data.end)}. Recorded collection coverage: ${data.coverage_known?(100*data.coverage_seconds/data.coverage_expected).toFixed(1)+'% with recorded uptime; the remainder is unknown.':'Unknown (no saved uptime evidence for this history).'} ${data.excluded} ambiguous, unverified or non-forwarding receptions excluded from confirmed totals. Historical hours without uptime records have unknown coverage.`;
-        neighborSnr(data);hourly(data);hopColumns(data);activeNeighbors(data);heatmap(data);packetTypes(data);ranking('statistics-regions',data.regions,r=>r.name,'MeshCore regional traffic',true);neighborMap(data);observeCharts(data);
+        neighborSnr(data);hourly(data);hopColumns(data);activeNeighbors(data);heatmap(data);packetTypes(data);regionalTraffic(data);neighborMap(data);observeCharts(data);
     }};
 })();

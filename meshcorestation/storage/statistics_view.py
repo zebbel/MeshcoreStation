@@ -286,7 +286,7 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                 with diagnostics.stage('indexes'):
                     size=work.execute('PRAGMA page_count').fetchone()[0]*work.execute('PRAGMA page_size').fetchone()[0]
                     _space_guard(main_path,size*2)
-                    work.executescript('''CREATE INDEX facts_confirmed_digest ON facts(confirmed,digest);
+                    work.executescript('''CREATE INDEX facts_confirmed_digest ON facts(confirmed,digest,at,id);
                       CREATE INDEX edges_group ON edges(verified,identity,direction,digest,at);''')
                 with diagnostics.stage('totals'):
                     result['totals']=dict(work.execute('SELECT '+COUNTS.replace('packet_digest','digest')+' FROM facts WHERE confirmed=1').fetchone())
@@ -307,7 +307,19 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                     total=sum(r['receptions'] for r in result['packet_types'])
                     for row in result['packet_types']:row['percentage']=100*row['receptions']/total if total else 0
                 with diagnostics.stage('hops'):
-                    result['hops']=[dict(r) for r in work.execute('SELECT hop AS hop_count,'+count_sql+' FROM facts WHERE confirmed=1 GROUP BY hop ORDER BY receptions DESC,hop')]
+                    # The first confirmed reception in the selected period owns
+                    # the unique packet, even if later copies have different hops.
+                    # NULL digests remain unidentified, never one shared packet.
+                    result['hops']=[dict(r) for r in work.execute("""
+                      WITH classified AS (
+                        SELECT hop,digest,CASE WHEN digest IS NOT NULL AND ROW_NUMBER() OVER (
+                          PARTITION BY digest ORDER BY at,id)=1 THEN 1 ELSE 0 END AS first_seen
+                        FROM facts WHERE confirmed=1)
+                      SELECT hop AS hop_count,COUNT(*) AS receptions,
+                        SUM(first_seen) AS unique_packets,
+                        COUNT(digest)-SUM(first_seen) AS repeated,
+                        COUNT(*)-COUNT(digest) AS unidentified
+                      FROM classified GROUP BY hop ORDER BY hop""")]
                 with diagnostics.stage('regions'):
                     result['regions']=[dict(r) for r in work.execute('SELECT region AS name,'+count_sql+' FROM facts WHERE confirmed=1 GROUP BY region ORDER BY receptions DESC,region')]
                     for row in result['regions']:row['percentage']=100*row['receptions']/result['totals']['receptions'] if result['totals']['receptions'] else 0
@@ -365,7 +377,7 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                 values=activity.get(bucket) or dict(receptions=0 if complete else None,unique_packets=0 if complete else None,repeated=0 if complete else None,unidentified=0 if complete else None)
                 result['activity_hourly'].append(dict(at=bucket,until=until,interval_seconds=until-bucket,coverage_seconds=seconds,expected_seconds=hi-lo,complete=complete,**values))
             result['notes'].append('Adjacent flood-path observations are inferred relationships, not verified direct RF links or delivery confirmation.')
-            result['notes'].append('Unique packets are distinct payload digests within each hour or ranking category; repeated receptions are additional copies in that group.')
+            result['notes'].append('Hop ranking classifies the first confirmed reception per digest across the selected period as unique and later copies as repeated, at their recorded hop counts. Hourly and regional unique counts are deduplicated within each hour or region.')
         result.setdefault('diagnostics',{})['stages_ms']=diagnostics.times
         completed=True
         return result

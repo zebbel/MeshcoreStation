@@ -280,3 +280,76 @@ def test_individual_packet_codes_keep_trace_exclusion(station):
     assert {r['packet_type'] for r in rows}==set(range(16))-{9}
     assert all(r['receptions']==1 for r in rows)
     assert sum(r['percentage'] for r in rows)==pytest.approx(100)
+
+
+@pytest.mark.parametrize('days',[1,7,30])
+def test_hop_duplicates_across_hops_match_realistic_diagnostic(station,days):
+    """2,180 receptions / 2,032 digests; only 7 repeats share a hop bin."""
+    packets=[]
+    def packet(index,path,at):
+        return store.normalize(dict(path=path,path_hash_size=2,path_len=len(path)//4,
+            payload_type=5,route_type=1,pkt_payload=f'packet {index}'.encode()),now_ns=int(at*1e9))
+    for i in range(2032):packets.append(packet(i,'aa11bb22',NOW-20000+i))
+    for i in range(148):packets.append(packet(i,'aa11bb22' if i<7 else 'aa11bb22cc33',NOW-1000+i))
+    store.store_batch(database.DB_FILE,packets)
+    path=store.statistics_path(database.DB_FILE,A)
+    with sqlite3.connect(path) as db:
+        fingerprint=db.execute('SELECT COUNT(*),SUM(id),SUM(received_at) FROM observations').fetchone()
+        old=sum(r[0]-r[1] for r in db.execute('SELECT COUNT(packet_digest),COUNT(DISTINCT packet_digest) FROM observations GROUP BY hop_count'))
+    assert old==7
+    view=aggregate(database.DB_FILE,A,days,now=NOW)
+    assert view['totals']==dict(receptions=2180,unique_packets=2032,repeated=148,unidentified=0)
+    hops={r['hop_count']:r for r in view['hops']}
+    assert hops[2]['unique_packets']==2032 and hops[2]['repeated']==7
+    assert hops[3]['unique_packets']==0 and hops[3]['repeated']==141
+    for field,total in view['totals'].items():assert sum(r[field] for r in view['hops'])==total
+    with sqlite3.connect(path) as db:
+        assert db.execute('SELECT COUNT(*),SUM(id),SUM(received_at) FROM observations').fetchone()==fingerprint
+
+
+def test_hop_first_confirmation_uses_observation_time_then_reception_id(station):
+    # Insert in reverse time order: ingestion order must not choose the first packet.
+    add('aa11bb22',payload=b'same packet',at=NOW-100)
+    add('aa11bb22cc33',payload=b'same packet',at=NOW-200)
+    add('aa11bb22cc33dd44',payload=b'same packet',at=NOW-100)
+    # Earlier reception outside the window must not consume the window's unique.
+    add('aa11',payload=b'same packet',at=NOW-2*86400)
+    view=aggregate(database.DB_FILE,A,1,now=NOW)
+    hops={r['hop_count']:r for r in view['hops']}
+    assert hops[3]['unique_packets']==1 and hops[3]['repeated']==0
+    assert hops[2]['unique_packets']==0 and hops[2]['repeated']==1
+    assert hops[4]['unique_packets']==0 and hops[4]['repeated']==1
+    assert 1 not in hops
+    # Equal-time copies use the saved reception ID as a deterministic tie-breaker.
+    add('aa11bb22cc33',payload=b'tied',at=NOW-50)
+    add('aa11bb22',payload=b'tied',at=NOW-50)
+    hops={r['hop_count']:r for r in aggregate(database.DB_FILE,A,1,now=NOW)['hops']}
+    assert hops[3]['unique_packets']==2 and hops[2]['unique_packets']==0
+
+
+def test_hop_unknown_and_ambiguous_are_not_unique_or_repeated(station):
+    station.add_new_repeater(NS(payload=dict(type=2,public_key='aa99'+'99'*30,adv_name='Prefix collision')),observed=False)
+    add('aabb',size=1,payload=b'same',at=NOW-300)  # Target prefix is ambiguous.
+    add('aa11bb22',payload=b'same',at=NOW-200)
+    add('aa11bb22cc33',payload=b'same',at=NOW-100)
+    add('aa11bb22',payload=b'unidentified',at=NOW-80)
+    path=store.statistics_path(database.DB_FILE,A)
+    with sqlite3.connect(path) as db:db.execute('UPDATE observations SET packet_digest=NULL WHERE payload=?',(b'unidentified',))
+    view=aggregate(database.DB_FILE,A,1,now=NOW)
+    assert view['excluded']==1
+    assert view['totals']==dict(receptions=3,unique_packets=1,repeated=1,unidentified=1)
+    for field,total in view['totals'].items():assert sum(r[field] for r in view['hops'])==total
+    hops={r['hop_count']:r for r in view['hops']}
+    assert hops[2]['unique_packets']==1 and hops[2]['unidentified']==1
+    assert hops[3]['unique_packets']==0 and hops[3]['repeated']==1
+
+
+def test_regions_deduplicate_packet_identity_not_decoded_message_text(station):
+    packets=[]
+    for payload,path in [(b'packet timestamp 1','aa11bb22'),(b'packet timestamp 1','aa11bb22cc33'),(b'packet timestamp 2','aa11bb22')]:
+        packets.append(store.normalize(dict(path=path,path_hash_size=2,path_len=len(path)//4,
+            payload_type=5,route_type=1,pkt_payload=payload,message='Same decoded text'),now_ns=int((NOW-100)*1e9)))
+    store.store_batch(database.DB_FILE,packets)
+    row=aggregate(database.DB_FILE,A,1,now=NOW)['regions'][0]
+    assert row['name']=='Unscoped'
+    assert row['unique_packets']==2 and row['repeated']==1 and row['receptions']==3

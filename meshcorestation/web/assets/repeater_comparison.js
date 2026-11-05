@@ -10,6 +10,12 @@
         const value=await response.json();if(!response.ok||!value.ok)throw Error(value.error||'Saved data unavailable.');return value;
     }
     function identity(r){return window.MeshcoreStationRepeaterNames?.element(r.public_key)||text('span',r.name||r.public_key);}
+    function percentageChange(before,after){
+        if(!Number.isFinite(before)||!Number.isFinite(after))return 'Unavailable';
+        if(before===0)return 'N/A';
+        const rounded=Number(((after-before)/before*100).toFixed(1));
+        return (rounded>0?'+':rounded<0?'−':'')+Math.abs(rounded).toFixed(1)+'%';
+    }
     function table(host,head,data){const table=document.createElement('table'),tr=document.createElement('tr');for(const label of head)tr.append(text('th',label));table.append(tr);for(const cells of data){const row=document.createElement('tr');for(const value of cells){const cell=document.createElement('td');cell.append(value instanceof Node?value:text('span',value));row.append(cell);}table.append(row);}const scroll=text('div','','statistics-table-scroll');scroll.append(table);host.append(scroll);}
     function button(label,action){const n=text('button',label,'secondary');n.type='button';n.addEventListener('click',action);return n;}
     function journal(selected=$('comparison-change').value){
@@ -76,7 +82,7 @@
         }
         host.append(text('h3','Supporting Observations'));
         const metrics=[['Observed neighbors','neighbors',''],['Confirmed observed receptions','receptions',''],['Unique packets','unique_packets',''],['Repeated receptions','repeated',''],['Unidentified receptions','unidentified',''],['Covered receptions / recorded hour','traffic_per_recorded_hour',' / h'],['One-way observed relationships','one_way',''],['Two-way observed relationships','two_way','']];
-        table(host,['Measurement','Before','After','Difference'],metrics.map(([label,k,suffix])=>[label,metric(data.before[k],suffix),metric(data.after[k],suffix),data.before[k]==null||data.after[k]==null?'Unavailable':metric(data.after[k]-data.before[k],suffix)]));
+        table(host,['Measurement','Before','After','Difference','Change (%)'],metrics.map(([label,k,suffix])=>[label,metric(data.before[k],suffix),metric(data.after[k],suffix),data.before[k]==null||data.after[k]==null?'Unavailable':metric(data.after[k]-data.before[k],suffix),percentageChange(data.before[k],data.after[k])]));
         for(const [label,list]of [['Newly observed route neighbors',data.new_observed_neighbors],['Route neighbors not observed after',data.not_observed_after]]){host.append(text('h4',label+' · '+list.length));const names=document.createElement('ul');for(const r of list){const li=document.createElement('li');li.append(identity(r));names.append(li);}host.append(names);}
         host.append(text('p','Covered traffic rates use receptions inside recorded healthy collection intervals only. Missing coverage is not zero traffic. Relationships come from observed flood routes, not verified direct RF links. SNR Last Heard times are estimates.','muted'));
         for(const period of ['before','after']){const notes=document.createElement('details');notes.append(text('summary',period==='before'?'Before — data limitations':'After — data limitations'));for(const n of data[period].notes)notes.append(text('p',n,'muted'));notes.append(text('p',data[period].uncertain_snr_groups+' unknown/ambiguous SNR groups excluded from identity matching.'));host.append(notes);}

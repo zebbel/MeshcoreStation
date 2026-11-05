@@ -57,6 +57,14 @@ these per-hour unique figures must not be summed as globally unique packets.
 
 ## Hop Count Ranking
 
+Unique/repeated classification spans the full selected period: the earliest
+confirmed reception of each packet digest is unique, ordered by observation time
+then reception ID. Later confirmed copies are repeated even if the hop count
+changes. Each reception belongs to its actual recorded hop category, so category
+counts reconcile with confirmed period totals. Unidentified digests remain
+separate; ambiguous or currently unresolved observations do not consume a
+confirmed unique packet. Stored history is read only.
+
 Columns are ordered by increasing numeric hop count. Each category uses
 the complete recorded flood-route hop count, not estimated transmissions or
 hops to a destination. Each category has side-by-side blue unique-packet
@@ -77,8 +85,12 @@ volume is not evidence of RF reception reliability.
 
 ## Traffic Activity Heatmap
 
-Calendar days form the rows and hours 00–23 form the columns. The intensity scale
-uses counts of confidently attributed flood-path receptions across all packet
+Calendar days form the rows and hours 00–23 form the columns. The continuous, data-adaptive blue intensity scale uses square-root interpolation
+between five color stops, with more than 20 distinguishable colors when the
+available range supports them. Colors are display values only: exact counts and
+original precision remain unchanged. A continuous legend shows light (low) to
+dark (high) traffic; zero and unknown intervals retain their separate styles.
+The scale uses counts of confidently attributed flood-path receptions across all packet
 types, excluding full-key advertisement origins. It therefore covers more packet
 types than Messages per Hour, which remains text-only.
 
@@ -94,11 +106,14 @@ receive invented zeros. Partial boundary hours remain visually incomplete.
 
 ## Packet Type Distribution
 
-The donut shows Group messages, Direct text messages, Advertisements and Other
-MeshCore packet types. Unknown/unsupported saved packet kinds remain in Other.
+The donut shows recorded MeshCore packet codes individually, including reserved
+or unknown codes by numeric identifier. Categories are ordered by descending
+unrounded percentage (equivalently reception count), with numeric code as a
+stable tie-breaker. Legend entries and donut segments share this order; colors
+remain attached to packet codes, regardless of ranking.
 Counts and percentages describe included receptions, including repeated copies,
 not a forwarding-success or delivery rate. The legend, interactive segments and
-exact table retain precise values. Zero categories remain visible in the legend.
+exact table retain precise values. Only recorded packet types are included.
 
 Full-key advertisement-origin evidence is included as a separate evidence class,
 never classified as forwarding in this new distribution. Advertisement route
@@ -117,11 +132,21 @@ The isolated worker, cache invalidation and timeouts remain unchanged.
 
 ## MeshCore Regional Traffic Ranking
 
-Unscoped is a normal category and is sorted with named regions by observed
-reception count. Unknown covers scoped traffic without a uniquely verified local
-region match. Each category shows reception count, percentage of all confirmed
-receptions in the period, distinct digests and repeated receptions. Distinct
-counts are per category and must not be summed as globally unique traffic.
+Unique packet digests per region are shown by default. **Show all messages
+(including duplicates)** switches locally to all included confirmed receptions,
+including duplicate and forwarded copies. Counts, shares, descending ranks and
+bar lengths update immediately without API requests or recalculating statistics.
+The choice is retained across period/repeater refreshes. Unknown digests are
+excluded from unique counts but remain in the saved exact-count table and all-
+reception mode. Ambiguous/unverified observations keep their existing exclusions.
+
+Unscoped is a normal category, ranked alongside named regions. Unknown covers
+scoped traffic without a uniquely verified local region match. Percentages use
+the sum of per-region counts in the selected mode. Deduplication uses packet
+identity, never decoded message text. The same identity seen in distinct regions
+can count once in each; per-region unique counts are not globally unique traffic.
+The exact-count table preserves the original saved reception/unique/repeated/
+unidentified counts, with shares for the active counting mode.
 
 In **Configure known region names**, enter one name per line, for example
 `de-he` or `rhein-neckar`. An optional 32-hex scope key can follow the name after

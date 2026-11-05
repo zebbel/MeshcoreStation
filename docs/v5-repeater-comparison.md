@@ -56,7 +56,13 @@ missing measurements; missing neighbors do not prove RF communication is impossi
 Each window shows observed flood-route neighbors, confirmed reception counts,
 unique/repeated/unidentified counts, one-/two-way observed relationships, and
 new/after-missing route neighbors. Unavailable history is shown as unavailable.
-Positive observations without complete coverage remain lower bounds.
+Positive observations without complete coverage remain lower bounds. Supporting
+Observations also shows **Change (%)** beside the absolute Difference:
+`(After - Before) / Before × 100`, rounded to one decimal with signed positive
+and negative changes. A zero Before value shows `N/A`; missing measurements
+remain unavailable. Values recalculate with each selected comparison period.
+Neighbor SNR means, samples and absolute dB differences are unchanged; no SNR
+percentage comparison is calculated.
 
 Traffic per recorded hour counts only confirmed receptions whose timestamps fall
 inside the union of verified recording intervals. It does not divide all legacy
