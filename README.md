@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.6.2
+# MeshcoreStation V5 — 5.7.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.6.2** restores themed regional-chart labels and displays unique and repeated receptions as separate bars in both ranking modes.
+Development branch: **`V5`**. Version **5.7.0** adds opt-in automatic repeater clock synchronization with per-repeater scheduling, administrator ACL checks and verified forward-only corrections.
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -72,6 +72,10 @@ off by default, with the V4 unencrypted-storage warning.
   store password values. Optional telemetry monitoring and report functions are
   disabled by default and use the main database; no Analyzer or neighbor poller
   is started.
+- Automatic repeater clock synchronization: disabled by default, per-repeater
+  intervals and saved status, Companion administrator ACL access, verified
+  forward-only corrections and persistent protection against uncertain-write
+  retries. See [clock synchronization safety and scheduling](docs/v5-clock-sync.md).
 - Known Repeaters: saved count and map work while disconnected. Only valid saved
   coordinates are plotted; ambiguous short path hashes remain unidentified.
 

@@ -43,7 +43,7 @@ async def run():
     runtime=Runtime(logging.getLogger('fixture'),db);runtime.companion=c;runtime.control=CompanionControl(c)
     runtime.device_info={'ver':'fixture','fw_build':'SIMULATED — no radio','model':'Fixture Companion'}
     bridge.attach(runtime);bridge.status=('Running','Fixture Companion connected — simulated hardware','running')
-    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.6.2','checked_at':2000000000}
+    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.7.0','checked_at':2000000000}
     updater.ready=lambda:False
     bot_runtime.ports=lambda:[{'device':'/dev/fixture','description':'Simulated Companion'}]
     web=WebServer();web.start()

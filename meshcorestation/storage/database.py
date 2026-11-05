@@ -105,6 +105,8 @@ class Database:
         initialize_replies(self.db);initialize_receptions(self.db);initialize_telemetry(self.db)
         from meshcorestation.storage.statistics_view import REGIONS_SCHEMA
         self.db.execute(REGIONS_SCHEMA)
+        from meshcorestation.storage.clock_sync import SCHEMA as CLOCK_SCHEMA
+        self.db.executescript(CLOCK_SCHEMA)
         from meshcorestation.storage.neighbor_snr import SCHEMA as NEIGHBOR_SCHEMA
         self.db.execute(NEIGHBOR_SCHEMA)
         from meshcorestation.storage.repeater_comparison import SCHEMA as COMPARISON_SCHEMA

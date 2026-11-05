@@ -24,6 +24,8 @@ class Runtime:
         self.statistics = Collector(main_path, logger)
         from meshcorestation.radio.neighbor_monitor import NeighborMonitor
         self.neighbor_monitor = NeighborMonitor(self, main_path)
+        from meshcorestation.radio.clock_sync import ClockSyncWorker
+        self.clock_sync = ClockSyncWorker(self, main_path)
 
     async def dispatch(self, payload):
         """Serialize control changes with bot replies and telemetry requests."""
@@ -76,6 +78,7 @@ class Runtime:
 
     async def close_session(self):
         self.control = None
+        await self.clock_sync.close()
         if self.neighbor_monitor.task:
             await self.neighbor_monitor.close()
         if self.companion is not None:
@@ -191,6 +194,7 @@ class Runtime:
         self.voltage = VoltageMonitor(self.companion)
         self.voltage.start()
         self.neighbor_monitor.start()
+        self.clock_sync.start()
         await self.start_rooms()
         self.logger.set_log_level()
         while True:
