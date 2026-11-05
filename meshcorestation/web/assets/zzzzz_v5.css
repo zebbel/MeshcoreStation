@@ -43,6 +43,13 @@
 .statistics-chart {overflow-x:auto;max-width:100%;}
 .statistics-chart > svg {display:block;width:100%;min-width:620px;height:auto;}
 .statistics-chart > svg text {font:13px system-ui;fill:var(--text);}
+/* The regional chart has a nested plot container. Scope SVG styling to this
+   chart so theme text reaches nested labels without touching Leaflet overlays. */
+#statistics-regions .statistics-regional-plot {min-width:0;max-width:100%;}
+#statistics-regions .statistics-regional-plot svg {display:block;width:100%;min-width:760px;height:auto;}
+#statistics-regions .statistics-regional-plot svg text {font:13px system-ui;fill:var(--text);}
+.statistics-region-bar:focus {outline:2px solid var(--accent);outline-offset:2px;}
+
 .statistics-grid {stroke:var(--border);stroke-width:1;}
 .statistics-chart-legend,.statistics-map-legend {color:var(--muted);font-size:13px;}
 #statistics-neighbor-map {height:380px;min-height:280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;}

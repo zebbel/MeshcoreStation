@@ -180,17 +180,24 @@
             const rows=data.regions.map(r=>({...r,percentage:total?100*count(r)/total:0})).sort((a,b)=>count(b)-count(a)||a.name.localeCompare(b.name,'en'));
             plot.replaceChildren();
             if(!rows.length){plot.append(text('p','No confidently attributed observations in this period.','statistics-empty'));return;}
-            const s=chart(plot,'MeshCore regional traffic',Math.max(140,rows.length*48+40)),maximum=Math.max(1,...rows.map(count));
+            const s=chart(plot,'MeshCore regional traffic: upper unique messages and lower repeated receptions',Math.max(160,rows.length*80+64));
+            const maximum=Math.max(1,...rows.flatMap(r=>[r.unique_packets,r.repeated])),interactive=inspect(plot);
+            s.classList.add('statistics-regional-chart');
+            s.append(svg('text',{x:185,y:18},'Unique messages / repeated receptions'),svg('text',{x:890,y:18,'text-anchor':'end'},regionalAll?'All receptions / share':'Unique total / share'));
             rows.forEach((r,i)=>{
-                const y=20+i*48,values=regionalAll?[r.unique_packets,r.repeated,r.unidentified]:[r.unique_packets];let x=185;
-                const category=svg('text',{x:8,y:y+15},r.name.length>22?r.name.slice(0,20)+'…':r.name);category.append(svg('title',{},r.name));s.append(category);
-                const description=`${r.name}: ${count(r)} ${regionalAll?'recorded receptions':'unique packets'} · ${r.percentage.toFixed(1)}% in this mode. Saved observations: ${countDescription(r)}.`;
-                values.forEach((value,j)=>{const width=value/maximum*480,bar=svg('rect',{x,y,width,height:22,fill:['#2563eb','#c75c0d','#64748b'][j],tabindex:'0',class:'statistics-region-bar','data-name':r.name,'data-count':count(r),'data-percentage':r.percentage,'data-mode':regionalAll?'all':'unique'});bar.append(svg('title',{},description));s.append(bar);x+=width;});
-                s.append(svg('text',{x:680,y:y+16,class:'statistics-region-value'},`${count(r)} · ${r.percentage.toFixed(1)}%`));
+                const y=34+i*80;
+                const description=`${r.name}: ${r.unique_packets} unique messages; ${r.repeated} repeated receptions; ${r.receptions} total observed receptions; ${r.unidentified} unidentified. Ranking uses ${count(r)} ${regionalAll?'all receptions':'unique messages'} (${r.percentage.toFixed(1)}%). Packet digests are deduplicated within each region.`;
+                const category=svg('text',{x:8,y:y+15},r.name.length>22?r.name.slice(0,20)+'…':r.name);interactive(category,description);s.append(category);
+                for(const [field,color,offset,label]of [['unique_packets','#2563eb',0,'unique'],['repeated','#c75c0d',26,'repeated']]){
+                    const value=r[field],bar=svg('rect',{x:185,y:y+offset,width:value/maximum*400,height:18,fill:color,class:'statistics-region-bar','data-name':r.name,'data-series':field,'data-value':value,'data-count':count(r),'data-total':r.receptions,'data-percentage':r.percentage,'data-mode':regionalAll?'all':'unique'});
+                    interactive(bar,description);s.append(bar);
+                    const number=svg('text',{x:600,y:y+offset+14,class:'statistics-region-series-count'},`${value} ${label}`);interactive(number,description);s.append(number);
+                }
+                const total=svg('text',{x:890,y:y+27,'text-anchor':'end',class:'statistics-region-value'},`${count(r)} · ${r.percentage.toFixed(1)}%`);interactive(total,description);s.append(total);
             });
-            if(regionalAll)legend(plot);else plot.append(text('p','Unique packets · blue','statistics-chart-legend'));
-            plot.append(text('p',regionalAll?'All confirmed regional receptions, including duplicate and forwarded copies.':'Unique packet digests within each region; repeated copies are excluded from the ranking. Unidentified payloads remain in the exact-count table.','muted'));
-            plot.append(text('p','Percentages use the selected counting mode. Saved counts below retain every included reception; ambiguous and unverified observations remain excluded.','muted'));
+            plot.append(text('p','Blue upper bar: Unique messages · Orange lower bar: Repeated receptions. Both bars use the same numerical scale in either ranking mode.','statistics-chart-legend'));
+            plot.append(text('p',regionalAll?'Regions are ranked by all confirmed regional receptions, including duplicate and forwarded copies. Totals and percentages include those receptions.':'Regions are ranked by unique packet digests within each region. Totals and percentages exclude duplicates; repeated receptions remain visible for context.','muted'));
+            plot.append(text('p','Bar counts do not change when the ranking mode changes. Unidentified payloads are included in all-reception totals but remain separate from unique/repeated bars in the exact-count table. Ambiguous and unverified observations remain excluded. The exact-count table retains all saved counts; its shares follow the active ranking mode.','muted'));
             exactCounts(plot,rows,r=>r.name,{percent:true});
         }
         check.addEventListener('change',()=>{regionalAll=check.checked;draw();});draw();

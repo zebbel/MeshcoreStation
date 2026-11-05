@@ -70,21 +70,35 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
  const regionalSource=JSON.stringify(regional);
  w.MeshcoreStationStatisticsVisuals.render({...data,regions:regional});await settle();
  let regionBars=[...d.querySelectorAll('.statistics-region-bar')];
- assert.deepEqual(regionBars.map(r=>r.dataset.name),['Beta','Alpha','Unscoped']);
- assert.deepEqual(regionBars.map(r=>r.dataset.count),['10','5','4']);
+ assert.equal(regionBars.length,6);
+ assert.deepEqual(regionBars.filter(r=>r.dataset.series==='unique_packets').map(r=>r.dataset.name),['Beta','Alpha','Unscoped']);
+ assert.deepEqual(regionBars.filter(r=>r.dataset.series==='unique_packets').map(r=>r.dataset.count),['10','5','4']);
  assert.equal(regionBars[0].dataset.mode,'unique');assert(Math.abs(Number(regionBars[0].dataset.percentage)-1000/19)<1e-9);
- assert(regionBars.every(r=>r.getAttribute('fill')==='#2563eb'));
+ assert.deepEqual(regionBars.filter(r=>r.dataset.series==='unique_packets').map(r=>r.getAttribute('fill')),['#2563eb','#2563eb','#2563eb']);
+ const repeatedBars=regionBars.filter(r=>r.dataset.series==='repeated');
+ assert.equal(repeatedBars.length,3);assert(repeatedBars.every(r=>r.getAttribute('fill')==='#c75c0d'&&Number(r.getAttribute('width'))>0),'repeated receptions remain visible in unique ranking mode');
+ for(const name of ['Alpha','Beta','Unscoped']){
+  const bars=regionBars.filter(r=>r.dataset.name===name),[unique,repeated]=bars;
+  assert.equal(unique.dataset.series,'unique_packets');assert.equal(repeated.dataset.series,'repeated');
+  assert.equal(unique.getAttribute('x'),repeated.getAttribute('x'));assert(Number(unique.getAttribute('y'))+Number(unique.getAttribute('height'))<Number(repeated.getAttribute('y')));
+  assert(Math.abs(Number(unique.getAttribute('width'))/Number(unique.dataset.value)-Number(repeated.getAttribute('width'))/Number(repeated.dataset.value))<1e-9,'both bars share one scale');
+ }
+ const initialWidths=new Map(regionBars.map(r=>[r.dataset.name+'|'+r.dataset.series,r.getAttribute('width')]));
+ repeatedBars[0].dispatchEvent(new w.Event('focus'));assert(d.querySelector('#statistics-regions .statistics-hover-value').textContent.includes('12 total observed receptions'));
+ repeatedBars[0].dispatchEvent(new w.Event('click'));assert(d.querySelector('#statistics-regions .statistics-hover-value').textContent.includes('2 repeated receptions'));
+
  const mapCount=maps,otherChart=d.getElementById('statistics-hourly').innerHTML;
  let external=0;w.fetch=()=>{external++;throw Error('Unexpected request');};
  let all=d.getElementById('statistics-regions-all');assert(!all.checked);all.checked=true;all.dispatchEvent(new w.Event('change'));
  regionBars=[...d.querySelectorAll('.statistics-region-bar')];
- assert.deepEqual(regionBars.filter((r,i)=>i%3===0).map(r=>r.dataset.name),['Alpha','Beta','Unscoped']);
+ assert.deepEqual(regionBars.filter(r=>r.dataset.series==='unique_packets').map(r=>r.dataset.name),['Alpha','Beta','Unscoped']);
  assert.equal(regionBars[0].dataset.count,'20');assert(Math.abs(Number(regionBars[0].dataset.percentage)-2000/38)<1e-9);
- assert(regionBars.some(r=>r.getAttribute('fill')==='#c75c0d'));
+ assert.equal(regionBars.length,6);assert(regionBars.filter(r=>r.dataset.series==='repeated').every(r=>r.getAttribute('fill')==='#c75c0d'));
+ for(const r of regionBars)assert.equal(r.getAttribute('width'),initialWidths.get(r.dataset.name+'|'+r.dataset.series),'ranking mode does not change either bar count/scale');
  assert.equal(external,0);assert.equal(maps,mapCount);assert.equal(d.getElementById('statistics-hourly').innerHTML,otherChart);
- for(const days of [1,7,30]){w.MeshcoreStationStatisticsVisuals.render({...data,days,selected:B,regions:regional});await settle();assert(d.getElementById('statistics-regions-all').checked);assert.equal(d.querySelector('.statistics-region-value').textContent,'20 · 52.6%');}
+ for(const days of [1,7,30]){w.MeshcoreStationStatisticsVisuals.render({...data,days,selected:B,regions:regional});await settle();assert(d.getElementById('statistics-regions-all').checked);assert.equal(d.querySelector('.statistics-region-value').firstChild.textContent,'20 · 52.6%');}
  all=d.getElementById('statistics-regions-all');all.checked=false;all.dispatchEvent(new w.Event('change'));
- assert.equal(d.querySelector('.statistics-region-value').textContent,'10 · 52.6%');assert.equal(JSON.stringify(regional),regionalSource);
+ assert.equal(d.querySelector('.statistics-region-value').firstChild.textContent,'10 · 52.6%');assert.equal(JSON.stringify(regional),regionalSource);
  // Donut and legend order aggregate origins/floods by code, with stable code ties.
  const types=[{packet_type:15,evidence:'observed-flood-route',receptions:20,unique_packets:10,repeated:10,unidentified:0},{packet_type:0,evidence:'observed-flood-route',receptions:2,unique_packets:2,repeated:0,unidentified:0},{packet_type:4,evidence:'advertisement-origin',receptions:8,unique_packets:8,repeated:0,unidentified:0},{packet_type:5,evidence:'observed-flood-route',receptions:20,unique_packets:20,repeated:0,unidentified:0},{packet_type:4,evidence:'observed-flood-route',receptions:2,unique_packets:2,repeated:0,unidentified:0}];
  for(const r of types)r.percentage=100*r.receptions/52;

@@ -132,13 +132,27 @@ The isolated worker, cache invalidation and timeouts remain unchanged.
 
 ## MeshCore Regional Traffic Ranking
 
-Unique packet digests per region are shown by default. **Show all messages
-(including duplicates)** switches locally to all included confirmed receptions,
-including duplicate and forwarded copies. Counts, shares, descending ranks and
-bar lengths update immediately without API requests or recalculating statistics.
-The choice is retained across period/repeater refreshes. Unknown digests are
-excluded from unique counts but remain in the saved exact-count table and all-
-reception mode. Ambiguous/unverified observations keep their existing exclusions.
+Each region has two separate horizontal bars: blue unique messages above orange
+repeated receptions. Both remain visible in either checkbox mode and share a
+single numerical scale across all regions. Their counts and lengths do not
+change when only the ranking mode changes. A zero count remains zero, without
+inventing a visible nonzero bar. Hover, keyboard focus or tap shows exact unique,
+repeated, total and unidentified counts with the active share.
+
+The **Show all messages (including duplicates)** checkbox defaults to unchecked.
+Unchecked ranks regions and calculates totals/percentages using unique packet
+digests within each region; repeated receptions remain visible for context.
+Checked ranks and calculates totals/percentages using all included confirmed
+receptions, including duplicates and forwarded copies. Ranking and shares update
+immediately from the saved response, with no API request or recalculation.
+The choice persists across period/repeater refreshes. Unknown digests are
+excluded from unique/repeated bars but retained in all-reception totals and the
+exact-count table. Ambiguous/unverified observations keep their exclusions.
+
+Regional SVG names, counts and headers inherit `--text` through a scoped nested
+SVG selector, so they remain readable in both light and dark themes. The chart
+scrolls horizontally inside its panel on narrow screens; other chart and Leaflet
+SVG styles are unchanged.
 
 Unscoped is a normal category, ranked alongside named regions. Unknown covers
 scoped traffic without a uniquely verified local region match. Percentages use
