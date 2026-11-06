@@ -22,7 +22,7 @@ management, telemetry and reply operations. Requests are paced at least five
 seconds apart, with one repeater serviced per scheduler tick and oldest-due first.
 The saved contact route is retained; flooding/path resets are not forced.
 
-All neighbor pages are requested using the existing MeshCore protocol, 15 entries
+For legacy repeaters, neighbor pages use the existing protocol, 15 entries
 per page. A 128-page safety bound prevents malformed pagination from generating
 unbounded radio traffic; reaching it reports an incomplete poll rather than
 claiming a complete list. Valid readings from earlier pages remain saved.
@@ -33,6 +33,11 @@ configuration and membership are rechecked before every queued operation and wri
 Removing/re-adding a managed repeater invalidates old queued work. Historical files
 are never automatically deleted.
 
+Compatible repeaters are checked for the hardware-independent averaged-SNR
+protocol through this same scheduler. Failed probes are not permanent unsupported
+classifications; legacy monitoring remains available. See
+[firmware aggregates, budgets and source rules](v5-averaged-snr.md).
+
 ## Stored evidence and averages
 
 Successful responses are stored in the existing per-repeater file:
@@ -42,12 +47,12 @@ unmanaged repeater, and merely viewing or saving settings creates no statistics
 file. Writes run outside the radio event loop and preserve the collector's disk
 space reserve.
 
-Each raw poll reading retains the prefix, resolved full key/status, SNR, reported
+Each legacy raw poll reading retains the prefix, resolved full key/status, SNR, reported
 `secs_ago`, poll time and a reference to its deduplicated measurement. Polls record
 completion/error state. Missing or invalid SNR/age readings remain raw evidence
 but are excluded from means.
 
-The protocol supplies an age, not a reception ID. A source last-heard time is
+The legacy protocol supplies an age, not a reception ID. A source last-heard time is
 bounded by request start/response arrival, allowing one second for age rounding.
 Overlapping intervals with the same identity and SNR are conservatively counted
 once, even as `secs_ago` increases on subsequent polls. Non-overlapping source

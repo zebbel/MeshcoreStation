@@ -94,3 +94,18 @@ tap/click or keyboard selection reveals a temporary marker, exact value and time
 Hover markers clear on pointer leave; selected markers clear with Escape or blur.
 Selections survive refresh while the selected measurement is still available.
 Stored telemetry, polling intervals and retention are unchanged.
+
+## Firmware SNR aggregates
+
+Compatible repeaters contribute sample-weighted firmware means. Only whole
+UTC-valid windows inside each comparison period are included. A window crossing
+the change timestamp is excluded from both periods, since its samples cannot be
+split without inventing their timing. Invalid UTC and collection limits remain
+explicit. The median still uses matched-neighbor differences, never pooled data
+across neighbors.
+
+For each neighbor, firmware aggregates take precedence over differently sampled
+legacy estimates within a period. Legacy history is preserved. When sources
+differ between periods, both values/counts are shown separately and excluded from
+dB differences and the median. No SNR percentage changes are introduced. See
+[aggregate source and time rules](v5-averaged-snr.md).

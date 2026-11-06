@@ -142,7 +142,7 @@ def record_page(path,cfg,poll_id,started,received,rows):
         return True
 
 
-def summary(source,registry,start,end):
+def _legacy_summary(source,registry,start,end):
     """SQL groups only; raw poll history never enters the browser."""
     if not source.execute("SELECT 1 FROM sqlite_master WHERE name='neighbor_snr_measurements'").fetchone():return []
     rows=source.execute('''SELECT prefix,public_key,resolution,AVG(snr),COUNT(*),MAX((heard_lo+heard_hi)/2)
@@ -163,3 +163,14 @@ def summary(source,registry,start,end):
             old['average_snr']=(old['average_snr']*old['samples']+row['average_snr']*row['samples'])/n
             old['samples']=n;old['last_heard']=max(old['last_heard'],row['last_heard'])
     return list(grouped.values())
+
+
+def summary(source,registry,start,end,quality=None):
+    from meshcorestation.storage.averaged_snr import summary as aggregated
+    legacy=_legacy_summary(source,registry,start,end)
+    firmware,details=aggregated(source,registry,start,end)
+    if quality is not None:quality.update(details)
+    firmware_keys={r['public_key'] for r in firmware}
+    for row in legacy:row.update(source='legacy_last_heard',minimum_snr=None,maximum_snr=None)
+    # Preserve legacy history but do not blend differently sampled methods.
+    return firmware+[r for r in legacy if r['public_key'] not in firmware_keys]

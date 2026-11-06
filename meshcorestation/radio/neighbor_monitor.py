@@ -45,12 +45,16 @@ class NeighborMonitor:
         poll_id=uuid.uuid4().hex;error='';self.collecting=True
         try:
             transport=RepeaterTransport(companion)
+            login_data={}
             async def prepare():
+                nonlocal login_data
                 contact=await transport.contact(cfg['public_key'])
                 if not await self.active(companion,cfg):raise ValueError('Monitoring configuration changed.')
-                await transport.login(contact,'') # guest access only, no stored/admin passwords
+                login_data=await transport.login(contact,'') # guest access only, no stored/admin passwords
                 return contact
             contact=await self.exchange(companion,cfg,prepare)
+            from meshcorestation.radio.averaged_snr_collection import collect
+            if await collect(self,companion,cfg,contact,login_data,poll_id):return
             offset=0
             for _ in range(MAX_PAGES):
                 started=time.time()

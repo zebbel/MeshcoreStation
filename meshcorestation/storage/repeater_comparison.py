@@ -88,12 +88,19 @@ def aggregate(path,key,change_id,days,now=None):
     before,after=values
     b={r['public_key']:r for r in before['neighbor_snr'] if r['resolution']=='matched'}
     a={r['public_key']:r for r in after['neighbor_snr'] if r['resolution']=='matched'}
-    matched=[]
+    matched=[];source_changes=[]
     for identity in sorted(b.keys()&a.keys()):
         left,right=b[identity],a[identity]
+        if left.get('source','legacy_last_heard')!=right.get('source','legacy_last_heard'):
+            source_changes.append(dict(public_key=identity,name=right['name'] or left['name'],before=left['average_snr'],after=right['average_snr'],before_source=left.get('source'),after_source=right.get('source'),before_samples=left['samples'],after_samples=right['samples']))
+            continue
         matched.append(dict(public_key=identity,name=right['name'] or left['name'],before=left['average_snr'],after=right['average_snr'],
                             difference_db=right['average_snr']-left['average_snr'],before_samples=left['samples'],after_samples=right['samples']))
     warnings=[]
+    if source_changes:warnings.append('SNR measurement sources differ for some neighbors. Their values are excluded from dB differences and the median.')
+    for value in values:
+        for note in value['notes']:
+            if 'firmware snr' in note.lower() and note not in warnings:warnings.append(note)
     if after.get('future'):warnings.append('The after-period extends into the future; this comparison is incomplete.')
     periods=[_period(v) for v in values]
     if not all(p['complete'] for p in periods):warnings.append('Passive recording coverage is incomplete or unknown. Observed counts are lower bounds, not final period totals.')
@@ -102,7 +109,7 @@ def aggregate(path,key,change_id,days,now=None):
     if overlapping:warnings.append('Other logged changes overlap these windows and may affect interpretation.')
     warnings.append('SNR sampling coverage is not equivalent to passive collection uptime; sample counts are shown separately.')
     warnings.append('Changes can coincide with different network traffic or radio conditions. Correlation does not establish causation or packet-delivery success.')
-    return dict(ok=True,generated_at=clock,selected=key,days=days,change=change,before=periods[0],after=periods[1],matched=matched,
+    return dict(ok=True,generated_at=clock,selected=key,days=days,change=change,source_changes=source_changes,before=periods[0],after=periods[1],matched=matched,
         median_snr_change=median(r['difference_db'] for r in matched) if matched else None,
         newly_heard=[a[k] for k in sorted(a.keys()-b.keys())],not_heard_after=[b[k] for k in sorted(b.keys()-a.keys())],
         new_observed_neighbors=[r for r in after['neighbors'] if r['public_key'] not in {n['public_key'] for n in before['neighbors']}],

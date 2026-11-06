@@ -38,12 +38,23 @@ async def run():
     stamp=time.time()
     for tag,started,age,snr in [('first',stamp-100,10,3),('same',stamp-50,60,3),('new',stamp-5,2,4.5)]:
         neighbor_snr.record_page(main_path,cfg,tag,started,started+1,[dict(pubkey='cdcdcdcd',secs_ago=age,snr=snr)])
+    import json,struct
+    from meshcorestation.radio.averaged_snr import decode
+    from meshcorestation.storage import averaged_snr
+    vectors=json.loads((Path(__file__).resolve().parents[1]/'fixtures/averaged_snr_v1.json').read_text())
+    raw=bytearray.fromhex(vectors['example']);raw[64:96]=bytes.fromhex('ef'*32)
+    struct.pack_into('<II',raw,112,int(stamp)-3600,int(stamp)-1800)
+    header=decode(bytes(raw))
+    averaged_snr.record(main_path,cfg,'firmware-fixture',stamp,header,bytes(raw))
+    averaged_snr.finish_for(main_path,KEY,'firmware-fixture',True)
+    averaged_snr.update(main_path,cfg,capability='averaged',detection='supported',session=header['session'],last_collection=stamp,
+        last_window=int(stamp)-1800,records_retrieved=1,completeness='complete',diagnostics={k:v for k,v in header.items() if k!='record'})
     neighbor_snr.save_settings(main_path,KEY,False,30)
     for i in range(205):db.add_logger({'message':'ping' if i%2 else 'status','name':'Fixture Sender','recv_time':2000000000+i},None,'unscoped','Fixture reply')
     runtime=Runtime(logging.getLogger('fixture'),db);runtime.companion=c;runtime.control=CompanionControl(c)
     runtime.device_info={'ver':'fixture','fw_build':'SIMULATED — no radio','model':'Fixture Companion'}
     bridge.attach(runtime);bridge.status=('Running','Fixture Companion connected — simulated hardware','running')
-    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.7.0','checked_at':2000000000}
+    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.8.0','checked_at':2000000000}
     updater.ready=lambda:False
     bot_runtime.ports=lambda:[{'device':'/dev/fixture','description':'Simulated Companion'}]
     web=WebServer();web.start()

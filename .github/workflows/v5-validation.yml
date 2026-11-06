@@ -40,7 +40,7 @@ jobs:
             browser-server.log
   publish:
     needs: verify
-    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.7.0:')
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.8.0:')
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -49,4 +49,4 @@ jobs:
       - name: Publish authorized V5 statistics update prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create v5.7.0 --target "$GITHUB_SHA" --title "MeshcoreStation 5.7.0 — Automatic Repeater Clock Synchronization" --notes-file docs/v5-release.md --prerelease --latest=false
+        run: gh release create v5.8.0 --target "$GITHUB_SHA" --title "MeshcoreStation 5.8.0 — Averaged Neighbor SNR Integration" --notes-file docs/v5-release.md --prerelease --latest=false

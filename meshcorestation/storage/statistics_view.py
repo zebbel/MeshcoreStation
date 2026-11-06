@@ -342,7 +342,12 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                     if len(edge_rows)>=1000:result['notes'].append('Neighbor output is limited to 1,000 grouped direction entries.')
                 with diagnostics.stage('neighbor_snr'):
                     from meshcorestation.storage.neighbor_snr import summary
-                    result['neighbor_snr']=summary(source,registry,start,observed_end)
+                    quality={}
+                    result['neighbor_snr']=summary(source,registry,start,observed_end,quality=quality)
+                    result['neighbor_snr_quality']=quality
+                    if quality['invalid_utc_records']:result['notes'].append('Saved firmware SNR records without valid UTC cannot be assigned to this observation period.')
+                    if quality['boundary_windows']:result['notes'].append('Firmware SNR windows crossing an observation boundary are excluded; samples cannot be split reliably.')
+                    if quality['partial_collections'] or quality['sequence_gaps'] or quality['reported_loss']:result['notes'].append('Firmware SNR collection includes partial cycles or cumulative retention diagnostics; review monitoring status.')
                 with diagnostics.stage('coverage'):
                     coverage,result['coverage_known'],activity_coverage=_coverage(source,start,observed_end,diagnostics,local_bounds)
                 if _covered:

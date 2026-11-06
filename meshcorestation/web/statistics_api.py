@@ -72,9 +72,17 @@ def register_statistics_routes(server):
                 if request.mimetype!='application/json' or (request.content_length or 0)>2048:raise ValueError('Expected monitoring settings.')
                 data=request.get_json(silent=True)
                 if not isinstance(data,dict):raise ValueError('Expected monitoring settings.')
-                value=neighbor_snr.save_settings(config.DB_PATH,data.get('public_key'),data.get('enabled'),data.get('interval_minutes'))
+                if data.get('operation')=='recheck_protocol':
+                    from meshcorestation.storage.averaged_snr import recheck
+                    recheck(config.DB_PATH,data.get('public_key'))
+                    value=neighbor_snr.settings(config.DB_PATH,data.get('public_key'))
+                elif data.get('operation') in (None,'save'):
+                    value=neighbor_snr.save_settings(config.DB_PATH,data.get('public_key'),data.get('enabled'),data.get('interval_minutes'))
+                else:raise ValueError('Unknown monitoring operation.')
             else:value=neighbor_snr.settings(config.DB_PATH,request.args.get('public_key'))
+            from meshcorestation.storage.averaged_snr import status as protocol_status
+            protocol=protocol_status(config.DB_PATH,value['public_key'])
             runtime=bridge.runtime;worker=getattr(runtime,'neighbor_monitor',None)
-            return json_response(dict(ok=True,config=value,running=bool(worker and worker.task and not worker.task.done())))
+            return json_response(dict(ok=True,config=value,protocol=protocol,running=bool(worker and worker.task and not worker.task.done())))
         except (ValueError,TypeError) as exc:return json_response(dict(ok=False,error=str(exc)),400)
         except (OSError,sqlite3.Error):return json_response(dict(ok=False,error='Neighbor monitoring storage unavailable; saved history is preserved.'),503)

@@ -155,13 +155,16 @@
         for(const [label,items]of [['Identified neighbors',rows.filter(r=>r.resolution==='matched')],['Unknown or ambiguous prefixes',rows.filter(r=>r.resolution!=='matched')]]){
             host.append(text('h4',label));if(!items.length){host.append(text('p','No distinct valid measurements in this period.','muted'));continue;}
             const scroll=text('div','','statistics-table-scroll'),table=document.createElement('table'),head=document.createElement('tr');
-            for(const value of ['Repeater','Average SNR','Samples','Last Heard'])head.append(text('th',value));table.append(head);
+            for(const value of ['Repeater','Average SNR','Samples','Minimum','Maximum','Last Heard','Source'])head.append(text('th',value));table.append(head);
             for(const row of items){const tr=document.createElement('tr'),identity=document.createElement('td');
                 identity.append(row.public_key?(window.MeshcoreStationRepeaterNames?.element(row.public_key)||text('span',row.name||row.public_key)):text('span',(row.resolution==='ambiguous'?'Ambiguous repeater':'Unknown Repeater')+' ('+row.prefix+'…)'));
-                tr.append(identity,text('td',row.average_snr.toFixed(2)+' dB'+(row.samples===1?' · single sample':'')),text('td',row.samples),text('td',stamp(row.last_heard)));table.append(tr);
+                tr.append(identity,text('td',row.average_snr.toFixed(2)+' dB'+(row.samples===1?' · single sample':'')),text('td',row.samples),text('td',Number.isFinite(row.minimum_snr)?row.minimum_snr.toFixed(2)+' dB':'Not available'),text('td',Number.isFinite(row.maximum_snr)?row.maximum_snr.toFixed(2)+' dB':'Not available'),text('td',stamp(row.last_heard)),text('td',row.source==='firmware_aggregates'?'Firmware aggregates'+(row.sample_overflow?' · incomplete samples':''):'Legacy last-heard estimates'));table.append(tr);
             }scroll.append(table);host.append(scroll);
         }
-        host.append(text('p','Means use distinct valid repeater-side readings. Last Heard is estimated from reported age and request timing. Overlapping equal-SNR estimates count once; source reception IDs are unavailable. Single samples provide insufficient history for a trend. Missing/invalid SNR or age values remain in raw poll history and are excluded here. These measurements do not confirm packet delivery.','muted'));
+        const quality=data.neighbor_snr_quality||{};
+        if(quality.invalid_utc_records||quality.boundary_windows||quality.partial_collections||quality.sequence_gaps||quality.reported_loss)
+            host.append(text('p',`Firmware data quality: ${quality.invalid_utc_records||0} saved records without usable UTC (not assigned to this period); ${quality.discontinuous_records||0} with clock discontinuities; ${quality.boundary_windows||0} boundary-crossing windows excluded; ${quality.partial_collections||0} partial collections and ${quality.sequence_gaps||0} sequence gaps noticed in this period. ${quality.reported_loss?'Firmware reports cumulative retention/drop counters; some records may already be saved locally.':''}`,'stats-message'));
+        host.append(text('p','Firmware means use actual sample counts across whole UTC-valid windows. Legacy estimates are not blended into a neighbor’s firmware mean. Boundary-crossing windows are excluded. Legacy Last Heard is estimated from reported age and request timing. Overlapping equal-SNR estimates count once; source reception IDs are unavailable. Single samples provide insufficient history for a trend. Missing/invalid SNR or age values remain in raw poll history and are excluded here. These measurements do not confirm packet delivery.','muted'));
     }
     function resizeVisible(){
         const host=$('statistics-neighbor-map');

@@ -109,6 +109,8 @@ class Database:
         self.db.executescript(CLOCK_SCHEMA)
         from meshcorestation.storage.neighbor_snr import SCHEMA as NEIGHBOR_SCHEMA
         self.db.execute(NEIGHBOR_SCHEMA)
+        from meshcorestation.storage.averaged_snr import SCHEMA as AVERAGED_SNR_SCHEMA
+        self.db.executescript(AVERAGED_SNR_SCHEMA)
         from meshcorestation.storage.repeater_comparison import SCHEMA as COMPARISON_SCHEMA
         self.db.executescript(COMPARISON_SCHEMA)
         self.db.commit()

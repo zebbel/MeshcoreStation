@@ -97,3 +97,6 @@
 .statistics-heatmap-sample.statistics-heatmap-ramp { width: 140px; max-width: 30vw; }
 #statistics-regions > label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 #statistics-regions-all { width: auto; }
+
+.statistics-monitor-details { flex-basis:100%;min-width:0;max-width:100%;color:var(--text); }
+.statistics-monitor-details p { margin:6px 0;overflow-wrap:anywhere; }

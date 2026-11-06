@@ -32,6 +32,20 @@
             $('neighbor-monitor-status').textContent=(cfg.enabled?'Enabled · '+cfg.interval_minutes+' minutes · '+(data.running?cfg.state:'worker unavailable / Companion disconnected'):'Disabled')+
                 (cfg.last_success?' · Last complete poll: '+(window.meshcorestationFormatDate?.(cfg.last_success)||new Date(cfg.last_success*1000).toLocaleString()):'')+
                 (cfg.error?' · '+cfg.error:'');
+            const protocol=data.protocol||{},names={averaged:'Averaged',legacy:'Legacy',unknown:'Unknown'};
+            const format=v=>v==null?'Not recorded':window.meshcorestationFormatDate?.(v)||new Date(v*1000).toLocaleString();
+            const diagnostic=protocol.diagnostics||{},details=$('neighbor-monitor-protocol-details');
+            if(details){details.replaceChildren();for(const [label,value]of [
+                ['Detected SNR protocol',names[protocol.capability]||'Unknown'],['Detection status',(protocol.detection||'Unprobed').replace(/_/g,' ')],
+                ['Last successful collection',format(protocol.last_collection||cfg.last_success)],
+                ['Last completed aggregation window',diagnostic.retained?`Boot ${String(protocol.session||'').slice(0,8)} · window ${diagnostic.newest_window}`:'Not recorded'],
+                ['Latest saved UTC window end',format(protocol.last_window)],['Next scheduled collection',cfg.enabled?format(cfg.next_due):'Not scheduled'],
+                ['Records retrieved',protocol.records_retrieved??0],['Collection duration',protocol.duration_seconds==null?'Not recorded':Number(protocol.duration_seconds).toFixed(1)+' seconds'],
+                ['Collection completeness',(protocol.completeness||'Not collected').replace(/_/g,' ')],
+                ['Firmware boot counters (cumulative)',`Expired: ${diagnostic.expired??0} · Evicted: ${diagnostic.evicted??0} · Dropped: ${diagnostic.dropped??0}`],
+                ['Retained sequence range',`${diagnostic.oldest??0}–${diagnostic.newest??0}`],['Warnings',protocol.warning||'None'],['Last protocol error',protocol.error||'None']]){
+                    const row=document.createElement('p');row.textContent=label+': '+value;details.append(row);
+                }}
             if($('neighbor-monitor-summary'))$('neighbor-monitor-summary').textContent=$('neighbor-monitor-status').textContent+' · Interval: '+cfg.interval_minutes+' min · Last success: '+(cfg.last_success?(window.meshcorestationFormatDate?.(cfg.last_success)||cfg.last_success):'None');
         }catch(error){if(ticket===sequence){$('neighbor-monitor-status').textContent='Monitoring settings unavailable: '+error.message;if($('neighbor-monitor-summary'))$('neighbor-monitor-summary').textContent='Settings unavailable · '+error.message;}}
     }
@@ -104,6 +118,14 @@
                 if(key===selected)await loadMonitoring(key,sequence);
             }catch(error){if(key===selected)$('neighbor-monitor-status').textContent=error.message;}
             finally{if(key===selected&&monitorKey===key)form.disabled=false;}
+        });
+        $('neighbor-monitor-recheck')?.addEventListener('click',async()=>{
+            if(!monitorKey||monitorKey!==selected)return;const key=monitorKey;
+            try{
+                const response=await fetch('/api/repeater-statistics/neighbor-monitor',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},signal:AbortSignal.timeout(5000),body:JSON.stringify({operation:'recheck_protocol',public_key:key})}),data=await response.json();
+                if(!response.ok||!data.ok)throw Error(data.error||'Could not request protocol recheck.');
+                if(key===selected){await loadMonitoring(key,sequence);$('neighbor-monitor-status').textContent+=' · Protocol will be checked at the next scheduled collection; the polling interval is unchanged.';}
+            }catch(error){if(key===selected)$('neighbor-monitor-status').textContent=error.message;}
         });
         $('statistics-repeater').addEventListener('change',()=>{selected=$('statistics-repeater').value;clearView();load();});
         $('statistics-period')?.addEventListener('change',()=>{clearView();load();});
