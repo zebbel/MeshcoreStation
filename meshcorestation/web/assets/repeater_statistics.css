@@ -100,3 +100,5 @@
 
 .statistics-monitor-details { flex-basis:100%;min-width:0;max-width:100%;color:var(--text); }
 .statistics-monitor-details p { margin:6px 0;overflow-wrap:anywhere; }
+
+#neighbor-monitor-read-status {flex-basis:100%;min-width:0;overflow-wrap:anywhere;color:var(--text);}

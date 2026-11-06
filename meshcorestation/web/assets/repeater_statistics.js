@@ -3,7 +3,7 @@
     const $ = id => document.getElementById(id);
     let attached=false, selected='', sequence=0, monitorKey='';
     const requests=new Set();
-    function stop(){sequence++;for(const request of requests)request.abort();requests.clear();}
+    function stop(){window.MeshcoreStationNeighborReadNow?.stop();sequence++;for(const request of requests)request.abort();requests.clear();}
     async function requestJSON(url,timeout,kind){
         const controller=new AbortController();requests.add(controller);let timedOut=false;
         const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeout);
@@ -19,15 +19,14 @@
             throw error;
         }finally{clearTimeout(timer);requests.delete(controller);}
     }
-    async function loadMonitoring(key,ticket){
-        const form=$('neighbor-monitor-settings');if(!form)return;form.disabled=true;monitorKey='';if($('neighbor-monitor-summary'))$('neighbor-monitor-summary').textContent='Loading settings…';
+    async function loadMonitoring(key,ticket,preserveControls=false){
+        const form=$('neighbor-monitor-settings');if(!form)return;if(!preserveControls){form.disabled=true;monitorKey='';}if(!preserveControls&&$('neighbor-monitor-summary'))$('neighbor-monitor-summary').textContent='Loading settings…';
         if(!key){$('neighbor-monitor-status').textContent='Select a managed repeater to configure neighbor monitoring.';return;}
         try{
             const data=await requestJSON('/api/repeater-statistics/neighbor-monitor?public_key='+encodeURIComponent(key),5000,'neighbor monitoring settings');
             if(ticket!==sequence||selected!==key)return;
-            $('neighbor-monitor-enabled').checked=!!data.config.enabled;
-            $('neighbor-monitor-interval').value=data.config.interval_minutes;
-            monitorKey=key;form.disabled=false;
+            if(!preserveControls){$('neighbor-monitor-enabled').checked=!!data.config.enabled;$('neighbor-monitor-interval').value=data.config.interval_minutes;form.disabled=false;}
+            monitorKey=key;window.MeshcoreStationNeighborReadNow?.load(key);
             const cfg=data.config;
             $('neighbor-monitor-status').textContent=(cfg.enabled?'Enabled · '+cfg.interval_minutes+' minutes · '+(data.running?cfg.state:'worker unavailable / Companion disconnected'):'Disabled')+
                 (cfg.last_success?' · Last complete poll: '+(window.meshcorestationFormatDate?.(cfg.last_success)||new Date(cfg.last_success*1000).toLocaleString()):'')+
@@ -49,7 +48,7 @@
             if($('neighbor-monitor-summary'))$('neighbor-monitor-summary').textContent=$('neighbor-monitor-status').textContent+' · Interval: '+cfg.interval_minutes+' min · Last success: '+(cfg.last_success?(window.meshcorestationFormatDate?.(cfg.last_success)||cfg.last_success):'None');
         }catch(error){if(ticket===sequence){$('neighbor-monitor-status').textContent='Monitoring settings unavailable: '+error.message;if($('neighbor-monitor-summary'))$('neighbor-monitor-summary').textContent='Settings unavailable · '+error.message;}}
     }
-    async function load(){
+    async function load(preserveMonitoring=false){
         const section=$('repeater-statistics-disclosure');if(!section?.open||document.hidden)return;
         stop();const ticket=sequence;
         window.MeshcoreStationStatisticsVisuals?.stale?.();
@@ -73,7 +72,7 @@
                 const last=data.last_recorded_at?(window.meshcorestationFormatDate?.(data.last_recorded_at)||new Date(data.last_recorded_at*1000).toLocaleString('en-GB')):'No observations recorded yet';
                 $('statistics-status').textContent=`${state}. ${count}. Last recorded: ${last}.`;
             }
-            loadMonitoring(selected,ticket);
+            loadMonitoring(selected,ticket,preserveMonitoring===true);
             const health=data.health;
             $('statistics-error').textContent=[data.error,health.error,health.repeater_error,health.dropped?`${health.dropped} observations or repeater writes dropped this session; recording is incomplete.`:'',health.invalid?`${health.invalid} malformed/unsupported packet events skipped this session.`:''].filter(Boolean).join(' ');
         }catch(error){
@@ -101,6 +100,7 @@
             if(progress)progress.textContent='Statistics could not be refreshed. Recording status above remains available; faded charts are an older snapshot.';
         }finally{if(ticket===sequence&&progress)progress.setAttribute('aria-busy','false');}
     }
+    window.MeshcoreStationRefreshSavedSnr=()=>load(true);
     function attach(){
         const section=$('repeater-statistics-disclosure');if(attached||!section)return;attached=true;
         section.addEventListener('toggle',()=>{if(section.open)load();else{stop();}});

@@ -8,7 +8,8 @@ retain existing `0x06` last-heard monitoring.
 Use the existing **Automatic neighbor SNR monitoring** checkbox per managed
 repeater. It remains disabled by default, with a suggested 30-minute interval and
 allowed 5–1440 minute settings. There is one scheduler, no additional enable
-switch and no Companion firmware change. The repeater must permit authenticated
+switch and no Companion firmware change. **Read now** can authorize a single
+collection even when automatic monitoring is disabled, preserving its schedule. The repeater must permit authenticated
 blank-password guest login. No browser password is read or stored.
 
 ## Transport and detection

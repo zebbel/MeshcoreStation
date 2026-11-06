@@ -53,13 +53,34 @@ async def run():
     for i in range(205):db.add_logger({'message':'ping' if i%2 else 'status','name':'Fixture Sender','recv_time':2000000000+i},None,'unscoped','Fixture reply')
     runtime=Runtime(logging.getLogger('fixture'),db);runtime.companion=c;runtime.control=CompanionControl(c)
     runtime.device_info={'ver':'fixture','fw_build':'SIMULATED — no radio','model':'Fixture Companion'}
+    # Manual reads use real client frame construction and fake completed-window
+    # replies. The disabled automatic monitor never generates scheduled traffic.
+    from types import MethodType
+    from meshcore import EventType
+    from meshcore.commands.base import CommandHandlerBase
+    from meshcorestation.radio.averaged_snr import HEADER
+    commands=c.mc.commands;original_send=commands.send
+    commands._reader=None;commands._mesh_request_lock=asyncio.Lock()
+    commands.send_binary_req=MethodType(CommandHandlerBase.send_binary_req,commands)
+    async def binary_send(payload,*args,**kwargs):
+        if payload and payload[0]==0x32:
+            _,_,count,_,boot,ceiling,cursor=struct.unpack_from('<BBBB16sII',payload,33)
+            values=list(HEADER.unpack_from(raw));has_record=bool(count and cursor<1)
+            values[2]=int(has_record);values[3]=int(not has_record and cursor<1);values[5]=1;values[6]=1 if has_record else cursor
+            answer=HEADER.pack(*values)+(bytes(raw[64:140]) if has_record else b'')
+            for callback in list(c.mc.subscriptions.get(EventType.BINARY_RESPONSE,[])):
+                await callback(NS(type=EventType.BINARY_RESPONSE,payload=dict(tag='12345678',data=answer.hex())))
+            return NS(type=EventType.MSG_SENT,payload=dict(expected_ack=bytes.fromhex('12345678')))
+        return await original_send(payload,*args,**kwargs)
+    commands.send=binary_send
+    runtime.neighbor_monitor.start()
     bridge.attach(runtime);bridge.status=('Running','Fixture Companion connected — simulated hardware','running')
-    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.8.0','checked_at':2000000000}
+    updater.check=lambda branch=None:{'branch':'V5','available':False,'ready':False,'latest':'b'*40,'latest_version':'5.9.0','checked_at':2000000000}
     updater.ready=lambda:False
     bot_runtime.ports=lambda:[{'device':'/dev/fixture','description':'Simulated Companion'}]
     web=WebServer();web.start()
     try:await asyncio.Event().wait()
-    finally:web.close();await c.disconnect();bridge.detach();db.close()
+    finally:web.close();await runtime.neighbor_monitor.close();await c.disconnect();bridge.detach();db.close()
 
 if __name__=='__main__':
     with tempfile.TemporaryDirectory(prefix='meshcorestation-v5-browser-',dir=os.environ.get('TMPDIR')) as directory:

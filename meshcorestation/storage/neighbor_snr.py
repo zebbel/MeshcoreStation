@@ -30,6 +30,7 @@ HISTORY_SCHEMA='''CREATE TABLE IF NOT EXISTS neighbor_snr_polls(
  CREATE TABLE IF NOT EXISTS neighbor_snr_readings(
  id INTEGER PRIMARY KEY,poll_id TEXT NOT NULL,polled_at REAL NOT NULL,prefix TEXT NOT NULL,
  public_key TEXT,resolution TEXT NOT NULL,snr REAL,secs_ago INTEGER,raw TEXT NOT NULL,measurement_id INTEGER);
+ CREATE INDEX IF NOT EXISTS neighbor_snr_reading_poll ON neighbor_snr_readings(poll_id);
  CREATE INDEX IF NOT EXISTS neighbor_snr_reading_time ON neighbor_snr_readings(polled_at);'''
 
 
@@ -71,6 +72,7 @@ def due(path,now):
 
 def claim(path,cfg,now):
     with MEMBERSHIP_LOCK,closing(connect(path,timeout=.25)) as db,db:
+        if db.execute("SELECT 1 FROM neighbor_snr_manual WHERE state IN ('queued','running') AND expires_at>?",(time.time(),)).fetchone():return False
         try:latest=current(db,cfg['public_key'])
         except ValueError:return False
         if not latest['enabled'] or latest['revision']!=cfg['revision'] or latest['membership_since_ns']!=cfg['membership_since_ns'] or latest['next_due']>now:return False
@@ -79,16 +81,23 @@ def claim(path,cfg,now):
         return True
 
 
-def still_enabled(path,cfg):
-    try:
-        row=settings(path,cfg['public_key'])
-        return row['enabled'] and row['revision']==cfg['revision'] and row['membership_since_ns']==cfg['membership_since_ns']
+def authorized(db,cfg):
+    if 'manual_job_id' in cfg:
+        from meshcorestation.storage.neighbor_snr_manual import authorized as manual_authorized
+        return manual_authorized(db,cfg)
+    try:row=current(db,cfg['public_key'])
     except ValueError:return False
+    return bool(row['enabled'] and row['revision']==cfg['revision'] and row['membership_since_ns']==cfg['membership_since_ns'])
+
+
+def still_enabled(path,cfg):
+    with closing(connect(Path(path).as_uri()+'?mode=ro',timeout=.25)) as db:return authorized(db,cfg)
 
 
 def finish(path,cfg,poll_id,stamp,error=''):
-    with closing(connect(path,timeout=.25)) as main,main:
-        main.execute('''UPDATE neighbor_monitor SET next_due=MAX(next_due,?+interval_minutes*60),state=?,error=?,last_success=CASE WHEN ?='' THEN ? ELSE last_success END
+    if 'manual_job_id' not in cfg:
+        with closing(connect(path,timeout=.25)) as main,main:
+            main.execute('''UPDATE neighbor_monitor SET next_due=MAX(next_due,?+interval_minutes*60),state=?,error=?,last_success=CASE WHEN ?='' THEN ? ELSE last_success END
           WHERE public_key=? AND revision=?''',(stamp,'error' if error else 'waiting',error,error,stamp,cfg['public_key'],cfg['revision']))
     target=passive_stats.statistics_path(path,cfg['public_key'])
     if target.exists():
@@ -105,9 +114,7 @@ def record_page(path,cfg,poll_id,started,received,rows):
     intervals are conservatively treated as the same reading, not independent RX.
     """
     with MEMBERSHIP_LOCK,closing(connect(Path(path).as_uri()+'?mode=ro',timeout=.25)) as main:
-        try:latest=current(main,cfg['public_key'])
-        except ValueError:return False
-        if not latest['enabled'] or latest['revision']!=cfg['revision'] or latest['membership_since_ns']!=cfg['membership_since_ns']:return False
+        if not authorized(main,cfg):return False
         named=with_neighbor_names(main,{'neighbours':rows})['neighbours']
         if shutil.disk_usage(Path(path).parent).free<passive_stats.MIN_FREE_BYTES:raise OSError('Low disk space; existing history is preserved.')
         target=passive_stats.statistics_path(path,cfg['public_key'])

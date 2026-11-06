@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.8.0
+# MeshcoreStation V5 — 5.9.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.8.0** adds hardware-independent firmware-calculated neighbor SNR averages, safe snapshot collection and sample-weighted statistics while retaining legacy monitoring.
+Development branch: **`V5`**. Version **5.9.0** adds asynchronous **Read now** neighbor SNR collection, including with automatic monitoring disabled, while preserving its settings and schedule.
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -104,6 +104,9 @@ recording. Compatible repeaters can supply hardware-independent firmware SNR
 aggregates through `0x70`; standard repeaters retain legacy last-heard monitoring.
 See [neighbor monitoring](docs/v5-neighbor-snr.md) and
 [firmware aggregate integration](docs/v5-averaged-snr.md).
+**Read now** performs one asynchronous neighbor SNR collection for the viewed
+managed repeater, including with monitoring disabled, without changing the
+automatic interval or schedule.
 Main sections and Statistics views use independent accordions; telemetry charts
 remain visible inside expanded Repeater Management.
 

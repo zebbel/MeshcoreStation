@@ -85,3 +85,41 @@ resizes saved maps/charts without fetching radio data or recalculating history.
 Controls, periods, saved content and monitoring configuration survive collapse.
 Main panels have 16 px gaps. Management telemetry's voltage and temperature charts
 remain visible whenever that main panel is open, with the existing shared period.
+
+## Read now
+
+**Read now** requests one collection for the viewed managed repeater, even when
+automatic monitoring is disabled. It does not enable monitoring or change its
+interval, revision, next due time or automatic attempt/success fields. If another
+collection or radio operation is already running, the request waits for the
+existing collector/control lock; requests do not overlap. A second manual request
+is rejected while one is queued or running, including from another browser.
+
+The local API queues the request and returns immediately. The page shows
+**Reading neighbor SNR…**, local progress, retrieved record counts and completion,
+partial results or errors. Its status polling reads local metadata only, not the
+radio. The button is disabled while work is pending. Completion refreshes saved
+statistics and protocol status without resetting unsaved monitoring controls.
+Closing Statistics pauses UI status checks, while the server collection continues.
+Reopening loads saved results normally.
+
+Manual reads reuse authenticated guest access, full-key identity checks, cached
+protocol detection, 0x70 snapshot pagination/continuation or legacy 0x06 fallback,
+request pacing, timeouts, disk safeguards and storage deduplication. Firmware
+reads return completed windows only; they never finalize the active window. A
+valid read can therefore retrieve no new completed records while saved statistics
+remain intact. Counts describe retrieved aggregate records or legacy neighbor
+rows, not packets delivered.
+
+A persistent one-time grant separately authorizes manual requests and storage;
+it is not an override of the automatic-monitoring enable flag. Membership is
+rechecked before requests and commits. Removing a repeater revokes its grant and
+cancels queued/in-flight work. Disconnect/shutdown/restart interrupts one-time
+requests without replaying them automatically. Authorization expires after
+15 minutes overall, in addition to the existing page and per-cycle safety limits.
+A timeout is not automatically retried; request another read explicitly.
+
+Validated earlier pages remain saved after a partial/error result. A later manual
+or scheduled read can resume the stored aggregate continuation. If monitoring
+remains disabled, a partial read will not schedule another radio operation. No
+packet, SNR or telemetry history is deleted.

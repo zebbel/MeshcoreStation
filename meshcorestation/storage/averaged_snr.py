@@ -45,10 +45,8 @@ def status(path,key):
 
 
 def _active(db,cfg):
-    from meshcorestation.storage.neighbor_snr import current
-    try:latest=current(db,cfg['public_key'])
-    except ValueError:return False
-    return bool(latest['enabled'] and latest['revision']==cfg['revision'] and latest['membership_since_ns']==cfg['membership_since_ns'])
+    from meshcorestation.storage.neighbor_snr import authorized
+    return authorized(db,cfg)
 
 
 def update(path,cfg,**values):

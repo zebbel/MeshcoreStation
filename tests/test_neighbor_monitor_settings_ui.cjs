@@ -20,5 +20,8 @@ const settle=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))
  assert(d.getElementById('neighbor-monitor-protocol-details').textContent.includes('Records retrieved: 12'));
  assert(d.getElementById('neighbor-monitor-protocol-details').textContent.includes('Expired: 2'));
  d.getElementById('neighbor-monitor-recheck').click();await settle();assert.equal(rechecks,1);assert.equal(saves,2);assert(!enabled);assert(d.getElementById('neighbor-monitor-status').textContent.includes('polling interval is unchanged'));
+ d.getElementById('neighbor-monitor-enabled').checked=true;d.getElementById('neighbor-monitor-interval').value='47';
+ w.MeshcoreStationRefreshSavedSnr();await settle();
+ assert(d.getElementById('neighbor-monitor-enabled').checked);assert.equal(d.getElementById('neighbor-monitor-interval').value,'47');assert.equal(saves,2,'Manual completion refresh must not save or reset automatic controls');
  console.log('Opt-in per-repeater settings load/save, local request protection and enable/disable readback passed.');
 }finally{w.close();}})().catch(e=>{console.error(e);process.exit(1)});

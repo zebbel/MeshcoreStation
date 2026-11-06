@@ -67,6 +67,7 @@ async def collect(monitor,companion,cfg,contact,login,poll_id):
             gap=(cursor+1,h['oldest']-1) if h['oldest']>cursor+1 else None
             if gap:warn('Missing retained sequence range; not proof that every absent record was lost during this poll.')
             await save(h,raw,gap)
+            await monitor.progress(cfg,'Averaged SNR snapshot opened; retrieving completed windows.',0,'averaged')
             await update(capability='averaged',detection='supported',firmware_level=firmware,probe_after=time.time()+PROBE_INTERVAL,
                 session=session,ceiling=ceiling,cursor=cursor,seen_sequence=seen,pending=int(cursor<ceiling),diagnostics=diagnostics(h),error='')
             complete=cursor==ceiling
@@ -83,6 +84,7 @@ async def collect(monitor,companion,cfg,contact,login,poll_id):
             if item and item['flags']&2:warn('Firmware reports a clock discontinuity.')
             if item and item['flags']&4:warn('Sample-count overflow makes this window incomplete.')
             await save(h,raw,gap);cursor=h['cursor'];records+=int(item is not None);complete=not h['more']
+            await monitor.progress(cfg,f'Received {records} completed aggregate records; sequence cursor {cursor}/{ceiling}.',records,'averaged')
             if complete and cursor<ceiling:
                 if item:
                     warn('Snapshot tail is no longer retained; missing sequences were recorded.')
@@ -92,12 +94,12 @@ async def collect(monitor,companion,cfg,contact,login,poll_id):
             # seen_sequence is a scan watermark, not evidence of receptions:
             # absent sequences have their own durable gap records.
             await update(session=session,ceiling=ceiling,cursor=cursor,seen_sequence=max(seen,cursor),pending=int(not complete),last_window=last_window,diagnostics=diagnostics(h))
-        if not complete:warn('Collection partial: continuation saved for the next configured poll. Large neighbor populations may exceed two-hour retention; review the configured interval.')
+        if not complete:warn('Collection partial: continuation saved for the next collection (manual or scheduled). Large neighbor populations may exceed two-hour retention; review the configured interval.')
         await update(last_collection=time.time(),records_retrieved=records,completeness='complete_with_gaps' if complete and gaps_seen else 'complete_with_warnings' if complete and warning else 'complete' if complete else 'partial',warning=warning,error='')
         if not complete:raise PartialCollection('Aggregate cycle budget reached; continuation saved, collection incomplete.')
         return True
     except PartialCollection:
-        failure='Aggregate collection partial; continuation saved for the next configured interval.';raise
+        failure='Aggregate collection partial; continuation saved for the next collection (manual or scheduled).';raise
     except asyncio.CancelledError:
         failure='Aggregate collection interrupted; validated records and continuation are preserved.'
         await asyncio.to_thread(store.update,path,cfg,completeness='partial' if records else 'interrupted',records_retrieved=records,last_collection=time.time() if records else cached['last_collection'],error=failure,warning=warning)
