@@ -119,6 +119,8 @@ def test_regions_transport_verification_unknown_unscoped_percentages_and_config(
 
 def test_scope_resolver_reserved_codes_and_payload_type(monkeypatch):
     class Digest:
+        def copy(self):return self
+        def update(self,payload):pass
         def digest(self):return b'\x00\x00'+bytes(30)
     monkeypatch.setattr(hmac,'new',lambda *a:Digest())
     resolve=scope_resolver([dict(name='region',scope_key='11'*16)])

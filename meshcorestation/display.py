@@ -1,10 +1,8 @@
 """Persistent display preferences; timezone and scheduler configuration stay separate."""
 import sqlite3
-import os
 import threading
-from functools import lru_cache
 from datetime import datetime
-from meshcorestation.config import DATA_DIR, TIMEZONE
+from meshcorestation.config import TIMEZONE
 
 DEFAULTS = {'date_format': 'german', 'hour_format': '24'}
 LOCK = threading.Lock()
@@ -18,14 +16,15 @@ def validate(value):
     return dict(value)
 
 
-def settings():
-    from meshcorestation.storage.connection import connect
+def settings(db=None):
     from meshcorestation.config import DB_PATH
     from contextlib import closing
     try:
-        with closing(connect(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
-            row=db.execute('SELECT date_format,hour_format FROM application_preferences WHERE id=1').fetchone()
-            return validate(dict(row))
+        if db is None:
+            with closing(sqlite3.connect(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as reader:
+                return settings(reader)
+        row = db.execute('SELECT date_format,hour_format FROM application_preferences WHERE id=1').fetchone()
+        return validate(dict(zip(DEFAULTS, row)))
     except (OSError,ValueError,TypeError,sqlite3.Error):return dict(DEFAULTS)
 
 
@@ -39,8 +38,9 @@ def save(value):
     return value
 
 
-def format_datetime(value, zone=TIMEZONE, *, time_only=False):
-    preferences = settings()
+def format_datetime(value, zone=TIMEZONE, *, time_only=False, preferences=None):
+    if preferences is None:
+        preferences = settings()
     date = value if isinstance(value, datetime) else datetime.fromtimestamp(float(value), zone)
     date = date.astimezone(zone)
     clock = date.strftime('%I:%M:%S %p' if preferences['hour_format'] == '12' else '%H:%M:%S')

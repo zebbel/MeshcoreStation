@@ -172,7 +172,7 @@ def test_exact_dashboard_structure_and_closed_history_no_reads(station,monkeypat
     bot=ids['bot-disclosure'];assert [n.id for n in walk(bot) if isinstance(n,html.Details)]==['bot-disclosure','bot-settings-disclosure','command-history-disclosure']
     ids_list=[n.id for n in nodes if getattr(n,'id',None)]
     assert len(ids_list)==len(set(ids_list))
-    monkeypatch.setattr(callbacks,'snapshot',lambda *a:(_ for _ in ()).throw(AssertionError('Closed history read')))
+    monkeypatch.setattr(callbacks,'history_snapshot',lambda *a:(_ for _ in ()).throw(AssertionError('Closed history read')))
     app=create_app();cb=next(v['callback'] for k,v in app.callback_map.items() if 'command-rows' in k)
     from dash import no_update
     assert cb.__wrapped__(0,None,200,False,None)==(no_update,)*8
@@ -268,3 +268,53 @@ def test_actual_rx_advert_registration_is_not_contact_or_notification_count(stat
     assert station.get_repeater_advert_count(KEY)==1
     c._handle_rx_log(NS(payload={**rx,'adv_key':OTHER}))
     assert station.get_repeater_count()==1 and station.get_repeater_advert_count(KEY)==1
+
+
+@pytest.mark.parametrize('count', [55, 200, 405])
+def test_history_uses_one_connection_and_skips_unchanged_render(station, monkeypatch, count):
+    from dash import Dash, no_update
+    from meshcorestation.web import callbacks
+
+    with station.db:
+        station.db.executemany('INSERT INTO logger (recv_time,message,sender_timestamp) VALUES (?,?,?)',
+                               ((1700049600+i, 'ping' if i%2 else 'status', 1700049600) for i in range(count)))
+    real = sqlite3.connect
+    connections, sql = [], []
+
+    def connect(*args, **kwargs):
+        db = real(*args, **kwargs)
+        connections.append(db)
+        db.set_trace_callback(sql.append)
+        return db
+
+    monkeypatch.setattr(sqlite3, 'connect', connect)
+    app = Dash(__name__)
+    callbacks.register_callbacks(app)
+    refresh = next(v['callback'].__wrapped__ for k,v in app.callback_map.items() if 'command-rows.children' in k)
+    first = refresh(0, None, 200, True, None)
+    assert len(first[1]) == min(200,count)
+    assert len(connections) == 1 and len(first[6]) == 64
+    assert all('ATTACH' not in statement.upper() for statement in sql)
+
+    sql.clear()
+    assert refresh(1, None, 200, True, first[6]) == (no_update,)*8
+    assert len(connections) == 2
+    assert len(sql) == 3 and all('FROM logger' not in statement for statement in sql)
+    assert refresh(2, None, 200, False, first[6]) == (no_update,)*8
+    assert len(connections) == 2
+
+    assert len(refresh(2, 'ping', 200, True, first[6])[1]) == min(200,count//2)
+    assert len(refresh(2, None, 400, True, first[6])[1]) == min(400,count)
+    for date_format, date in [('german','15.11.2023'), ('iso','2023-11-15'), ('us','11/15/2023')]:
+        for clock in ('12', '24'):
+            with station.db:
+                station.db.execute('UPDATE application_preferences SET date_format=?,hour_format=?',
+                                   (date_format,clock))
+            result = refresh(3,None,200,True,None)
+            formatted = result[1][-1].children[0].children
+            assert formatted.startswith(date)
+            assert ('PM' in formatted or 'AM' in formatted) == (clock=='12')
+    with station.db:
+        station.db.execute("UPDATE logger SET reply='verified reply' WHERE id=?", (count,))
+    updated = refresh(4,None,200,True,result[6])
+    assert 'verified reply' in updated[1][-1].children[-1].children.to_plotly_json()['props']['data-details']

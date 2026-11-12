@@ -33,7 +33,10 @@ def register_statistics_routes(server):
             return json_response(saved_view(config.DB_PATH,request.args.get('public_key') or None,int(raw)))
         except ValueError as exc:return json_response(dict(ok=False,error=str(exc)),400)
         except QueryTimeout as exc:
-            return json_response(dict(ok=False,error_code='QUERY_TIMEOUT',stage=exc.stage,diagnostics=exc.diagnostics,error='The server query budget was reached during '+exc.stage+'. Try a shorter period. Recording continues; saved data is preserved.'),504)
+            retry = ('Refresh this period to resume classification.' if exc.diagnostics.get('classification_progress_saved')
+                     else 'Try refreshing the saved view or choosing a shorter period.')
+            return json_response(dict(ok=False,error_code='QUERY_TIMEOUT',stage=exc.stage,diagnostics=exc.diagnostics,
+                error=f'The server query budget was reached during {exc.stage}. {retry} Recording continues; saved data is preserved.'),504)
         except StatisticsWorkerError:
             return json_response(dict(ok=False,error_code='WORKER_ERROR',error='The isolated statistics worker is unavailable. Refresh the saved view; recording status remains available.'),503)
         except StatisticsBusy as exc:

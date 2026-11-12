@@ -16,6 +16,7 @@ import uuid
 
 from meshcorestation.storage.connection import connect as open_database
 from meshcorestation.storage.voltage_store import MEMBERSHIP_LOCK
+from meshcorestation.storage.statistics_classification import SOURCE_SCHEMA
 
 MIN_FREE_BYTES = 64 * 1024 * 1024
 SCHEMA = '''
@@ -142,6 +143,8 @@ def _write(path, rows):
     with closing(sqlite3.connect(path, timeout=0.25)) as db:
         db.execute('PRAGMA journal_mode=WAL')
         db.executescript(SCHEMA)
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name='classification_source'").fetchone():
+            db.executescript("BEGIN IMMEDIATE;"+SOURCE_SCHEMA+"COMMIT;")
         with db:
             db.executemany('''INSERT INTO observations(reception_id,received_at,recorded_at,packet_type,route_type,
                 scoped,transport_code,payload,raw_packet,packet_digest,client_digest,metadata,rssi,snr,hop_count,

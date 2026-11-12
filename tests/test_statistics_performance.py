@@ -145,3 +145,71 @@ def test_scratch_space_cannot_consume_recording_reserve(tmp_path,monkeypatch):
     monkeypatch.setattr(view.shutil,'disk_usage',lambda _:NS(free=passive_stats.MIN_FREE_BYTES+1))
     with pytest.raises(OSError,match='reserve'):view.aggregate(path,KEY,1,now=NOW)
     with sqlite3.connect(passive_stats.statistics_path(path,KEY)) as db:assert db.execute('SELECT COUNT(*) FROM observations').fetchone()[0]==2500
+
+
+def test_classifications_reuse_overlap_and_track_data_and_configuration(tmp_path):
+    path = create_fixture(tmp_path, 2500)
+    source = passive_stats.statistics_path(path, KEY)
+
+    def compare(days, now=NOW):
+        reused = view.aggregate(path, KEY, days, now=now)
+        independent = view.aggregate(path, KEY, days, now=now, _reuse=False)
+        assert {k: v for k, v in reused.items() if k != 'diagnostics'} == {
+            k: v for k, v in independent.items() if k != 'diagnostics'}
+        return reused['diagnostics']['classified_rows']
+
+    assert compare(7) == 2500
+    assert compare(1) == 0
+    assert compare(30) == 0
+    packet = passive_stats.normalize(dict(route_type=1, payload_type=5, path='aa11',
+        path_len=1, path_hash_size=2, pkt_payload=b'new or repeated'), now_ns=int((NOW - 1)*1e9))
+    passive_stats.store_batch(path, [packet])
+    assert compare(1, NOW + 1) == 1
+    assert compare(7, NOW + 1) == 0
+
+    # Registry metadata is rendered live. A key collision invalidates all facts.
+    with sqlite3.connect(path.with_name('knownRepeaters.db')) as db:
+        db.execute("UPDATE repeaters SET name='Renamed' WHERE public_key=?", (KEY,))
+    assert compare(7, NOW + 1) == 0
+    with sqlite3.connect(path.with_name('knownRepeaters.db')) as db:
+        db.execute("""INSERT INTO repeaters(public_key,name,first_seen,source) VALUES(?,?,0,'contact')""",
+                   ('aa11' + 'bb' * 30, 'Collision'))
+    assert compare(7, NOW + 1) == 2501
+
+    with sqlite3.connect(path) as db:
+        db.execute("UPDATE statistics_regions SET name='renamed' WHERE name='region-1'")
+    assert compare(7, NOW + 1) == 2501
+    with sqlite3.connect(source) as db:
+        db.execute('UPDATE observations SET ambiguous=1 WHERE id=1')
+        db.execute('DELETE FROM observations WHERE id=2')
+    assert compare(7, NOW + 1) == 2500
+
+
+def test_readonly_legacy_history_and_unavailable_cache_fall_back(tmp_path):
+    path = create_fixture(tmp_path, 2500)
+    source = passive_stats.statistics_path(path, KEY)
+    with sqlite3.connect(source) as db:
+        for action in ('insert', 'update', 'delete'):
+            db.execute(f'DROP TRIGGER classification_{action}')
+        db.execute('DROP TABLE classification_source')
+    assert view.aggregate(path, KEY, 7, now=NOW)['diagnostics']['classified_rows'] == 2500
+    cache = tmp_path / 'statistics-classification.sqlite'
+    assert not cache.exists()
+    packet = passive_stats.normalize(dict(route_type=1, payload_type=5, path='aa11',
+        path_len=1, path_hash_size=2, pkt_payload=b'first post-update'), now_ns=int((NOW - 1)*1e9))
+    passive_stats.store_batch(path, [packet])
+    cache.mkdir()
+    assert view.aggregate(path, KEY, 7, now=NOW)['diagnostics']['classified_rows'] == 2501
+
+
+def test_interrupted_classification_resumes_without_returning_partial_counts(tmp_path):
+    path = create_fixture(tmp_path, 2500)
+    with pytest.raises(view.QueryTimeout, match='classify') as timed_out:
+        view.aggregate(path, KEY, 7, now=NOW, _budget=.7)
+    assert timed_out.value.diagnostics['classification_progress_saved']
+    assert 0 < timed_out.value.diagnostics['classified_rows'] < 2500
+    resumed = view.aggregate(path, KEY, 7, now=NOW + 1)
+    complete = view.aggregate(path, KEY, 7, now=NOW + 1, _reuse=False)
+    assert resumed['diagnostics']['classified_rows'] < 2500
+    assert {k: v for k, v in resumed.items() if k != 'diagnostics'} == {
+        k: v for k, v in complete.items() if k != 'diagnostics'}

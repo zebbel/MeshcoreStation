@@ -99,6 +99,14 @@ class Database:
             self.db.execute('ALTER TABLE logger ADD COLUMN room_public_key TEXT')
         self.db.execute('CREATE INDEX IF NOT EXISTS idx_logger_recv_time ON logger(recv_time)')
         self.db.execute('CREATE INDEX IF NOT EXISTS idx_logger_message_time ON logger(message,recv_time DESC,id DESC)')
+        self.db.execute("""CREATE TABLE IF NOT EXISTS command_history_revision(
+            id INTEGER PRIMARY KEY CHECK(id=1), revision TEXT NOT NULL)""")
+        self.db.execute("INSERT OR IGNORE INTO command_history_revision VALUES(1, lower(hex(randomblob(16))) )")
+        for action in ("INSERT", "UPDATE", "DELETE"):
+            self.db.execute(f"""CREATE TRIGGER IF NOT EXISTS command_history_after_{action.lower()}
+                AFTER {action} ON logger BEGIN
+                  UPDATE command_history_revision SET revision=lower(hex(randomblob(16))) WHERE id=1;
+                END""")
         from meshcorestation.storage.reply_store import initialize as initialize_replies
         from meshcorestation.storage.reception_store import initialize as initialize_receptions
         from meshcorestation.storage.voltage_store import initialize as initialize_telemetry

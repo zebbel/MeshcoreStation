@@ -19,6 +19,9 @@ import time
 
 from meshcorestation.storage.connection import connect as open_database
 from meshcorestation.storage import passive_stats
+from meshcorestation.storage.statistics_classification import (
+    CACHE_BYTES, ClassificationCache, EDGE_COLUMNS, FACT_COLUMNS, source_anchor, source_marker,
+)
 
 REGIONS_SCHEMA = '''CREATE TABLE IF NOT EXISTS statistics_regions(
  name TEXT PRIMARY KEY,scope_key TEXT NOT NULL)'''
@@ -56,6 +59,11 @@ def scope_resolver(regions):
             name=row['name'].removeprefix('#')
             if len(key)==16 and name.lower() not in {'unknown','unscoped'}:keys.setdefault(key,set()).add(name)
         except (ValueError,TypeError,KeyError):continue
+    @lru_cache(maxsize=16)
+    def keyed_prefixes(kind):
+        prefix = bytes([kind])
+        return [(hmac.new(key, prefix, 'sha256'), names) for key, names in keys.items()]
+
     @lru_cache(maxsize=4096)
     def resolve(kind,payload,transport,route_type):
         if route_type==1:return 'Unscoped'
@@ -67,8 +75,10 @@ def scope_resolver(regions):
             if received==0:return 'Unscoped'  # MeshCore wildcard transport scope.
             if not isinstance(payload,bytes):return 'Unknown'
             matches=set()
-            for key,names in keys.items():
-                value=int.from_bytes(hmac.new(key,bytes([kind])+payload,hashlib.sha256).digest()[:2],'little')
+            for prefix,names in keyed_prefixes(kind):
+                digest = prefix.copy()
+                digest.update(payload)
+                value = int.from_bytes(digest.digest()[:2], 'little')
                 value=1 if value==0 else 65534 if value==65535 else value
                 if received==value:matches.update(names)
             return next(iter(matches)) if len(matches)==1 else 'Unknown'
@@ -90,10 +100,10 @@ class QueryTimeout(RuntimeError):
 class Diagnostics:
     def __init__(self,budget):
         self.started=time.monotonic();self.cpu_started=time.process_time();self.deadline=self.started+budget
-        self.current='setup';self.times={};self.rows=0
+        self.current='setup';self.times={};self.rows=0;self.classified=0
 
     def report(self):
-        return dict(source_rows=self.rows,elapsed_ms=round((time.monotonic()-self.started)*1000,3),cpu_ms=round((time.process_time()-self.cpu_started)*1000,3),stages_ms=self.times)
+        return dict(source_rows=self.rows,classified_rows=self.classified,elapsed_ms=round((time.monotonic()-self.started)*1000,3),cpu_ms=round((time.process_time()-self.cpu_started)*1000,3),stages_ms=self.times)
 
     def check(self):
         if time.monotonic()>=self.deadline:raise QueryTimeout(self.current,self.report())
@@ -124,21 +134,31 @@ class RouteCache:
             self.cache.move_to_end(route);return saved[0]
         self.parsed+=1
         try:
-            hops=json.loads(route)
-            if not isinstance(hops,list) or any(not isinstance(h,dict) or not isinstance(h.get('hash'),str) for h in hops):raise ValueError()
-        except (ValueError,TypeError):raise sqlite3.DatabaseError('Saved route evidence is malformed.') from None
-        confirmed=any(h.get('status')=='matched' and self.resolve_hash(h['hash'])==self.key for h in hops)
-        edges=set()
-        for i,target in enumerate(hops):
-            prefix=target['hash']
-            if not prefix or not self.key.startswith(prefix):continue
-            for offset,direction in ((-1,'incoming'),(1,'outgoing')):
-                if not 0<=i+offset<len(hops):continue
-                neighbor=hops[i+offset];other=neighbor['hash']
-                neighbor_key=self.resolve_hash(other)
-                verified=(target.get('status')=='matched' and neighbor.get('status')=='matched'
-                          and self.resolve_hash(prefix)==self.key and neighbor_key is not None)
-                edges.add((prefix,other,neighbor_key,direction,bool(verified)))
+            hops = json.loads(route)
+            if not isinstance(hops, list):
+                raise ValueError()
+            targets = []
+            for i, hop in enumerate(hops):
+                prefix = hop['hash']
+                if not isinstance(prefix, str):
+                    raise ValueError()
+                if prefix and self.key.startswith(prefix):
+                    targets.append((i, prefix))
+        except (ValueError, TypeError, KeyError):
+            raise sqlite3.DatabaseError('Saved route evidence is malformed.') from None
+        confirmed = False
+        edges = set()
+        for i, prefix in targets:
+            target_matches = hops[i].get('status') == 'matched' and self.resolve_hash(prefix) == self.key
+            confirmed |= target_matches
+            for offset, direction in ((-1, 'incoming'), (1, 'outgoing')):
+                if not 0 <= i + offset < len(hops):
+                    continue
+                neighbor = hops[i + offset]
+                other = neighbor['hash']
+                neighbor_key = self.resolve_hash(other)
+                verified = target_matches and neighbor.get('status') == 'matched' and neighbor_key is not None
+                edges.add((prefix, other, neighbor_key, direction, verified))
         value=(confirmed,tuple(edges));weight=len(route)*4+len(edges)*256+256
         if weight<=8*1024*1024:
             while self.cache and (self.used+weight>8*1024*1024 or len(self.cache)>=1024):
@@ -156,48 +176,114 @@ def _space_guard(main_path,extra=0):
             raise OSError('Insufficient statistics scratch space; collection reserve is protected.')
 
 
-def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path):
-    """One indexed source scan. Only compact, disposable facts enter the spool.
+HEX_DIGEST = re.compile('[0-9a-f]{64}')
 
-    No source-schema writes or membership lock. The anonymous SQLite file is
-    deleted on close and has a 2 MiB page cache; raw payload/history never enters
-    the browser or a Python list of the complete observation history.
-    """
-    work.executescript('''PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;
+
+def _source_rows(source, start, end, after_id=None):
+    # Index range for sparse windows, sequential pages for dense history. The
+    # latter avoids a table-page lookup in timestamp order for each reception.
+    columns = """id,received_at,packet_digest,packet_type,route_type,ambiguous,
+        first_hop,middle_hop,last_hop,hop_count,route,
+        CASE WHEN route_type=0 OR (packet_type=4 AND evidence='advertisement-origin') THEN payload END,
+        transport_code,evidence"""
+    where = 'received_at>=? AND received_at<?'
+    if after_id is not None:
+        return source.execute(f'SELECT {columns} FROM observations NOT INDEXED WHERE id>? AND {where} ORDER BY id',
+                              (after_id, start, end)), True
+    count = source.execute(f'SELECT COUNT(*) FROM observations WHERE {where}', (start, end)).fetchone()[0]
+    last_id = source.execute('SELECT MAX(id) FROM observations').fetchone()[0]
+    dense = bool(last_id and count * 3 >= last_id)
+    scan = ' NOT INDEXED' if dense else ''
+    order = ' ORDER BY id' if dense else ''
+    return source.execute(f'SELECT {columns} FROM observations{scan} WHERE {where}{order}', (start, end)), dense
+
+
+def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,marker=None):
+    """Build compact aggregate inputs, reusing valid overlap and reading only missing rows."""
+    _space_guard(main_path)
+    work.executescript(f"""PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;
         PRAGMA temp_store=FILE; PRAGMA cache_size=-2048;
-        CREATE TABLE facts(id INTEGER PRIMARY KEY,digest TEXT,at REAL,bucket INTEGER,
-          kind INTEGER,hop INTEGER,confirmed INTEGER,region TEXT,origin INTEGER);
-        CREATE TABLE edges(identity TEXT,direction TEXT,verified INTEGER,digest BLOB,at REAL);''')
-    routes=RouteCache(key,resolve_hash);region_name=scope_resolver(regions)
-    rows=source.execute('''SELECT id,received_at,packet_digest,packet_type,route_type,
-        ambiguous,first_hop,middle_hop,last_hop,hop_count,route,payload,transport_code,evidence
-        FROM observations WHERE received_at>=? AND received_at<?''',(start,end))
-    while True:
-        batch=rows.fetchmany(128)
-        if not batch:break
-        diagnostics.check();_space_guard(main_path);facts=[];edge_facts=[]
-        for row in batch:
-            oid,at,digest,kind,route_type,ambiguous,first,middle,last,hop,route,payload,transport,evidence=row
-            observed=route_type in (0,1) and kind!=9
-            matched,links=routes.get(route) if observed else (False,())
-            confirmed=int(observed and not ambiguous and (first or middle or last) and matched)
-            region=region_name(kind,payload,transport,route_type) if confirmed else None
-            # SHA-256 identifiers remain exact; compact lowercase digests only
-            # in this disposable spool (noncanonical stored strings stay strings).
-            if isinstance(digest,str) and re.fullmatch('[0-9a-f]{64}',digest):digest=bytes.fromhex(digest)
-            # Full advertised origin is independent of route-hash ambiguity.
-            origin=int(kind==4 and evidence=='advertisement-origin' and isinstance(payload,bytes)
-                       and len(payload)>=101 and payload[:32].hex()==key and payload[100]&15==2)
-            facts.append((oid,digest,at,int(at//3600)*3600,kind,hop,confirmed,region,origin))
-            # Deduplicate a direction within this reception, never across RX copies.
-            edges={(neighbor_key if valid and not ambiguous else prefix+' → '+other,direction,int(valid and not ambiguous))
-                   for prefix,other,neighbor_key,direction,valid in links}
-            edge_facts.extend((identity,direction,valid,digest,at) for identity,direction,valid in edges)
-        work.executemany('INSERT INTO facts VALUES(?,?,?,?,?,?,?,?,?)',facts)
-        work.executemany('INSERT INTO edges VALUES(?,?,?,?,?)',edge_facts)
-        diagnostics.rows+=len(batch)
-        # Yield the GIL to the radio loop/collector between bounded batches.
-        time.sleep(0)
+        CREATE TABLE facts({FACT_COLUMNS});
+        CREATE TABLE edges({EDGE_COLUMNS});""")
+    routes = RouteCache(key, resolve_hash)
+    region_name = scope_resolver(regions)
+    if start >= end:
+        return routes
+    cache = ClassificationCache(work, main_path) if marker else None
+    reused = None
+    if cache:
+        # Rollback must undo a partially loaded cache, so the work database
+        # needs a journal when copying cached rows.
+        work.execute('PRAGMA journal_mode=MEMORY')
+        try:
+            reused = cache.load(*marker, start, end, source)
+        except (OSError, sqlite3.Error):
+            diagnostics.check()
+            cache = None
+        work.execute('PRAGMA journal_mode=OFF')
+    ranges = [(start, end, None)]
+    if reused:
+        lo, hi, last_id = reused
+        ranges = [(start, lo, None), (hi, end, None)]
+        if marker[1] > last_id:
+            ranges.append((lo, hi, last_id))
+    ranges = [(lo, hi, last_id) for lo, hi, last_id in ranges if lo < hi]
+    checkpoint = None
+    for index, (lo, hi, last_id) in enumerate(ranges):
+        rows, ordered = _source_rows(source, lo, hi, last_id)
+        last_processed = None
+        while batch := rows.fetchmany(256):
+            diagnostics.check()
+            if (cache and ordered and (not reused or last_id is not None)
+                    and index == len(ranges) - 1 and last_processed is not None
+                    and diagnostics.deadline - time.monotonic() < .85):
+                # Save only the completed ID prefix. The next request resumes
+                # from it. Never aggregate or return a partially classified view.
+                checkpoint = last_processed
+                break
+            if diagnostics.classified // 2048 != (diagnostics.classified + len(batch)) // 2048:
+                _space_guard(main_path)
+            facts, edge_facts = [], []
+            for row in batch:
+                oid,at,digest,kind,route_type,ambiguous,first,middle,last,hop,route,payload,transport,evidence=row
+                observed=route_type in (0,1) and kind!=9
+                matched,links=routes.get(route) if observed else (False,())
+                confirmed=int(observed and not ambiguous and (first or middle or last) and matched)
+                region = ('Unscoped' if route_type == 1 else region_name(kind,payload,transport,route_type)) if confirmed else None
+                if isinstance(digest,str) and HEX_DIGEST.fullmatch(digest):digest=bytes.fromhex(digest)
+                origin=int(kind==4 and evidence=='advertisement-origin' and isinstance(payload,bytes)
+                           and len(payload)>=101 and payload[:32].hex()==key and payload[100]&15==2)
+                facts.append((oid,digest,at,int(at//3600)*3600,kind,hop,confirmed,region,origin))
+                edges={(neighbor_key if valid and not ambiguous else prefix+' → '+other,direction,int(valid and not ambiguous))
+                       for prefix,other,neighbor_key,direction,valid in links}
+                edge_facts.extend((identity,direction,valid,digest,at,oid) for identity,direction,valid in edges)
+            work.executemany('INSERT INTO facts VALUES(?,?,?,?,?,?,?,?,?)',facts)
+            work.executemany('INSERT INTO edges VALUES(?,?,?,?,?,?)',edge_facts)
+            diagnostics.classified += len(batch)
+            last_processed = batch[-1][0]
+    work.commit()
+    diagnostics.rows = work.execute('SELECT COUNT(*) FROM facts').fetchone()[0]
+    checkpoint_saved = False
+    if cache and (not reused or diagnostics.classified or start < cache.previous[2] or end > cache.previous[3]):
+        # Treat persistence as optional. Save only after the requested facts
+        # are committed so a full/locked cache cannot discard the current view.
+        try:
+            _space_guard(main_path, CACHE_BYTES)
+            highwater = marker[1] if checkpoint is None else checkpoint
+            retain = checkpoint is None
+            if retain and reused and highwater > reused[2]:
+                # A new backdated row outside this view could make the old
+                # coverage misleading. Current-time appends retain the overlap.
+                retain = source.execute("""SELECT 1 FROM observations NOT INDEXED
+                    WHERE id>? AND received_at>=? AND received_at<?
+                    AND (received_at<? OR received_at>=?) LIMIT 1""",
+                    (reused[2], *cache.previous[2:4], start, end)).fetchone() is None
+            checkpoint_saved = cache.save(
+                marker[0], highwater, start, end, reused, retain, source_anchor(source, highwater))
+        except (OSError, sqlite3.Error):
+            diagnostics.check()
+    if checkpoint is not None:
+        raise QueryTimeout(diagnostics.current, dict(diagnostics.report(), classification_progress_saved=checkpoint_saved))
     return routes
 
 
@@ -242,7 +328,7 @@ def _coverage(source,start,end,diagnostics,local_bounds):
     return buckets,True,local_buckets
 
 
-def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_metadata=None,_budget=None,_covered=False):
+def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_metadata=None,_budget=None,_covered=False,_reuse=True):
     if days not in (1,7,30):raise ValueError('Choose 24 hours, 7 days or 30 days.')
     diagnostics=Diagnostics(QUERY_BUDGET_SECONDS if _budget is None else _budget)
     result=None;completed=False
@@ -280,13 +366,14 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                 source.set_progress_handler(lambda:int(time.monotonic()>=diagnostics.deadline),10000)
                 work.set_progress_handler(lambda:int(time.monotonic()>=diagnostics.deadline),10000)
                 with diagnostics.stage('classify'):
-                    routes=_spool(source,work,key,resolve_hash,regions,start,observed_end,diagnostics,main_path)
+                    marker=source_marker(source,path,key,registry,regions) if _reuse else None
+                    routes=_spool(source,work,key,resolve_hash,regions,start,observed_end,diagnostics,main_path,marker)
                 work.row_factory=sqlite3.Row
                 # Compact covering indexes, built only in this disposable spool.
                 with diagnostics.stage('indexes'):
                     size=work.execute('PRAGMA page_count').fetchone()[0]*work.execute('PRAGMA page_size').fetchone()[0]
                     _space_guard(main_path,size*2)
-                    work.executescript('''CREATE INDEX facts_confirmed_digest ON facts(confirmed,digest,at,id);
+                    work.executescript('''CREATE INDEX facts_confirmed_digest ON facts(confirmed,digest,at,id,hop);
                       CREATE INDEX edges_group ON edges(verified,identity,direction,digest,at);''')
                 with diagnostics.stage('totals'):
                     result['totals']=dict(work.execute('SELECT '+COUNTS.replace('packet_digest','digest')+' FROM facts WHERE confirmed=1').fetchone())
@@ -296,8 +383,12 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                     hourly={r['bucket']:dict(r) for r in work.execute('SELECT bucket,'+count_sql+' FROM facts WHERE confirmed=1 AND kind IN (2,5) GROUP BY bucket')}
                 with diagnostics.stage('activity'):
                     # Reuse compact facts; never parse routes or read source payloads again.
-                    work.create_function('calendar_bucket',1,lambda at:local_bounds[bisect_right(local_bounds,at)-1],deterministic=True)
-                    activity={r['bucket']:dict(r) for r in work.execute('SELECT calendar_bucket(at) AS bucket,'+count_sql+' FROM facts WHERE confirmed=1 AND origin=0 GROUP BY calendar_bucket(at)')}
+                    bucket_sql = 'bucket'
+                    if local_bounds[0] % 3600 or any(b-a != 3600 for a,b in zip(local_bounds,local_bounds[1:])):
+                        work.create_function('calendar_bucket',1,lambda at:local_bounds[bisect_right(local_bounds,at)-1],deterministic=True)
+                        bucket_sql = 'calendar_bucket(at)'
+                    activity={r['bucket']:dict(r) for r in work.execute(
+                        f'SELECT {bucket_sql} AS bucket,'+count_sql+f' FROM facts WHERE confirmed=1 AND origin=0 GROUP BY {bucket_sql}')}
                 with diagnostics.stage('packet_types'):
                     result['packet_types']=[dict(r) for r in work.execute('''SELECT
                       kind AS packet_type,CAST(kind AS TEXT) AS category,
@@ -366,7 +457,7 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                                 return int(i>=0 and at<intervals[i][1])
                             work.create_function('recorded',1,covered,deterministic=True)
                             result['covered_receptions']=work.execute('SELECT COUNT(*) FROM facts WHERE confirmed=1 AND recorded(at)').fetchone()[0]
-                result['diagnostics']=dict(source_rows=diagnostics.rows,parsed_routes=routes.parsed,route_cache_bytes=routes.used)
+                result['diagnostics']=dict(source_rows=diagnostics.rows,classified_rows=diagnostics.classified,parsed_routes=routes.parsed,route_cache_bytes=routes.used)
         with diagnostics.stage('render_series'):
             for bucket in range(int(start//3600)*3600,int(now//3600)*3600+1,3600):
                 lo,hi=max(start,bucket),min(now,bucket+3600)

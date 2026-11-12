@@ -117,7 +117,7 @@ def _saved_view(main_path,key,days,change_id=None):
     if not SLOT.acquire(blocking=False):raise StatisticsBusy('Another saved statistics view is being calculated. Refresh after it finishes; recording status remains available.')
     try:
         value=aggregate(main_path,key,days) if change_id is None else aggregate(main_path,key,days,change_id)
-        # Cap both entries and serialized size. No persistent cache/schema migration.
+        # Cap the short-lived response cache independently of classification reuse.
         if len(json.dumps(value).encode())<=4*1024*1024:
             with LOCK:
                 CACHE[cache_key]=(time.monotonic()+CACHE_SECONDS,token,value)

@@ -1,4 +1,4 @@
-"""One read-only calculation in a fresh interpreter; never imports radio/runtime."""
+"""One saved-data calculation in a fresh interpreter; never imports radio/runtime."""
 import json
 import logging
 import sqlite3

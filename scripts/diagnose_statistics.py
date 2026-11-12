@@ -58,7 +58,7 @@ class Connection:
     def __getattr__(self,name):return getattr(self.db,name)
 
 
-def profile_actual(main_path,key,days):
+def profile_actual(main_path,key,days,*,now=None,reuse=False):
     from meshcorestation.storage import statistics_view as module
     profile=Profile()
     original_scope,original_route,original_guard,original_spool=module.scope_resolver,module.RouteCache.get,module._space_guard,module._spool
@@ -72,20 +72,21 @@ def profile_actual(main_path,key,days):
     def guard(*args):return profile.measure('space_checks',original_guard,*args)
     def spool(source,work,*args):return original_spool(Connection(source,profile,'source'),Connection(work,profile,'scratch'),*args)
     module.scope_resolver,module.RouteCache.get,module._space_guard,module._spool=scope,route,guard,spool
-    wall,cpu=time.perf_counter(),time.process_time();value=None;error=None
-    try:value=module.aggregate(main_path,key,days)
+    wall,cpu=time.perf_counter(),time.process_time();value=None;error=None;failed_diagnostics={}
+    try:value=module.aggregate(main_path,key,days,now=now,_reuse=reuse)
     except Exception as exc:
         # Do not echo a malformed stored value in an exception message.
         error=dict(type=type(exc).__name__,stage=getattr(exc,'stage',None))
+        failed_diagnostics=getattr(exc,'diagnostics',{})
     finally:module.scope_resolver,module.RouteCache.get,module._space_guard,module._spool=original_scope,original_route,original_guard,original_spool
     return dict(wall_seconds=round(time.perf_counter()-wall,4),cpu_seconds=round(time.process_time()-cpu,4),
                 peak_rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,error=error,
                 fetched_rows=profile.rows,parsed_routes=profile.parsed,max_profiled_route_bytes=profile.max_route_bytes,
                 breakdown_ms={name:round(value*1000,3) for name,value in profile.seconds.items()},calls=profile.calls,
-                diagnostics=value.get('diagnostics',{}) if value else {})
+                diagnostics=value.get('diagnostics',{}) if value else failed_diagnostics)
 
 
-def inspect(main_path,selection=None,days=1):
+def inspect(main_path,selection=None,days=1,*,reuse=False):
     from meshcorestation.storage.connection import connect
     from meshcorestation.storage.passive_stats import snapshot,statistics_path
     from meshcorestation import __version__
@@ -118,7 +119,7 @@ def inspect(main_path,selection=None,days=1):
                 (time.time()-days*86400,time.time())).fetchone()
             result['window']=dict(rows=row[0],mean_route_bytes=round(row[1] or 0,1),max_route_bytes=row[2],mean_hops=round(row[3] or 0,2),scoped_rows=row[4],ambiguous_rows=row[5])
         except sqlite3.Error:result['window']=dict(error='Summary query unavailable within two seconds.')
-    result['profile']=profile_actual(main_path,key,days)
+    result['profile']=profile_actual(main_path,key,days,reuse=reuse)
     return result
 
 
@@ -130,8 +131,10 @@ def main():
     parser.add_argument('--repeater',type=int,help='Number from the selection list when multiple repeaters are managed.')
     parser.add_argument('--days',type=int,choices=[1,7,30],default=1)
     parser.add_argument('--output',type=Path)
+    parser.add_argument('--reuse-classification',action='store_true',
+                        help='Exercise the disposable classification cache; source history remains read-only.')
     args=parser.parse_args()
-    try:result=inspect(args.database,args.repeater,args.days)
+    try:result=inspect(args.database,args.repeater,args.days,reuse=args.reuse_classification)
     except (ValueError,OSError,sqlite3.Error) as exc:result=dict(error=type(exc).__name__,note='Check the installation directory, --database path and selected repeater.')
     encoded=json.dumps(result,indent=2)
     print(encoded)

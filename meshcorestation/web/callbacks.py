@@ -4,20 +4,22 @@ import logging
 import sqlite3
 from datetime import datetime
 from dash import Input, Output, State, ctx, html, no_update
-from meshcorestation.web.data import PAGE_SIZE, TIMEZONE, bot_status, overview, snapshot, timestamp
+from meshcorestation.web.data import PAGE_SIZE, TIMEZONE, bot_status, overview, history_snapshot, timestamp
 
 
 def register_callbacks(app):
-    def table_rows(rows):
+    def table_rows(rows, preferences):
         if not rows:
             return [html.Tr(html.Td("No recorded commands match this filter.", colSpan=4, className="empty"))]
         result = []
         for row in rows:
             details = dict(row)
+            received = timestamp(row.get("recv_time"), preferences)
             for key in ("recv_time", "sender_timestamp", "sender_position_updated_at"):
                 if details.get(key) is not None:
-                    details[key] = f"{timestamp(details[key])} · Unix {details[key]}"
-            result.append(html.Tr([html.Td(timestamp(row.get("recv_time")), className="date"), html.Td(row.get("message") or "—", className="command"), html.Td(row.get("sender") or "—"), html.Td(html.Button("Info ↗", className="info-button", **{"data-details": json.dumps(details, default=str), "aria-label": f"Details for command {row['id']}"}))], **{"data-row-id": str(row["id"])}))
+                    formatted = received if key == "recv_time" else timestamp(details[key], preferences)
+                    details[key] = f"{formatted} · Unix {details[key]}"
+            result.append(html.Tr([html.Td(received, className="date"), html.Td(row.get("message") or "—", className="command"), html.Td(row.get("sender") or "—"), html.Td(html.Button("Info ↗", className="info-button", **{"data-details": json.dumps(details, default=str), "aria-label": f"Details for command {row['id']}"}))], **{"data-row-id": str(row["id"])}))
         return result
 
 
@@ -62,22 +64,22 @@ def register_callbacks(app):
             return (no_update,) * 8
         zone_label = f"Oldest to newest · {TIMEZONE.key}"
         try:
-            data = snapshot(command, size or PAGE_SIZE)
+            data = history_snapshot(command, size or PAGE_SIZE, previous)
         except (sqlite3.Error, OSError) as exc:
             logging.warning("Command history read failed: %s", exc)
             return (no_update, no_update, no_update, "Data unavailable", True,
-                    "History unavailable (retrying automatically)", no_update, zone_label)
-        from meshcorestation.display import settings
-        signature = json.dumps([command, settings(), data["rows"]], sort_keys=True, default=str)
-        rows = table_rows(data["rows"]) if signature != previous else no_update
+                    "History unavailable (retrying automatically)", None, zone_label)
+        if data is None:
+            return (no_update,) * 8
+        rows = table_rows(data["rows"], data["preferences"])
         options = [{"label": value if value else "(empty command)", "value": value} for value in data["commands"]]
         if command is not None and command not in data["commands"]:
             options.append({"label": command + " (no records)", "value": command})
         return (options, rows, json.dumps(command),
                 f"{len(data['rows']):,} of {data['total']:,} commands",
                 len(data["rows"]) >= data["total"],
-                "Updated " + timestamp(datetime.now(TIMEZONE).timestamp()),
-                signature, zone_label)
+                "Updated " + timestamp(datetime.now(TIMEZONE).timestamp(), data["preferences"]),
+                data["token"], zone_label)
 
     @app.callback(Output('bot-runtime-status','children'),Output('bot-channel-status','children'),Output('footer-firmware','children'),Input('refresh','n_intervals'))
     def refresh_bot_state(tick):
