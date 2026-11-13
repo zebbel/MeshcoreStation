@@ -2,9 +2,16 @@
 from pathlib import Path
 from dash import Dash
 from meshcorestation.web.layout import build_layout
+from meshcorestation.web.i18n import language, register_localization
 from meshcorestation.web.callbacks import register_callbacks
 from meshcorestation.web.companion_settings import register_companion_routes
 from meshcorestation.web.map_routes import register_map_routes
+
+
+class Dashboard(Dash):
+    def interpolate_index(self, **kwargs):
+        page = super().interpolate_index(**kwargs)
+        return page.replace('<html>', f'<html lang="{language()}">', 1)
 
 
 def create_app():
@@ -12,7 +19,7 @@ def create_app():
     import logging
     from meshcorestation.storage.database import Database
     owner=Database(logging.getLogger('meshcorestation'));owner.close()
-    app = Dash(__name__, title="MeshcoreStation", update_title=None, assets_folder=str(Path(__file__).with_name("assets")), assets_ignore=r"^(?:leaflet(?:\.markercluster)?\.(?:js|css)|MarkerCluster\.css)$", assets_path_ignore=[r"vendor/(?:leaflet(?:\.markercluster)?\.(?:js|css)|MarkerCluster\.css)$"])
+    app = Dashboard(__name__, title="MeshcoreStation", update_title=None, assets_folder=str(Path(__file__).with_name("assets")), assets_ignore=r"^(?:leaflet(?:\.markercluster)?\.(?:js|css)|MarkerCluster\.css)$", assets_path_ignore=[r"vendor/(?:leaflet(?:\.markercluster)?\.(?:js|css)|MarkerCluster\.css)$"])
     app.index_string = app.index_string.replace("{%favicon%}", '<link rel="icon" type="image/png" href="/assets/meshcore-logo.png?v=1.2">')
     from meshcorestation.updater import local_revision
     try:
@@ -20,11 +27,13 @@ def create_app():
     except Exception:
         revision = 'unknown'
     app.index_string = app.index_string.replace('{%metas%}', '{%metas%}<meta name="meshcorestation-revision" content="' + revision + '">')
+    register_localization(app.server)
     from flask import request,jsonify
     @app.server.before_request
     def reject_unimplemented_pages():
         if request.url_rule and request.url_rule.rule=='/<path:path>':
-            return jsonify(ok=False,error='This page or API is not included in V5 milestone 1.'),404
+            return jsonify(ok=False,error='This page or API is unavailable.'),404
+    app.index_string = app.index_string.replace("</head>", '<script src="/dashboard-locales.js"></script></head>')
     app.layout = build_layout
     register_callbacks(app)
     register_companion_routes(app.server)

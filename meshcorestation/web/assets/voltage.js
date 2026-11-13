@@ -1,4 +1,9 @@
 (() => {
+    const {translatedError: uiError, t: ui, html: uiHTML} = window.MeshcoreStationI18n || {
+        translatedError: value => value,
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`)),
+        html: value => value
+    };
     let dialog, snapshot = null, busy = false, wantedKey = '', timer = null, dirty = false, channelsCache = [], templateValid = false, previewTimer, previewSerial = 0;
     const el = id => document.getElementById(id);
     const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
@@ -15,21 +20,21 @@
         if (wantedKey) q.set('public_key', wantedKey);
         const response = await fetch('/api/bot/voltage?' + q, options);
         let result;
-        try { result = await response.json(); } catch { throw new Error('Unreadable response. Check the dashboard logs and refresh.'); }
-        if (!response.ok || !result.ok) throw new Error(result.error || 'Telemetry request failed.');
+        try { result = await response.json(); } catch { throw new Error(ui("Unreadable response. Check the dashboard logs and refresh.")); }
+        if (!response.ok || !result.ok) throw new Error(result.error || ui("Telemetry request failed."));
         return result;
     }
     function previewTemplate() {
         clearTimeout(previewTimer);const serial=++previewSerial;templateValid=false;controls();
-        el('voltage-template-error').textContent='Checking template…';
+        el('voltage-template-error').textContent=ui("Checking template…");
         previewTimer=setTimeout(async()=>{
             try{
                 const response=await fetch('/api/battery-report-preview',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},body:JSON.stringify({template:el('voltage-template').value})});
                 const data=await response.json();if(serial!==previewSerial)return;
-                if(!response.ok||!data.ok)throw Error(data.error||'Preview unavailable.');
+                if(!response.ok||!data.ok)throw Error(data.error||ui("Preview unavailable."));
                 el('voltage-template-preview').textContent=data.preview;
                 el('voltage-template-error').textContent='';templateValid=true;
-            }catch(error){if(serial!==previewSerial)return;el('voltage-template-error').textContent=error.message;el('voltage-template-preview').textContent='Preview unavailable';}
+            }catch(error){if(serial!==previewSerial)return;el('voltage-template-error').textContent=uiError(error.message);el('voltage-template-preview').textContent=ui("Preview unavailable");}
             finally{if(serial===previewSerial)controls();}
         },250);
     }
@@ -48,12 +53,12 @@
     }
     function candidates(data) {
         window.MeshcoreStationRepeaterNames?.ingest(data.repeaters);
-        const select = el('voltage-repeater'); select.replaceChildren(new Option('Choose a repeater…', ''));
+        const select = el('voltage-repeater'); select.replaceChildren(new Option(ui("Choose a repeater…"), ''));
         for (const r of data.repeaters) {const option=window.MeshcoreStationRepeaterNames?.element(r.public_key,'option')||new Option(r.name||'(unnamed)');option.value=r.public_key;select.append(option);};
         select.value = wantedKey || data.config.public_key;
         const list = el('voltage-repeaters'); list.replaceChildren();
         for (const r of data.repeaters) {
-            const row = document.createElement('li'), name = window.MeshcoreStationRepeaterNames?.element(r.public_key)||node('span',r.name||'(unnamed)'), b=node('button','Select');
+            const row = document.createElement('li'), name = window.MeshcoreStationRepeaterNames?.element(r.public_key)||node('span',r.name||'(unnamed)'), b=node('button',ui("Select"));
             name.title=r.public_key; b.type='button'; b.addEventListener('click',()=>choose(r.public_key)); row.dataset.name=`${r.name} ${r.public_key}`.toLowerCase(); row.append(name,b); list.append(row);
         }
         filter();
@@ -61,13 +66,13 @@
     function filter() { const q=el('voltage-search').value.trim().toLowerCase(); el('voltage-repeaters').querySelectorAll('li').forEach(n=>n.hidden=!n.dataset.name.includes(q)); }
     function reportDestinations(data) {
         const select = el('voltage-target'), selected = data.config.report_target || 'bot';
-        select.replaceChildren(new Option('Follow bot chat / room', 'bot'));
+        select.replaceChildren(new Option(ui("Follow bot chat / room"), 'bot'));
         for (const room of (data.rooms || []).filter(r => r.enabled))
-            select.append(new Option('Room: ' + room.name, 'room:' + room.id));
+            select.append(new Option(ui("Room: ") + room.name, ui("room:") + room.id));
         for (const chat of channelsCache.filter(c => c.type === 'private'))
-            select.append(new Option('Chat: ' + chat.name + ' (slot ' + chat.index + ')', 'channel:' + chat.name));
+            select.append(new Option(ui("Chat: ") + chat.name + ' (slot ' + chat.index + ')', ui("channel:") + chat.name));
         if (![...select.options].some(option => option.value === selected))
-            select.append(new Option('Unavailable: ' + selected, selected));
+            select.append(new Option(ui("Unavailable: ") + selected, selected));
         select.value = selected;
     }
     async function refreshChannels() {
@@ -94,52 +99,52 @@
             dirty = !!wantedKey && wantedKey!==c.public_key;
         }
         const latest=data.latest;
-        el('voltage-latest').textContent=latest ? `Voltage: ${latest.voltage===null?'Reading failed':window.MeshcoreStationBattery.reading(latest.voltage)} · ${date(latest.sampled_at,data.config.timezone)}${latest.error?' · '+latest.error:''}` : 'Voltage: No readings yet.';
+        el('voltage-latest').textContent=latest ? ui("Voltage: {0} · {1}{2}", latest.voltage===null?ui("Reading failed"):window.MeshcoreStationBattery.reading(latest.voltage), date(latest.sampled_at,data.config.timezone), latest.error?' · '+latest.error:'') : ui("Voltage: No readings yet.");
         const temperature=data.latest_temperature;
-        el('temperature-latest').textContent=temperature ? `Temperature: ${Number.isFinite(temperature.temperature)?temperature.temperature.toFixed(1)+' °C':'Not available'} · ${date(temperature.sampled_at,data.config.timezone)}${temperature.temperature_error?' · '+temperature.temperature_error:''}` : 'Temperature: No readings yet.';
+        el('temperature-latest').textContent=temperature ? ui("Temperature: {0} · {1}{2}", Number.isFinite(temperature.temperature)?temperature.temperature.toFixed(1)+' °C':ui("Not available"), date(temperature.sampled_at,data.config.timezone), temperature.temperature_error?' · '+temperature.temperature_error:'') : ui("Temperature: No readings yet.");
         const worker=data.worker, active=worker && worker.state!=='stopped' && data.server_time-worker.heartbeat<150;
         const target = data.config.report_target || 'bot';
-        const destination = target === 'bot' ? 'Bot chat / room' : target.startsWith('channel:') ? 'chat ' + target.slice(8) : target;
-        el('voltage-worker').textContent=`${active?'Bot monitor: '+worker.state:'Bot monitor offline'} · Reports to: ${destination}.`;
+        const destination = target === 'bot' ? ui("Bot chat / room") : target.startsWith('channel:') ? 'chat ' + target.slice(8) : target;
+        el('voltage-worker').textContent=ui("{0} · Reports to: {1}.", active?ui("Bot monitor: ")+worker.state:ui("Bot monitor offline"), destination);
         el('voltage-chart-note').textContent=''; chart(data.samples,data.config.timezone,Number(el('voltage-days').value));
         window.MeshcoreStationBattery.temperatureChart(el('temperature-chart'),el('temperature-chart-note'),data.temperature_samples||[],data.config.timezone,Number(el('voltage-days').value),data.server_time);
         const rows=el('voltage-recent'); rows.replaceChildren();
-        for (const p of [...data.samples].slice(-10).reverse()) { const tr=document.createElement('tr'); for(const t of [date(p.sampled_at,data.config.timezone),p.voltage===null?'—':window.MeshcoreStationBattery.reading(p.voltage),p.temperature_channel===data.config.temperature_channel&&Number.isFinite(p.temperature)?p.temperature.toFixed(1)+' °C':'—',p.error||p.temperature_error||'OK']) tr.append(node('td',t)); rows.append(tr); }
+        for (const p of [...data.samples].slice(-10).reverse()) { const tr=document.createElement('tr'); for(const t of [date(p.sampled_at,data.config.timezone),p.voltage===null?'—':window.MeshcoreStationBattery.reading(p.voltage),p.temperature_channel===data.config.temperature_channel&&Number.isFinite(p.temperature)?p.temperature.toFixed(1)+' °C':'—',p.error||p.temperature_error||ui("OK")]) tr.append(node('td',t)); rows.append(tr); }
         const reports=el('voltage-report-log'); reports.replaceChildren();
-        for (const r of data.reports) reports.append(node('li',`${date(r.attempted_at,data.config.timezone)} · ${r.status} · ${r.channel_name||'no channel'} · ${r.detail}`));
+        for (const r of data.reports) reports.append(node('li',`${date(r.attempted_at,data.config.timezone)} · ${r.status} · ${r.channel_name||ui("no channel")} · ${r.detail}`));
     }
     async function load(form = false, silent = false) {
         if (busy || (silent && dirty)) return;
         busy=true;controls();
-        if (!silent) message('Loading telemetry history…');
-        try { if(form) await refreshChannels(); render(await request(),form); if (!silent) message(dirty?'Repeater selected. Save to use it for monitoring.':'History refreshed.'); }
-        catch(error) { message(error.message,true); if(form) snapshot=null; }
+        if (!silent) message(ui("Loading telemetry history…"));
+        try { if(form) await refreshChannels(); render(await request(),form); if (!silent) message(dirty?ui("Repeater selected. Save to use it for monitoring."):ui("History refreshed.")); }
+        catch(error) { message(uiError(error.message),true); if(form) snapshot=null; }
         finally { busy=false;controls(); }
     }
     function choose(key) {
-        if (dirty && !window.confirm('Discard unsaved settings and select another repeater?')) { el('voltage-repeater').value=wantedKey || snapshot?.config.public_key || ''; return; }
+        if (dirty && !window.confirm(ui("Discard unsaved settings and select another repeater?"))) { el('voltage-repeater').value=wantedKey || snapshot?.config.public_key || ''; return; }
         wantedKey=key;dirty=false;load(true);
     }
     async function save(event) {
         event.preventDefault(); if(busy || !snapshot || !templateValid || !el('voltage-form').reportValidity()) return;
         const value={enabled:el('voltage-enabled').checked,public_key:el('voltage-repeater').value,interval_minutes:Number(el('voltage-interval').value),reports_enabled:el('voltage-reports').checked,report_time_1:el('voltage-time1').value,report_time_2:el('voltage-time2').value,timezone:el('voltage-zone').value.trim(),voltage_channel:Number(el('voltage-lpp').value),temperature_channel:Number(el('temperature-lpp').value),report_target:el('voltage-target').value,report_template:el('voltage-template').value};
         busy=true;controls();
-        try { await request({operation:'save',expected_revision:snapshot.config.revision,value});wantedKey=value.public_key;dirty=false;message('Settings saved. The bot applies them automatically.'); }
-        catch(error) { message(error.message+' Refresh before retrying.',true); return; }
+        try { await request({operation:'save',expected_revision:snapshot.config.revision,value});wantedKey=value.public_key;dirty=false;message(ui("Settings saved. The bot applies them automatically.")); }
+        catch(error) { message(error.message+ui(" Refresh before retrying."),true); return; }
         finally {busy=false;controls();}
         await load(true);
     }
     async function read() {
         if(busy || !snapshot || dirty) return;
         busy=true;controls();
-        try {await request({operation:'sample',expected_revision:snapshot.config.revision});message('Reading requested. The bot will collect it shortly; a radio request can take about a minute.');}
-        catch(error){message(error.message,true);}
+        try {await request({operation:'sample',expected_revision:snapshot.config.revision});message(ui("Reading requested. The bot will collect it shortly; a radio request can take about a minute."));}
+        catch(error){message(uiError(error.message),true);}
         finally{busy=false;controls();}
     }
-    function close() {if(!busy && (!dirty || window.confirm('Discard unsaved telemetry settings?'))) {dialog.close();clearInterval(timer);timer=null;clearTimeout(previewTimer);++previewSerial;} }
+    function close() {if(!busy && (!dirty || window.confirm(ui("Discard unsaved telemetry settings?")))) {dialog.close();clearInterval(timer);timer=null;clearTimeout(previewTimer);++previewSerial;} }
     function create() {
         dialog=document.createElement('dialog');dialog.id='voltage-dialog';dialog.setAttribute('aria-labelledby','voltage-title');
-        dialog.innerHTML=`<div class="dialog-header"><h2 id="voltage-title">Repeater telemetry</h2><button type="button" id="voltage-close" aria-label="Close telemetry history">×</button></div>
+        dialog.innerHTML=uiHTML(`<div class="dialog-header"><h2 id="voltage-title">Repeater telemetry</h2><button type="button" id="voltage-close" aria-label="Close telemetry history">×</button></div>
         <p id="voltage-message" role="status" aria-live="polite"></p><p id="voltage-worker" class="muted"></p>
         <form id="voltage-form"><div class="voltage-fields">
         <div class="voltage-wide voltage-repeater-choice"><label>Repeater<select id="voltage-repeater"></select></label><button type="button" id="voltage-map">Select repeater on map</button></div>
@@ -159,7 +164,7 @@
         <h3 id="voltage-latest">Voltage: No readings yet.</h3><h3 id="temperature-latest">Temperature: No readings yet.</h3><label>Chart period <select id="voltage-days"><option value="1" selected>24 hours</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
         <h3>Battery voltage</h3><div id="voltage-chart"></div><p id="voltage-chart-note" class="muted"></p><h3>Temperature</h3><div id="temperature-chart"></div><p id="temperature-chart-note" class="muted"></p>
         <details><summary>Recent readings</summary><table><thead><tr><th>Time</th><th>Voltage</th><th>Temperature</th><th>Result</th></tr></thead><tbody id="voltage-recent"></tbody></table></details>
-        <details><summary>Recent report attempts</summary><ul id="voltage-report-log"></ul><p class="muted">Queued means accepted by the companion, not confirmed delivery. Missed report times have a 10-minute grace period; interrupted sends are not retried automatically.</p></details>`;
+        <details><summary>Recent report attempts</summary><ul id="voltage-report-log"></ul><p class="muted">Queued means accepted by the companion, not confirmed delivery. Missed report times have a 10-minute grace period; interrupted sends are not retried automatically.</p></details>`);
         window.meshcorestationPrepareDialog(dialog);
         document.body.append(dialog);
         el('voltage-template').addEventListener('input',previewTemplate);
@@ -171,7 +176,7 @@
         el('voltage-repeater').addEventListener('change',()=>choose(el('voltage-repeater').value));
         el('voltage-search').addEventListener('input',filter);el('voltage-read').addEventListener('click',read);
         el('voltage-days').addEventListener('change',()=>load());
-        el('voltage-refresh').addEventListener('click',()=>{if(!dirty||window.confirm('Discard unsaved changes and refresh?')){dirty=false;load(true);}});
+        el('voltage-refresh').addEventListener('click',()=>{if(!dirty||window.confirm(ui("Discard unsaved changes and refresh?"))){dirty=false;load(true);}});
     }
     function open(key='') {
         if(!dialog)create();if(dialog.open)return;
@@ -180,7 +185,7 @@
     }
     function pick(data) {
         if (!data) return;
-        document.dispatchEvent(new CustomEvent('stats-picker-open', {detail: {repeaters:data.repeaters,selected:dialog?.open ? el('voltage-repeater').value : data.config.public_key,selectionEvent:'battery-picker-selected',title:'Select telemetry repeater'}}));
+        document.dispatchEvent(new CustomEvent('stats-picker-open', {detail: {repeaters:data.repeaters,selected:dialog?.open ? el('voltage-repeater').value : data.config.public_key,selectionEvent:'battery-picker-selected',title:ui("Select telemetry repeater")}}));
     }
     document.addEventListener('battery-picker-selected',event=>{if(dialog?.open)choose(event.detail);else open(event.detail);});
     document.addEventListener('click',async event=>{
@@ -188,7 +193,7 @@
         button.disabled=true;
         try {
             const response=await fetch('/api/bot/voltage?days=1',{cache:'no-store',headers:{'X-Meshcore-Control':'1'}});
-            const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||'Could not load repeaters.');pick(data);
+            const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||ui("Could not load repeaters."));pick(data);
         } catch(error) {window.alert(error.message);} finally {button.disabled=false;}
     });
     document.addEventListener('meshcore-voltage-open',e=>{const key=e.detail?.public_key||'';if(dialog?.open&&key)choose(key);else open(key);});

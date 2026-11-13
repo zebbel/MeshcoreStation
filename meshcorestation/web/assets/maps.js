@@ -1,4 +1,7 @@
 (() => {
+    const {t: ui} = window.MeshcoreStationI18n || {
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
+    };
     const maps = new Map(), requests = new Map(), cache = new Map(), observers = new Map();
     const cacheTTL = 30000;
     async function mapData(url, signal) {
@@ -7,10 +10,10 @@
         const response=await fetch(url,{cache:"no-store",signal});
         let data;
         try { data=await response.json(); }
-        catch { throw Error('Map API returned an invalid response. Reload the page and try again.'); }
-        if(!response.ok)throw Error(data?.error||`Map data request failed (HTTP ${response.status}). Try again.`);
+        catch { throw Error(ui("Map API returned an invalid response. Reload the page and try again.")); }
+        if(!response.ok)throw Error(data?.error||ui("Map data request failed (HTTP {0}). Try again.", response.status));
         if (!data || !['nodes','segments','notes','hops'].every(key => Array.isArray(data[key])))
-            throw Error('Map API returned incomplete map data. Reload the page and try again.');
+            throw Error(ui("Map API returned incomplete map data. Reload the page and try again."));
         cache.set(url,{at:Date.now(),data});
         while(cache.size>32)cache.delete(cache.keys().next().value);
         return data;
@@ -36,10 +39,10 @@
     }
     function describe(node) {
         const box = document.createElement('div');
-        box.append(node.role==='repeater'&&window.MeshcoreStationRepeaterNames?window.MeshcoreStationRepeaterNames.element(node.public_key||node.key||node.label,'strong'):text('strong', node.label), text('p', node.role === 'repeater' && node.order ? `Repeater hop ${node.order}` : node.role));
+        box.append(node.role==='repeater'&&window.MeshcoreStationRepeaterNames?window.MeshcoreStationRepeaterNames.element(node.public_key||node.key||node.label,'strong'):text('strong', node.label), text('p', node.role === 'repeater' && node.order ? ui("Repeater hop {0}", node.order) : ui(node.role)));
         box.append(text('p', node.position.map(n => n.toFixed(6)).join(', ')));
         if (node.public_key) box.append(text('p', node.public_key, 'map-key'));
-        if (node.updated_at) box.append(text('p', `Saved / last seen: ${window.meshcorestationFormatDate(node.updated_at)}`));
+        if (node.updated_at) box.append(text('p', ui("Saved / last seen: {0}", window.meshcorestationFormatDate(node.updated_at))));
         if (node.role === 'repeater' && node.public_key) {
             window.meshcorestationRepeaterActions(box, node, () => {
                 document.getElementById('repeaters-dialog')?.close();
@@ -53,10 +56,10 @@
         const controller = new AbortController(); requests.set(id, controller);
         const canvas = document.getElementById(id), notes = document.getElementById(notesId);
         const summary = id === 'route-map' && document.getElementById('route-summary');
-        if (summary) summary.replaceChildren(text('p', 'Loading distances and packet route…'));
+        if (summary) summary.replaceChildren(text('p', ui("Loading distances and packet route…")));
         if (summary) document.getElementById('route-paths')?.replaceChildren();
         dispose(id); canvas.replaceChildren();
-        const loading = text('p', 'Loading map…', 'map-loading');
+        const loading = text('p', ui("Loading map…"), 'map-loading');
         loading.setAttribute('role','status');
         notes.replaceChildren(loading); canvas.setAttribute('aria-busy','true');
         let timedOut = false, failed = false;
@@ -64,11 +67,11 @@
             if (failed || requests.get(id) !== controller || (controller.signal.aborted && !timedOut)) return;
             failed = true; controller.abort();
             dispose(id); canvas.replaceChildren(); canvas.setAttribute('aria-busy','false');
-            const message = timedOut ? 'Map loading timed out. Check the connection and try again.' : String(error?.message || error || 'Map initialization failed. Try again.');
+            const message = timedOut ? ui("Map loading timed out. Check the connection and try again.") : String(error?.message || error || ui("Map initialization failed. Try again."));
             const failure = text('p', message, 'map-error'); failure.setAttribute('role','alert');
-            const retry = text('button','Retry map'); retry.type='button'; retry.addEventListener('click',()=>load(id,url,notesId));
+            const retry = text('button',ui("Retry map")); retry.type='button'; retry.addEventListener('click',()=>load(id,url,notesId));
             notes.replaceChildren(failure,retry);
-            if (summary && summary.textContent === 'Loading distances and packet route…') summary.replaceChildren(text('p', 'Distances and packet route could not be loaded.'));
+            if (summary && summary.textContent === ui('Loading distances and packet route…')) summary.replaceChildren(text('p', ui("Distances and packet route could not be loaded.")));
         }
         const timeout = setTimeout(() => { timedOut = true; fail(); }, 30000);
         try {
@@ -88,25 +91,25 @@
                 notes.replaceChildren(...data.notes.map(note => text('p', note)));
                 if (tileWarning) notes.append(tileWarning);
                 if (canvas.getAttribute('aria-busy') === 'true') notes.prepend(loading);
-                if (summary) notes.prepend(text('p', 'S = sender · numbered markers = repeaters · B = bot. Blue = resolved route; red dashed = unresolved section. Arrows point toward the bot.', 'map-legend'));
+                if (summary) notes.prepend(text('p', ui("S = sender · numbered markers = repeaters · B = bot. Blue = resolved route; red dashed = unresolved section. Arrows point toward the bot."), 'map-legend'));
                 if (summary) {
-                    const distance = value => typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} km` : 'Not available';
-                    const sequence = [data.sender_name || 'Sender', ...data.hops.map(hop => hop.status === 'Resolved' || hop.status === 'Coordinates missing' ? hop.name : `${hop.hash} (${hop.status})`), data.bot_name || 'Bot'];
-                    if (!data.path_valid) sequence.splice(1, 0, 'Route not recorded / invalid');
+                    const distance = value => typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} km` : ui("Not available");
+                    const sequence = [data.sender_name || ui("Sender"), ...data.hops.map(hop => hop.status === 'Resolved' || hop.status === 'Coordinates missing' ? hop.name : `${hop.hash} (${ui(hop.status)})`), data.bot_name || ui("Bot")];
+                    if (!data.path_valid) sequence.splice(1, 0, ui("Route not recorded / invalid"));
                     summary.replaceChildren(
-                        text('p', `Direct distance: ${distance(data.direct_distance_km)} · Route distance: ${data.route_distance_lower_bound ? '≥ ' : ''}${distance(data.route_distance_km)}`, 'route-distances'),
+                        text('p', ui("Direct distance: {0} · Route distance: {1}{2}", distance(data.direct_distance_km), data.route_distance_lower_bound ? '≥ ' : '', distance(data.route_distance_km)), 'route-distances'),
                         text('p', sequence.join(' → '), 'route-sequence'));
-                    if (data.path_valid && !data.hops.length) summary.append(text('p', 'Direct packet · no repeaters', 'muted'));
+                    if (data.path_valid && !data.hops.length) summary.append(text('p', ui("Direct packet · no repeaters"), 'muted'));
                 }
             }
             showRoute();
             if (selector) alternatives.forEach((route, index) => {
                 const rx = route.reception || {}, button = text('button', '');
                 button.type = 'button';
-                const metric = (value, unit) => typeof value === 'number' ? `${value} ${unit}` : 'Unknown';
-                const hops = route.path_valid ? `${route.hops.length} hops` : 'Unknown / incomplete path';
-                const unresolved = route.hops.some(hop => hop.status !== 'Resolved') ? ' · Unresolved: ' + route.hops.filter(hop => hop.status !== 'Resolved').map(hop => hop.status).join(', ') : '';
-                button.textContent = `Path ${index+1} · ${hops}${unresolved} · RSSI ${metric(rx.rssi,'dBm')} · SNR ${metric(rx.snr,'dB')} · ${rx.recv_time == null ? 'Time unknown' : window.meshcorestationFormatDate(rx.recv_time)}${rx.observations?.length > 1 ? ` · ${rx.observations.length} receptions` : ''}`;
+                const metric = (value, unit) => typeof value === 'number' ? `${value} ${unit}` : ui("Unknown");
+                const hops = route.path_valid ? ui("{0} hops", route.hops.length) : ui("Unknown / incomplete path");
+                const unresolved = route.hops.some(hop => hop.status !== 'Resolved') ? ui(" · Unresolved: ") + route.hops.filter(hop => hop.status !== 'Resolved').map(hop => ui(hop.status)).join(', ') : '';
+                button.textContent = ui("Path {0} · {1}{2} · RSSI {3} · SNR {4} · {5}{6}", index+1, hops, unresolved, metric(rx.rssi,'dBm'), metric(rx.snr,'dB'), rx.recv_time == null ? ui("Time unknown") : window.meshcorestationFormatDate(rx.recv_time), rx.observations?.length > 1 ? ui(" · {0} receptions", rx.observations.length) : '');
                 button.setAttribute('aria-pressed', String(index === 0));
                 button.addEventListener('click', () => {
                     if (controller.signal.aborted) return;
@@ -120,7 +123,7 @@
             const libraryError=await ready;
             if(controller.signal.aborted)return;
             if(libraryError)throw libraryError;
-            if (!window.L) throw new Error('Map library could not be loaded. Refresh the page and try again.');
+            if (!window.L) throw new Error(ui("Map library could not be loaded. Refresh the page and try again."));
             // MarkerCluster needs a finite zoom limit before background tiles exist.
             if (!await frame(controller.signal)) return;
             const map = L.map(canvas, { scrollWheelZoom: true, maxZoom: 19 }); maps.set(id, map);
@@ -178,20 +181,20 @@
                         else add(marker);
                     }
                     clusters.addLayers(batch);
-                    loading.textContent = `Loading map… ${Math.min(offset+100,data.nodes.length)} / ${data.nodes.length} markers`;
+                    loading.textContent = ui("Loading map… {0} / {1} markers", Math.min(offset+100,data.nodes.length), data.nodes.length);
                     await new Promise(resolve => setTimeout(resolve,0));
                 }
             }
-            if (clusters) notes.prepend(text('p', 'Numbered circles group nearby repeaters. Zoom in or click a group to expand it; overlapping markers spread apart when expanded.', 'map-legend'));
-            if (!summary) notes.prepend(text('p', 'S = sender · numbered markers / R = repeaters · B = bot. Click markers for details.', 'map-legend'));
-            if (!data.nodes.length) notes.prepend(text('p', 'No usable coordinates are available for this map.'));
+            if (clusters) notes.prepend(text('p', ui("Numbered circles group nearby repeaters. Zoom in or click a group to expand it; overlapping markers spread apart when expanded."), 'map-legend'));
+            if (!summary) notes.prepend(text('p', ui("S = sender · numbered markers / R = repeaters · B = bot. Click markers for details."), 'map-legend'));
+            if (!data.nodes.length) notes.prepend(text('p', ui("No usable coordinates are available for this map.")));
             if (!await frame(controller.signal) || maps.get(id) !== map) return;
             map.invalidateSize();
             if (bounds.length) map.fitBounds(bounds, {padding:[35,35],maxZoom:14});
             // Draw overlays before tiles; await these steps so failures are visible.
             if (!await frame(controller.signal) || maps.get(id) !== map) return;
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
-                if (!notes.querySelector('.tile-warning')) notes.append(text('p', 'Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap.', 'tile-warning'));
+                if (!notes.querySelector('.tile-warning')) notes.append(text('p', ui("Background tiles unavailable. Markers and route lines remain visible; an Internet connection is needed for the basemap."), 'tile-warning'));
             }).addTo(map);
             if (window.ResizeObserver) {
                 const observer = new ResizeObserver(() => {
@@ -202,7 +205,7 @@
                 observers.set(id,observer); observer.observe(canvas);
             }
             loading.remove();
-            notes.prepend(text('p', `Map ready · ${data.nodes.length} markers.`, 'map-ready'));
+            notes.prepend(text('p', ui("Map ready · {0} markers.", data.nodes.length), 'map-ready'));
         } catch (error) {
             fail(error);
         } finally {

@@ -1,4 +1,7 @@
 (() => {
+    const {t: ui} = window.MeshcoreStationI18n || {
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
+    };
     let box, body, initial = true, follow = true, anchor = null, anchorOffset = 0, previousFilter, frame;
     function remember() {
         if (document.getElementById('command-history-disclosure')?.open === false) return;
@@ -38,11 +41,13 @@
         if (button && button.dataset.details) {
             const record = JSON.parse(button.dataset.details), fields = document.getElementById('detail-fields');
             fields.replaceChildren();
-            document.getElementById('detail-title').textContent = `Command #${record.id}`;
+            document.getElementById('detail-title').textContent = ui("Command #{0}", record.id);
             for (const [key, value] of Object.entries(record)) {
                 const label = document.createElement('dt'), content = document.createElement('dd');
-                label.textContent = key;
-                content.textContent = value === null ? 'Not recorded' : value === '' ? '(empty)' : String(value);
+                const identifier = 'history.field.' + key;
+                const translated = ui(identifier);
+                label.textContent = translated === identifier ? key : translated;
+                content.textContent = value === null ? ui("Not recorded") : value === '' ? ui('(empty)') : String(value);
                 fields.append(label, content);
             }
             dialog.showModal();

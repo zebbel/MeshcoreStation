@@ -1,5 +1,8 @@
 /* Await both scripts and styles; failed or stalled assets can be retried. */
 (() => {
+    const {t: ui} = window.MeshcoreStationI18n || {
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
+    };
     let core, clusters;
     const styles = new Map(), scripts = new Map();
     function asset(url, stylesheet = false) {
@@ -13,9 +16,9 @@
                 if (error) { element.remove(); reject(error); }
                 else resolve();
             };
-            const timer = setTimeout(() => finish(Error('Timed out loading map asset: ' + url)), 15000);
+            const timer = setTimeout(() => finish(Error(ui("Timed out loading map asset: ") + url)), 15000);
             element.onload = () => finish();
-            element.onerror = () => finish(Error('Could not load map asset: ' + url));
+            element.onerror = () => finish(Error(ui("Could not load map asset: ") + url));
             document.head.append(element);
         });
     }
@@ -32,12 +35,12 @@
             style('/assets/vendor/leaflet.css'),
             window.L ? Promise.resolve() : script('/assets/vendor/leaflet.js')
         ]).then(() => {
-            if (!window.L?.map) throw Error('Leaflet did not initialize. Reload the page and try again.');
+            if (!window.L?.map) throw Error(ui("Leaflet did not initialize. Reload the page and try again."));
         }).catch(error => { core = null; throw error; });
         if (!clustering) return core;
         if (!clusters) clusters = Promise.all([core, style('/assets/vendor/MarkerCluster.css')]).then(async () => {
             if (!window.L.markerClusterGroup) await script('/assets/vendor/leaflet.markercluster.js');
-            if (!window.L.markerClusterGroup) throw Error('Leaflet clustering did not initialize. Reload the page and try again.');
+            if (!window.L.markerClusterGroup) throw Error(ui("Leaflet clustering did not initialize. Reload the page and try again."));
         }).catch(error => { clusters = null; throw error; });
         return clusters;
     };

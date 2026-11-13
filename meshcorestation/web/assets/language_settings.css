@@ -1,0 +1,7 @@
+#dashboard-language {
+    max-width: 100%;
+}
+
+html[lang="de"] :is(.dialog-header, .statistics-controls, .repeater-toolbar) {
+    overflow-wrap: anywhere;
+}

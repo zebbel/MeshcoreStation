@@ -1,6 +1,9 @@
 /* Approximate standard 1S LiPo state of charge; this is not a fuel-gauge reading.
    The generic nonlinear curve is intentionally explicit for future calibration. */
 window.MeshcoreStationBattery = (() => {
+    const {t: ui} = window.MeshcoreStationI18n || {
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
+    };
     const curve = [[3.0,0],[3.3,2],[3.5,5],[3.6,10],[3.7,20],[3.75,30],[3.8,40],[3.85,50],[3.9,60],[3.95,70],[4.0,80],[4.1,90],[4.2,100]];
     function percent(voltage) {
         if (!Number.isFinite(voltage) || voltage < 3.0 || voltage > 4.2) return null;
@@ -10,9 +13,9 @@ window.MeshcoreStationBattery = (() => {
         return 100;
     }
     function reading(voltage) {
-        if (!Number.isFinite(voltage)) return 'No valid reading';
+        if (!Number.isFinite(voltage)) return ui("No valid reading");
         const p=percent(voltage);
-        return `${voltage.toFixed(2)} V · ${p === null ? 'outside 1S estimate range' : '≈' + p + '%'}`;
+        return `${voltage.toFixed(2)} V · ${p === null ? ui("outside 1S estimate range") : '≈' + p + '%'}`;
     }
     const selections=new WeakMap();
     function seriesChart(box,note,samples,zone,days,end,field) {
@@ -23,7 +26,7 @@ window.MeshcoreStationBattery = (() => {
         const points=samples.filter(p=>Number.isFinite(p.sampled_at)&&p.sampled_at>=start&&p.sampled_at<=end)
             .sort((a,b)=>a.sampled_at-b.sampled_at);
         const good=points.filter(p=>Number.isFinite(value(p)));
-        if(!good.length){box.textContent=temperature?'No temperature readings in this period. Check the temperature LPP channel in Telemetry history / settings.':'No valid voltage readings in this period. Request a reading in Telemetry history / settings.';selections.delete(box);return;}
+        if(!good.length){box.textContent=temperature?ui("No temperature readings in this period. Check the temperature LPP channel in Telemetry history / settings."):ui("No valid voltage readings in this period. Request a reading in Telemetry history / settings.");selections.delete(box);return;}
         const ns='http://www.w3.org/2000/svg',w=940,h=290,left=70,right=24,top=20,bottom=48;
         let low=3.0,high=4.2;
         if(temperature){
@@ -32,8 +35,8 @@ window.MeshcoreStationBattery = (() => {
         }
         const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
         svg.setAttribute('role','img');svg.setAttribute('tabindex','0');svg.classList.add('telemetry-chart-svg');
-        const label=temperature?'Repeater temperature in Celsius':'Battery voltage, fixed scale 3.0 to 4.2 volts';
-        svg.setAttribute('aria-label',label+'. Click or tap to select a measurement.');
+        const label=temperature?ui("Repeater temperature in Celsius"):ui("Battery voltage, fixed scale 3.0 to 4.2 volts");
+        svg.setAttribute('aria-label',label+ui(". Click or tap to select a measurement."));
         const x=t=>left+(t-start)/(end-start)*(w-left-right),y=v=>top+(high-v)/(high-low)*(h-top-bottom);
         const bounded=v=>Math.max(low,Math.min(high,v));
         const date=t=>window.meshcorestationFormatDate(t,zone,{seconds:false});
@@ -56,7 +59,7 @@ window.MeshcoreStationBattery = (() => {
                 y:Math.max(top+30,Math.min(h-bottom-10,y(bounded(value(p)))-18)),
                 'text-anchor':'middle',class:'telemetry-selected-value'},format(p));
             selections.set(box,{at:p.sampled_at,value:value(p),mode});
-            svg.setAttribute('aria-label',label+'. Selected '+format(p)+' · '+selectedDate(p.sampled_at));note.textContent=format(p)+' · '+selectedDate(p.sampled_at);
+            svg.setAttribute('aria-label',label+ui(". Selected ")+format(p)+' · '+selectedDate(p.sampled_at));note.textContent=format(p)+' · '+selectedDate(p.sampled_at);
         }
         function pick(event){
             if(event.button!=null&&event.button!==0)return;
@@ -69,7 +72,7 @@ window.MeshcoreStationBattery = (() => {
             const mode=event.type==='pointermove'?'hover':'selected';
             if(selections.get(box)?.at!==nearest.sampled_at||selections.get(box)?.value!==value(nearest)||selections.get(box)?.mode!==mode)select(nearest,mode);
         }
-        function clear(){highlight?.remove();text?.remove();highlight=text=null;selections.delete(box);if(originalNote)note.textContent=originalNote;svg.setAttribute('aria-label',label+'. Hover, tap or use arrow keys to inspect measurements.');}
+        function clear(){highlight?.remove();text?.remove();highlight=text=null;selections.delete(box);if(originalNote)note.textContent=originalNote;svg.setAttribute('aria-label',label+ui(". Hover, tap or use arrow keys to inspect measurements."));}
         svg.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')pick(event);});
         svg.addEventListener('pointerleave',event=>{if(event.pointerType!=='touch'&&selections.get(box)?.mode==='hover')clear();});
         svg.addEventListener('blur',()=>{if(svg.isConnected)clear();});
@@ -85,8 +88,8 @@ window.MeshcoreStationBattery = (() => {
         const saved=selections.get(box),point=good.find(p=>p.sampled_at===saved?.at&&value(p)===saved?.value);
         if(!point)selections.delete(box);
         const outside=good.filter(p=>value(p)<low||value(p)>high).length;
-        note.textContent=temperature?`${good.length} temperature readings · °C · ${zone}. Missing readings break the line.`:
-            `Fixed 1S LiPo scale: 3.0–4.2 V · ${good.length} valid / ${points.length} attempts · ${zone}. Gaps indicate failed readings or outages.${outside?' '+outside+' out-of-range reading(s), available through selection.':''} Percentages are approximate voltage-based estimates; charging, load and cell chemistry affect them.`;
+        note.textContent=temperature?ui("{0} temperature readings · °C · {1}. Missing readings break the line.", good.length, zone):
+            ui("Fixed 1S LiPo scale: 3.0–4.2 V · {0} valid / {1} attempts · {2}. Gaps indicate failed readings or outages.{3} Percentages are approximate voltage-based estimates; charging, load and cell chemistry affect them.", good.length, points.length, zone, outside?' '+outside+ui(" out-of-range reading(s), available through selection."):'');
         originalNote=note.textContent;if(point)select(point,selections.get(box)?.mode);
     }
     function chart(box,note,samples,zone,days,end){seriesChart(box,note,samples,zone,days,end,'voltage');}

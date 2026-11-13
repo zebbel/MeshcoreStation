@@ -1,9 +1,9 @@
-name: V5 milestone validation
+name: V6 dashboard validation
 on:
   push:
-    branches: [V5]
+    branches: [V6]
   pull_request:
-    branches: [V5]
+    branches: [V6]
 permissions:
   contents: read
 jobs:
@@ -31,22 +31,23 @@ jobs:
           trap 'kill "$server_pid"' EXIT
           for attempt in {1..30}; do curl -fsS http://127.0.0.1:8050/ > /dev/null && break; sleep 1; done
           node tests/browser/v5_milestone.cjs
+          node tests/browser/v6_localization.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v5-browser-evidence
+          name: v6-browser-evidence
           path: |
             browser-evidence/
             browser-server.log
   publish:
     needs: verify
-    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.9.1:')
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 6.0.0:')
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Publish authorized V5 statistics update prerelease
+      - name: Publish authorized V6 dashboard prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create v5.9.1 --target "$GITHUB_SHA" --title "MeshcoreStation 5.9.1 — Statistics and Command History Performance" --notes-file docs/v5-release.md --prerelease --latest=false
+        run: gh release create v6.0.0 --target "$GITHUB_SHA" --title "MeshcoreStation 6.0.0 — Multilingual Dashboard" --notes-file docs/v6-release.md --prerelease --latest=false

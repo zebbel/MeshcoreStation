@@ -1,5 +1,8 @@
 /* Shared display identities. Exact keys only; no requests and no prefix guessing. */
 (() => {
+    const {t: ui} = window.MeshcoreStationI18n || {
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
+    };
     const records=new Map(),byName=new Map();let queued=false,revision=0;
     const keyOf=r=>typeof r==='string'?r:r?.public_key||r?.pubkey||r?.ID||r?.id||r?.key;
     const full=k=>typeof k==='string'&&/^[a-f0-9]{64}$/i.test(k);
@@ -21,12 +24,12 @@
     function suffix(key,others){let size=8;while(size<64&&others.some(k=>k!==key&&k.slice(0,size)===key.slice(0,size)))size+=4;return key.slice(0,size)+(size<64?'…':'');}
     function resolve(value){
         const key=normalize(keyOf(value)),record=records.get(key);
-        if(!full(key))return {key,label:`Unknown Repeater (${key.slice(0,8)||'?'}…) · unresolved prefix`,status:'unresolved'};
-        if(!record)return {key,label:`Unknown Repeater (${key.slice(0,8)}…)`,status:'unknown'};
+        if(!full(key))return {key,label:ui("Unknown Repeater ({0}…) · unresolved prefix", key.slice(0,8)||'?'),status:'unresolved'};
+        if(!record)return {key,label:ui("Unknown Repeater ({0}…)", key.slice(0,8)),status:'unknown'};
         const duplicates=[...byName.get(record.name.toLocaleLowerCase())];
         return {key,label:record.name+(duplicates.length>1?' ('+suffix(key,duplicates)+')':''),status:'named'};
     }
-    function apply(node){const r=resolve(node.dataset.repeaterKey);node.textContent=r.label;node.title=r.key+(r.status==='unresolved'?' — unresolved prefix; identity not confirmed':'');node.dataset.identityStatus=r.status;}
+    function apply(node){const r=resolve(node.dataset.repeaterKey);node.textContent=r.label;node.title=r.key+(r.status==='unresolved'?ui(" — unresolved prefix; identity not confirmed"):'');node.dataset.identityStatus=r.status;}
     function element(value,tag='span'){
         const node=document.createElement(tag);node.dataset.repeaterKey=normalize(keyOf(value));apply(node);return node;
     }

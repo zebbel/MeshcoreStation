@@ -1,2 +1,2 @@
-"""MeshcoreStation V5 — Companion, channel bot and repeater management."""
-__version__ = "5.9.1"
+"""MeshcoreStation V6 — Companion, channel bot and repeater management."""
+__version__ = "6.0.0"

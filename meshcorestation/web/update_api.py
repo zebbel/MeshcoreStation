@@ -28,9 +28,9 @@ def register_update_routes(server):
                 if not isinstance(body, dict):
                     raise ValueError('Invalid update request.')
                 if body.get('action') == 'branches':
-                    return reply({'ok': True, 'branches': {'V5':'V5'}})
-                if body.get('action') in {'check','install'} and body.get('branch',branch)!='V5':
-                    raise ValueError('V5 updates stay on the V5 branch.')
+                    return reply({'ok': True, 'branches': {'V6':'V6'}})
+                if body.get('action') in {'check','install'} and body.get('branch',branch)!='V6':
+                    raise ValueError('V6 updates stay on the V6 branch.')
                 if body.get('action') == 'check':
                     return reply({'ok': True, 'check': updater.check(body.get('branch'))})
                 if body.get('action') == 'install':

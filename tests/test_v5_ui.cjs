@@ -1,4 +1,4 @@
-/* Actual V4 dialog code, wired into V5's separate Settings/Bot/history hosts. */
+/* Actual V4 dialog code, wired into V6's separate Settings/Bot/history hosts. */
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
 const dom=new JSDOM(`<body><button id="open-station-settings">Settings</button><dialog id="station-settings-dialog"><div class="dialog-header"><button id="close-station-settings"></button></div><div class="dialog-body"></div></dialog><button id="open-companion"></button><button id="open-contacts"></button><button id="open-channels"></button><details id="bot-disclosure"><details id="bot-settings-disclosure"><button id="open-commands"></button><div class="companion-grid"></div></details><details id="command-history-disclosure"><button id="open-commands-history"></button><div id="command-scroll"><table><tbody id="command-rows"></tbody></table></div></details></details><dialog id="details-dialog"><button id="close-details"></button><h2 id="detail-title"></h2><dl id="detail-fields"></dl></dialog></body>`,{url:'http://localhost/',runScripts:'outside-only',pretendToBeVisual:true});
 const w=dom.window,$=id=>w.document.getElementById(id),key='ab'.repeat(32),identity='11'.repeat(32),requests=[],props=[];
@@ -6,7 +6,7 @@ w.TextEncoder=TextEncoder;w.AbortSignal.timeout=()=>undefined;w.confirm=()=>true
 w.dash_clientside={set_props:(id,value)=>props.push([id,value])};let managed,protectedChannel=false,scopeRows=[];
 w.meshcorestationManageRepeater=value=>managed=value;
 w.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null;requests.push({url,body});let data={ok:true};
- if(url==='/api/update')data={...data,version:'5.9.1',revision:'a'.repeat(40),branch:'V5',ready:false,check:{},status:{},branches:{V5:'V5'}};
+ if(url==='/api/update')data={...data,version:'6.0.0',revision:'a'.repeat(40),branch:'V6',ready:false,check:{},status:{},branches:{V6:'V6'}};
  else if(url==='/api/companion')data.settings={public_key:identity,name:'Fixture',adv_lat:49,adv_lon:8,tx_power:10,max_tx_power:22,radio_freq:869.525,radio_bw:125,radio_sf:7,radio_cr:5};
  else if(url==='/api/companion/network')data.network={public_key:identity,path_hash_size:1,default_scope:{name:'',key:''}};
  else if(url==='/api/bot/runtime')data={...data,settings:{serial_port:'/dev/fixture',channel_name:'Bot'},ports:[{device:'/dev/fixture',description:'Simulated'}]};
@@ -27,5 +27,5 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
  $('open-commands-history').click();await settle();assert($('commands-dialog').open,'history button opens the same command editor');$('commands-close').click();$('open-commands').click();await settle();assert($('commands-dialog').open);$('commands-close').click();
  $('bot-settings-disclosure').open=true;await settle();$('scope-name').value='local';$('scope-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await settle();assert($('scopes-list').textContent.includes('local'));
  $('bot-disclosure').open=true;$('command-history-disclosure').open=true;await settle();assert(props.some(([id,p])=>id==='history-visible'&&p.data===true));$('bot-disclosure').open=false;await settle();assert.equal(props.filter(([id])=>id==='history-visible').at(-1)[1].data,false,'closing Bot pauses the still-open nested History');
- dom.window.close();console.log('V5 dialog hosts, serial isolation, Contacts Manage, protected Bot channel, generated keys, both Commands buttons, scopes and nested history visibility passed.');
+ dom.window.close();console.log('V6 dialog hosts, serial isolation, Contacts Manage, protected Bot channel, generated keys, both Commands buttons, scopes and nested history visibility passed.');
 })().catch(e=>{console.error(e);dom.window.close();process.exit(1);});

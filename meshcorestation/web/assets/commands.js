@@ -1,7 +1,12 @@
 /* Edit a local draft; only Save changes writes SQLite. Previews never use the radio. */
 (() => {
+    const {translatedError: uiError, t: ui, html: uiHTML} = window.MeshcoreStationI18n || {
+        translatedError: value => value,
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`)),
+        html: value => value
+    };
     let dialog, editor, snapshot, draft = [], currentId = null, busy = false, catalog = [], previewTimer, previewSequence = 0, activeTemplate = 'command-reply';
-    const actionLabels = {reply: 'Reply', position: 'Update sender position', scope: 'Add scope'};
+    const actionLabels = {reply: ui("Reply"), position: ui('Update sender position'), scope: ui("Add scope")};
     const $ = id => document.getElementById(id), copy = value => JSON.parse(JSON.stringify(value));
     const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
     function button(text, action, cls) { const n = node('button', text, cls); n.type = 'button'; n.addEventListener('click', action); return n; }
@@ -12,7 +17,7 @@
         if ($('command-action')) $('command-action').disabled = busy || currentId === 'help';
         $('commands-save').disabled = busy || !snapshot || !dirty();
         $('commands-add').disabled = busy || !snapshot || draft.length >= (snapshot.max_commands || 24);
-        $('commands-dirty').textContent = dirty() ? 'Unsaved changes' : 'All changes saved';
+        $('commands-dirty').textContent = dirty() ? ui("Unsaved changes") : ui("All changes saved");
         dialog.setAttribute('aria-busy', String(busy));
     }
     async function request(body) {
@@ -20,7 +25,7 @@
         if (body) { options.method = 'POST'; options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
         const response = await fetch('/api/bot/commands', options);
         const result = await response.json();
-        if (!response.ok || !result.ok) throw new Error(result.error || 'Command request failed. Reload before retrying.');
+        if (!response.ok || !result.ok) throw new Error(result.error || ui("Command request failed. Reload before retrying."));
         return result;
     }
     function formCommand() {
@@ -35,7 +40,7 @@
     }
     function schedulePreview() {
         clearTimeout(previewTimer); ++previewSequence;
-        $('command-preview').textContent = 'Updating preview…';
+        $('command-preview').textContent = ui("Updating preview…");
         previewTimer = setTimeout(() => preview(true), 250);
     }
     async function preview(editing = false) {
@@ -47,21 +52,21 @@
             else $('commands-help-preview').textContent = result.help_reply;
         } catch (error) {
             if (sequence !== previewSequence) return;
-            if (editing) { $('command-preview').textContent = 'Preview unavailable'; $('command-editor-message').textContent = error.message; }
-            else $('commands-help-preview').textContent = error.message;
+            if (editing) { $('command-preview').textContent = ui("Preview unavailable"); $('command-editor-message').textContent = uiError(error.message); }
+            else $('commands-help-preview').textContent = uiError(error.message);
         }
     }
     function render() {
         const list = $('commands-list'); list.replaceChildren();
         for (const command of draft) {
             const row = node('li', undefined, 'command-row'), name = node('strong', command.trigger, 'command-name'), detail = node('div', undefined, 'command-description');
-            if (command.id === 'help') detail.append(node('span', '🔒 Required', 'command-badge'));
+            if (command.id === 'help') detail.append(node('span', ui("🔒 Required"), 'command-badge'));
             detail.append(node('p', command.help), node('code', command.reply));
-            detail.append(node('small', 'Action: ' + actionLabels[command.action], 'muted'));
-            if (command.action !== 'reply') detail.append(node('p', 'On failure:'), node('code', command.failure_reply));
-            const actions = node('div', undefined, 'command-actions'); actions.append(button('Edit', () => edit(command.id)));
-            if (command.id !== 'help') actions.append(button('Delete', () => {
-                if (busy || !window.confirm(`Delete ${command.trigger}? It will stop responding after you save changes.`)) return;
+            detail.append(node('small', ui("Action: ") + actionLabels[command.action], 'muted'));
+            if (command.action !== 'reply') detail.append(node('p', ui("On failure:")), node('code', command.failure_reply));
+            const actions = node('div', undefined, 'command-actions'); actions.append(button(ui("Edit"), () => edit(command.id)));
+            if (command.id !== 'help') actions.append(button(ui("Delete"), () => {
+                if (busy || !window.confirm(ui("Delete {0}? It will stop responding after you save changes.", command.trigger))) return;
                 draft = draft.filter(c => c.id !== command.id); render(); preview();
             }, 'command-delete'));
             row.append(name, detail, actions); list.append(row);
@@ -69,19 +74,19 @@
         controls();
     }
     async function load() {
-        if (busy || (dirty() && !window.confirm('Discard unsaved command changes and reload?'))) return;
-        busy = true; controls(); message('Loading commands…');
+        if (busy || (dirty() && !window.confirm(ui("Discard unsaved command changes and reload?")))) return;
+        busy = true; controls(); message(ui("Loading commands…"));
         try { snapshot = await request(); catalog = snapshot.placeholders; draft = copy(snapshot.commands); render(); message(''); await preview(); }
-        catch (error) { message(error.message, true); }
+        catch (error) { message(uiError(error.message), true); }
         finally { busy = false; controls(); }
     }
     async function save() {
         if (busy || !snapshot || !dirty()) return;
-        busy = true; controls(); message('Saving commands…');
+        busy = true; controls(); message(ui("Saving commands…"));
         try {
             const result = await request({operation: 'save', commands: draft, expected_revision: snapshot.revision});
-            snapshot = {...snapshot, ...result}; draft = copy(result.commands); render(); message('Commands saved. Changes are active immediately.'); await preview();
-        } catch (error) { message(error.message, true); }
+            snapshot = {...snapshot, ...result}; draft = copy(result.commands); render(); message(ui("Commands saved. Changes are active immediately.")); await preview();
+        } catch (error) { message(uiError(error.message), true); }
         finally { busy = false; controls(); }
     }
     function placeholders(command) {
@@ -104,13 +109,13 @@
         if (busy || !snapshot) return;
         currentId = id || ('cmd-' + Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join(''));
         const command = draft.find(c => c.id === currentId) || {trigger: '', help: '', reply: '', action: 'reply', failure_reply: '@{sender_name} | {result}'};
-        $('command-editor-title').textContent = id ? 'Edit command' : 'Add command';
+        $('command-editor-title').textContent = id ? ui("Edit command") : ui("Add command");
         $('command-trigger').value = command.trigger; $('command-trigger').readOnly = currentId === 'help';
         $('command-help').value = command.help; $('command-reply').value = command.reply;
         $('command-action').value = command.action; $('command-action').disabled = currentId === 'help';
         $('command-failure').value = command.failure_reply || '@{sender_name} | {result}';
         activeTemplate = 'command-reply'; actionFields();
-        $('command-editor-message').textContent = ''; $('command-preview').textContent = 'Enter a command, help text and reply template.';
+        $('command-editor-message').textContent = ''; $('command-preview').textContent = ui("Enter a command, help text and reply template.");
         $('command-help-rule').hidden = currentId !== 'help';
         placeholders(command); editor.showModal();
         if (id) preview(true);
@@ -120,12 +125,12 @@
         const action = $('command-action').value;
         $('command-failure-section').hidden = action === 'reply'; $('command-failure-preview-section').hidden = action === 'reply';
         $('command-failure').required = action !== 'reply';
-        $('command-action-hint').textContent = action === 'position' ? 'Use command latitude, longitude to save supplied coordinates, or command alone to request fresh GPS telemetry. Requires one matching sender contact. Invalid coordinates leave the saved position unchanged. Position mentions use @[{sender_name}].' : action === 'scope' ? 'Use: command <name> or command add <name>. Adds a reply scope to MeshcoreStation; an existing scope uses the failure reply.' : 'Sends a reply using available data. No additional action.';
+        $('command-action-hint').textContent = action === 'position' ? ui("Use command latitude, longitude to save supplied coordinates, or command alone to request fresh GPS telemetry. Requires one matching sender contact. Invalid coordinates leave the saved position unchanged. Position mentions use @[{sender_name}].") : action === 'scope' ? ui("Use: command <name> or command add <name>. Adds a reply scope to MeshcoreStation; an existing scope uses the failure reply.") : ui("Sends a reply using available data. No additional action.");
         if (action === 'reply') activeTemplate = 'command-reply';
         placeholders({action});
     }
     function closeEditor() {
-        if (busy || (formDirty() && !window.confirm('Discard this command’s unfinished edits?'))) return;
+        if (busy || (formDirty() && !window.confirm(ui("Discard this command’s unfinished edits?")))) return;
         clearTimeout(previewTimer); ++previewSequence; editor.close(); preview();
     }
     async function apply(event) {
@@ -137,25 +142,25 @@
             const commands = candidateList();
             await request({operation: 'preview', commands, selected_id: currentId});
             draft = commands; editor.close(); render(); await preview();
-        } catch (error) { $('command-editor-message').textContent = error.message; }
+        } catch (error) { $('command-editor-message').textContent = uiError(error.message); }
         finally { busy = false; controls(); }
     }
     function close() {
-        if (busy || (dirty() && !window.confirm('Discard unsaved command changes?'))) return;
+        if (busy || (dirty() && !window.confirm(ui("Discard unsaved command changes?")))) return;
         clearTimeout(previewTimer); ++previewSequence; dialog.close();
         // Discard the local draft on close; reopening reads the current registry.
         if (snapshot) draft = copy(snapshot.commands);
     }
     function create() {
         dialog = node('dialog'); dialog.id = 'commands-dialog'; dialog.setAttribute('aria-labelledby', 'commands-title');
-        dialog.innerHTML = '<div class="dialog-header"><h2 id="commands-title">Commands</h2><button id="commands-close" type="button" aria-label="Close commands">×</button></div><p class="muted">Add commands and define their help text and replies.</p><div class="commands-toolbar"><button id="commands-reload" type="button">Reload</button><button id="commands-add" type="button">＋ Add command</button></div><p id="commands-message" role="status" aria-live="polite"></p><ul id="commands-list"></ul><section class="commands-preview"><h3>Help reply preview</h3><pre id="commands-help-preview"></pre><p class="muted">Built from each command’s help text. Preview only; nothing is sent to the mesh.</p></section>';
+        dialog.innerHTML = uiHTML('<div class="dialog-header"><h2 id="commands-title">Commands</h2><button id="commands-close" type="button" aria-label="Close commands">×</button></div><p class="muted">Add commands and define their help text and replies.</p><div class="commands-toolbar"><button id="commands-reload" type="button">Reload</button><button id="commands-add" type="button">＋ Add command</button></div><p id="commands-message" role="status" aria-live="polite"></p><ul id="commands-list"></ul><section class="commands-preview"><h3>Help reply preview</h3><pre id="commands-help-preview"></pre><p class="muted">Built from each command’s help text. Preview only; nothing is sent to the mesh.</p></section>');
         window.meshcorestationPrepareDialog(dialog);
-        const footer = node('div', undefined, 'commands-footer'); footer.innerHTML = '<div><p class="muted">? is always available and cannot be deleted or renamed.</p><span id="commands-dirty" role="status"></span></div><button id="commands-cancel" type="button">Cancel</button><button id="commands-save" type="button">Save changes</button>';
+        const footer = node('div', undefined, 'commands-footer'); footer.innerHTML = uiHTML('<div><p class="muted">? is always available and cannot be deleted or renamed.</p><span id="commands-dirty" role="status"></span></div><button id="commands-cancel" type="button">Cancel</button><button id="commands-save" type="button">Save changes</button>');
         dialog.append(footer); document.body.append(dialog);
         editor = node('dialog'); editor.id = 'command-editor-dialog'; editor.setAttribute('aria-labelledby', 'command-editor-title');
-        editor.innerHTML = '<div class="dialog-header"><h2 id="command-editor-title">Edit command</h2><button id="command-editor-close" type="button" aria-label="Close command editor">×</button></div><form id="command-editor-form"><label for="command-trigger">Command</label><input id="command-trigger" required maxlength="30" autocomplete="off"><label for="command-help">Help text</label><input id="command-help" required maxlength="100"><label for="command-action">Action</label><select id="command-action"><option value="reply">Reply</option><option value="position">Update sender position</option><option value="scope">Add scope</option></select><p id="command-action-hint" class="muted"></p><label for="command-reply">Success reply template</label><textarea id="command-reply" rows="4" required maxlength="512"></textarea><div id="command-failure-section" hidden><label for="command-failure">Failure reply template</label><textarea id="command-failure" rows="3" maxlength="512"></textarea></div><p class="muted">Mix your own text with values from MeshcoreStation.</p><p id="command-help-rule" class="muted" hidden>The ? reply must include {command_list}.</p><section class="commands-preview"><h3>Insert data placeholder</h3><div id="command-placeholders"></div><p class="muted">Click a placeholder to insert it at the cursor. Numeric formatting: {snr:.1f} or {battery_voltage:.2f}. Missing values show “unknown”.</p></section><section class="commands-preview"><h3>Reply preview <small class="muted">Example data</small></h3><pre id="command-preview"></pre><p class="muted">Values are filled in when the command is received. Distances are in km without units; ~ means estimated and &gt;= means a lower bound. Battery percentage is an approximate 1S LiPo estimate.</p></section><section id="command-failure-preview-section" class="commands-preview" hidden><h3>Failure reply preview <small class="muted">Example data</small></h3><pre id="command-failure-preview"></pre></section><p id="command-editor-message" class="commands-error" role="status" aria-live="polite"></p></form>';
+        editor.innerHTML = uiHTML('<div class="dialog-header"><h2 id="command-editor-title">Edit command</h2><button id="command-editor-close" type="button" aria-label="Close command editor">×</button></div><form id="command-editor-form"><label for="command-trigger">Command</label><input id="command-trigger" required maxlength="30" autocomplete="off"><label for="command-help">Help text</label><input id="command-help" required maxlength="100"><label for="command-action">Action</label><select id="command-action"><option value="reply">Reply</option><option value="position">Update sender position</option><option value="scope">Add scope</option></select><p id="command-action-hint" class="muted"></p><label for="command-reply">Success reply template</label><textarea id="command-reply" rows="4" required maxlength="512"></textarea><div id="command-failure-section" hidden><label for="command-failure">Failure reply template</label><textarea id="command-failure" rows="3" maxlength="512"></textarea></div><p class="muted">Mix your own text with values from MeshcoreStation.</p><p id="command-help-rule" class="muted" hidden>The ? reply must include {command_list}.</p><section class="commands-preview"><h3>Insert data placeholder</h3><div id="command-placeholders"></div><p class="muted">Click a placeholder to insert it at the cursor. Numeric formatting: {snr:.1f} or {battery_voltage:.2f}. Missing values show “unknown”.</p></section><section class="commands-preview"><h3>Reply preview <small class="muted">Example data</small></h3><pre id="command-preview"></pre><p class="muted">Values are filled in when the command is received. Distances are in km without units; ~ means estimated and &gt;= means a lower bound. Battery percentage is an approximate 1S LiPo estimate.</p></section><section id="command-failure-preview-section" class="commands-preview" hidden><h3>Failure reply preview <small class="muted">Example data</small></h3><pre id="command-failure-preview"></pre></section><p id="command-editor-message" class="commands-error" role="status" aria-live="polite"></p></form>');
         window.meshcorestationPrepareDialog(editor);
-        const editorFooter = node('div', undefined, 'commands-footer'); editorFooter.innerHTML = '<button id="command-editor-cancel" type="button">Cancel</button><button id="command-editor-apply" type="submit" form="command-editor-form">Apply</button>';
+        const editorFooter = node('div', undefined, 'commands-footer'); editorFooter.innerHTML = uiHTML('<button id="command-editor-cancel" type="button">Cancel</button><button id="command-editor-apply" type="submit" form="command-editor-form">Apply</button>');
         editor.append(editorFooter); document.body.append(editor);
         $('commands-close').addEventListener('click', close); $('commands-cancel').addEventListener('click', close);
         dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });

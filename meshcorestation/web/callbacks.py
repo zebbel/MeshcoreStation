@@ -2,6 +2,7 @@
 import json
 import logging
 import sqlite3
+from meshcorestation.web.i18n import t
 from datetime import datetime
 from dash import Input, Output, State, ctx, html, no_update
 from meshcorestation.web.data import PAGE_SIZE, TIMEZONE, bot_status, overview, history_snapshot, timestamp
@@ -10,7 +11,7 @@ from meshcorestation.web.data import PAGE_SIZE, TIMEZONE, bot_status, overview, 
 def register_callbacks(app):
     def table_rows(rows, preferences):
         if not rows:
-            return [html.Tr(html.Td("No recorded commands match this filter.", colSpan=4, className="empty"))]
+            return [html.Tr(html.Td(t('No recorded commands match this filter.'), colSpan=4, className="empty"))]
         result = []
         for row in rows:
             details = dict(row)
@@ -19,7 +20,7 @@ def register_callbacks(app):
                 if details.get(key) is not None:
                     formatted = received if key == "recv_time" else timestamp(details[key], preferences)
                     details[key] = f"{formatted} · Unix {details[key]}"
-            result.append(html.Tr([html.Td(received, className="date"), html.Td(row.get("message") or "—", className="command"), html.Td(row.get("sender") or "—"), html.Td(html.Button("Info ↗", className="info-button", **{"data-details": json.dumps(details, default=str), "aria-label": f"Details for command {row['id']}"}))], **{"data-row-id": str(row["id"])}))
+            result.append(html.Tr([html.Td(received, className="date"), html.Td(row.get("message") or "—", className="command"), html.Td(row.get("sender") or "—"), html.Td(html.Button(t('Info ↗'), className="info-button", **{"data-details": json.dumps(details, default=str), "aria-label": t('Details for command {0}', row['id'])}))], **{"data-row-id": str(row["id"])}))
         return result
 
 
@@ -37,20 +38,21 @@ def register_callbacks(app):
     def refresh_overview(tick):
         # Keep the visible cards independent of slower history/filter reads.
         status, detail, status_class = bot_status()
-        status = "Connected" if status == "Running" else status
+        status = t('Connected') if status == "Running" else t(status)
+        detail = t(detail)
         try:
             summary = overview()
         except (sqlite3.Error, OSError) as exc:
             logging.warning("Dashboard summary read failed: %s", exc)
-            return (status, "metric " + status_class, detail, "—", "Database unavailable",
-                    "—", "Database unavailable",
-                    "Cannot read the bot database. Check MESHCORESTATION_DATA_DIR and file permissions; retrying automatically.")
+            return (status, "metric " + status_class, detail, "—", t('Database unavailable'),
+                    "—", t('Database unavailable'),
+                    t('Cannot read the bot database. Check MESHCORESTATION_DATA_DIR and file permissions; retrying automatically.'))
         latest = summary["latest"]
-        latest_text = (latest.get("message") or "—") if latest else "No commands yet"
-        latest_detail = (f"{latest.get('sender') or 'Unknown sender'} · {timestamp(latest.get('recv_time'))}"
-                         if latest else "Waiting for the first saved command")
+        latest_text = (latest.get("message") or "—") if latest else t('No commands yet')
+        latest_detail = (f"{latest.get('sender') or t('Unknown sender')} · {timestamp(latest.get('recv_time'))}"
+                         if latest else t('Waiting for the first saved command'))
         return (status, "metric " + status_class, detail, f"{summary['repeaters']:,}",
-                "Saved locally; available while disconnected.", latest_text, latest_detail, "")
+                t('Saved locally; available while disconnected.'), latest_text, latest_detail, "")
 
     @app.callback(
         Output("command-filter", "options"), Output("command-rows", "children"),
@@ -62,23 +64,23 @@ def register_callbacks(app):
     def refresh_history(tick, command, size, visible, previous):
         if not visible:
             return (no_update,) * 8
-        zone_label = f"Oldest to newest · {TIMEZONE.key}"
+        zone_label = t('Oldest to newest · {0}', TIMEZONE.key)
         try:
             data = history_snapshot(command, size or PAGE_SIZE, previous)
         except (sqlite3.Error, OSError) as exc:
             logging.warning("Command history read failed: %s", exc)
-            return (no_update, no_update, no_update, "Data unavailable", True,
-                    "History unavailable (retrying automatically)", None, zone_label)
+            return (no_update, no_update, no_update, t('Data unavailable'), True,
+                    t('History unavailable (retrying automatically)'), None, zone_label)
         if data is None:
             return (no_update,) * 8
         rows = table_rows(data["rows"], data["preferences"])
-        options = [{"label": value if value else "(empty command)", "value": value} for value in data["commands"]]
+        options = [{"label": value if value else t('(empty command)'), "value": value} for value in data["commands"]]
         if command is not None and command not in data["commands"]:
-            options.append({"label": command + " (no records)", "value": command})
+            options.append({"label": command + t(' (no records)'), "value": command})
         return (options, rows, json.dumps(command),
-                f"{len(data['rows']):,} of {data['total']:,} commands",
+                t('{0} of {1} commands', f"{len(data['rows']):,}", f"{data['total']:,}"),
                 len(data["rows"]) >= data["total"],
-                "Updated " + timestamp(datetime.now(TIMEZONE).timestamp(), data["preferences"]),
+                t('Updated ') + timestamp(datetime.now(TIMEZONE).timestamp(), data["preferences"]),
                 data["token"], zone_label)
 
     @app.callback(Output('bot-runtime-status','children'),Output('bot-channel-status','children'),Output('footer-firmware','children'),Input('refresh','n_intervals'))
@@ -90,7 +92,7 @@ def register_callbacks(app):
         try:
             with closing(connect(DB_PATH.as_uri()+'?mode=ro',uri=True,timeout=2)) as db:
                 channel=db.execute('SELECT channel_name FROM bot_settings WHERE id=1').fetchone()[0]
-        except (sqlite3.Error,OSError):return 'Bot configuration unavailable','Saved channel could not be read.','Companion firmware unavailable'
+        except (sqlite3.Error,OSError):return t('Bot configuration unavailable'),t('Saved channel could not be read.'),t('Companion firmware unavailable')
         from meshcorestation.config import DATA_DIR
         selected_room = None
         if (DATA_DIR / 'rooms.db').exists():
@@ -102,7 +104,7 @@ def register_callbacks(app):
         running=bridge.status[0]=='Running'
         runtime=bridge.runtime
         parts=[runtime.device_info.get(k) for k in ('ver','fw_build')] if runtime and running else []
-        firmware='Companion firmware '+' · '.join(str(v) for v in parts if v) if any(parts) else 'Companion firmware unavailable'
+        firmware=t('Companion firmware ')+' · '.join(str(v) for v in parts if v) if any(parts) else t('Companion firmware unavailable')
         if selected_room:
-            return ('Running' if running and selected_room['enabled'] else 'Room disabled' if running else 'Disconnected'), ('Bot room: ' + selected_room['name'] + (' (disabled)' if not selected_room['enabled'] else '')), firmware
-        return ('Running' if running and channel else 'No Bot channel selected' if running else 'Disconnected'),('Bot channel: '+channel if channel else 'Select the Bot channel in Companion Channels.'),firmware
+            return (t('Running') if running and selected_room['enabled'] else t('Room disabled') if running else t('Disconnected')), (t('Bot room: ') + selected_room['name'] + (t(' (disabled)') if not selected_room['enabled'] else '')), firmware
+        return (t('Running') if running and channel else t('No Bot channel selected') if running else t('Disconnected')),(t('Bot channel: ')+channel if channel else t('Select the Bot channel in Companion Channels.')),firmware

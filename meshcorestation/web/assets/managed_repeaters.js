@@ -1,16 +1,20 @@
 /* The server owns the managed list; this browser remembers only the viewed repeater. */
 (() => {
+    const {translatedError: uiError, t: ui} = window.MeshcoreStationI18n || {
+        translatedError: value => value,
+        t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
+    };
     const storageKey='meshcorestation.managed-repeaters';
     const $=id=>document.getElementById(id);
     let known=[],managed=[],attached=false,pending=null;
     function persist(){
         try{localStorage.setItem(storageKey,JSON.stringify({keys:managed,selected:window.meshcorestationSelectedRepeater}));}
-        catch{$('managed-repeater-message').textContent='Browser storage unavailable; the managed list is saved on the server, but the viewed repeater will not be remembered.';}
+        catch{$('managed-repeater-message').textContent=ui("Browser storage unavailable; the managed list is saved on the server, but the viewed repeater will not be remembered.");}
     }
     function select(key){
         if(!key){
             window.meshcorestationSelectedRepeater='';
-            $('managed-repeater').replaceChildren(new Option('Add a repeater from the map',''));
+            $('managed-repeater').replaceChildren(new Option(ui("Add a repeater from the map"),''));
             $('managed-repeater-open').disabled=true;$('managed-repeater-remove').disabled=true;
             $('open-voltage').disabled=true;persist();
             document.dispatchEvent(new CustomEvent('managed-repeater-selected',{detail:''}));return;
@@ -26,7 +30,7 @@
     async function load(preferredKey){
         try{
             const response=await fetch('/api/bot/voltage?days=1',{headers:{'X-Meshcore-Control':'1'},cache:'no-store'});
-            const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||'Could not load repeaters.');
+            const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||ui("Could not load repeaters."));
             known=data.repeaters;window.MeshcoreStationRepeaterNames?.ingest(known);let saved={};
             try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};}catch{}
             managed=(Array.isArray(data.managed_repeaters)?data.managed_repeaters:[]).filter((key,i,keys)=>known.some(r=>r.public_key===key)&&keys.indexOf(key)===i);
@@ -34,7 +38,7 @@
             if(initial&&known.some(r=>r.public_key===initial))select(initial);
             else select('');
             return true;
-        }catch(error){$('managed-repeater-message').textContent=error.message;return false;}
+        }catch(error){$('managed-repeater-message').textContent=uiError(error.message);return false;}
     }
     window.meshcorestationEnsureRepeaterSelection=()=>{
         if(known.length)return Promise.resolve(true);
@@ -44,33 +48,33 @@
     function attach(){
         if(attached||!$('managed-repeater'))return;attached=true;
         $('managed-repeater').onchange=()=>select($('managed-repeater').value);
-        $('managed-repeater-add').onclick=()=>document.dispatchEvent(new CustomEvent('stats-picker-open',{detail:{repeaters:known,selected:window.meshcorestationSelectedRepeater||'',managedRepeaters:managed.slice(),selectionEvent:'managed-repeater-added',title:'Add repeater from map',actionLabel:'Add repeater'}}));
+        $('managed-repeater-add').onclick=()=>document.dispatchEvent(new CustomEvent('stats-picker-open',{detail:{repeaters:known,selected:window.meshcorestationSelectedRepeater||'',managedRepeaters:managed.slice(),selectionEvent:'managed-repeater-added',title:ui("Add repeater from map"),actionLabel:ui("Add repeater")}}));
         $('managed-repeater-open').onclick=()=>{const r=known.find(r=>r.public_key===window.meshcorestationSelectedRepeater);if(r)window.meshcorestationManageRepeater({...r,type:2});};
         $('managed-repeater-remove').onclick=async()=>{
             const key=window.meshcorestationSelectedRepeater;
             const name=window.MeshcoreStationRepeaterNames?.label(key)||known.find(r=>r.public_key===key)?.name||key;
-            if(!key||!window.confirm(`Remove ${name} from management? Its local telemetry settings, readings and reports will be deleted. The known-repeater identity will remain.`))return;
+            if(!key||!window.confirm(ui("Remove {0} from management? Its local telemetry settings, readings and reports will be deleted. The known-repeater identity will remain.", name)))return;
             $('managed-repeater-remove').disabled=true;
             try{
                 const response=await fetch('/api/bot/voltage',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},body:JSON.stringify({operation:'remove',public_key:key})});
-                const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Could not remove repeater.');
+                const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||ui("Could not remove repeater."));
                 try{localStorage.removeItem('meshcorestation.repeater.password.'+key.toLowerCase());}catch{}
                 document.dispatchEvent(new CustomEvent('managed-repeater-removed',{detail:key}));
-                if(!await load())throw Error('Removal was submitted, but the managed list could not be refreshed. Reload the page to verify it.');
-                if(managed.includes(key))throw Error('Removal could not be verified. Reload and try again.');
-                $('managed-repeater-message').textContent='Repeater removed. Local telemetry data was deleted; passive statistics history is preserved.';
-            }catch(error){$('managed-repeater-message').textContent=error.message;$('managed-repeater-remove').disabled=false;}
+                if(!await load())throw Error(ui("Removal was submitted, but the managed list could not be refreshed. Reload the page to verify it."));
+                if(managed.includes(key))throw Error(ui("Removal could not be verified. Reload and try again."));
+                $('managed-repeater-message').textContent=ui("Repeater removed. Local telemetry data was deleted; passive statistics history is preserved.");
+            }catch(error){$('managed-repeater-message').textContent=uiError(error.message);$('managed-repeater-remove').disabled=false;}
         };
         document.addEventListener('managed-repeater-added',async e=>{
-            if(managed.includes(e.detail)){$('managed-repeater-message').textContent='This repeater is already managed.';return;}
-            $('managed-repeater-message').textContent='Adding repeater…';
+            if(managed.includes(e.detail)){$('managed-repeater-message').textContent=ui("This repeater is already managed.");return;}
+            $('managed-repeater-message').textContent=ui("Adding repeater…");
             try{
                 const response=await fetch('/api/bot/voltage',{method:'POST',headers:{'X-Meshcore-Control':'1','Content-Type':'application/json'},body:JSON.stringify({operation:'add',public_key:e.detail})});
-                const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Could not add repeater.');
-                if(!await load(e.detail))throw Error('Addition was submitted, but the managed list could not be refreshed.');
-                if(!managed.includes(e.detail))throw Error('Addition could not be verified. Reload and try again.');
-                $('managed-repeater-message').textContent='Repeater added. Optional telemetry monitoring can be enabled in its settings.';
-            }catch(error){$('managed-repeater-message').textContent=error.message;}
+                const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||ui("Could not add repeater."));
+                if(!await load(e.detail))throw Error(ui("Addition was submitted, but the managed list could not be refreshed."));
+                if(!managed.includes(e.detail))throw Error(ui("Addition could not be verified. Reload and try again."));
+                $('managed-repeater-message').textContent=ui("Repeater added. Optional telemetry monitoring can be enabled in its settings.");
+            }catch(error){$('managed-repeater-message').textContent=uiError(error.message);}
         });
         // Avoid this extra voltage/repeater request while management is collapsed.
         const disclosure=$('repeater-management-disclosure');

@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.9.1
+# MeshcoreStation V6 — 6.0.0
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.9.1** speeds up saved Repeater Statistics and Bot Command History. Large statistics views reuse packet classifications, and unchanged history refreshes skip loading and rendering the table.
+Version **6.0.0** on branch **`V6`** adds English and German dashboard localization. Select **Language / Sprache** in MeshcoreStation Settings. See [Dashboard languages](docs/v6-localization.md).
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -9,7 +9,7 @@ The first row has exactly **MeshcoreStation**, **Connected Companion**, and
 **Known Repeaters**. The cards stack in that order on mobile. The V4 logo,
 theme variables, typography and fixed footer are retained. The footer shows
 version/branch, connected firmware/build or unavailable, and an asynchronous
-installed-branch update check. V5 updates cannot switch to an incompatible branch
+installed-branch update check. V6 updates stay on the V6 branch
 and never install automatically.
 
 Below the cards, **Bot** contains only **Bot Settings** and **Command History**,
@@ -20,8 +20,8 @@ or Network Monitoring. The Room Server is described below.
 
 ## Fresh storage only
 
-Use a **new, empty V5 data directory**. V3/V4 databases are not migrated or
-supported. The application refuses a main database containing the former
+For a fresh installation, use an empty data directory. V6 retains the V5 database
+format. V3/V4 databases are not migrated or supported. The application refuses a main database containing the former
 known-repeater registry rather than modifying it.
 
 | File | Ownership |
@@ -131,8 +131,7 @@ MESHCORESTATION_DATA_DIR="$PWD/data-v5" MESHCORESTATION_HOST=127.0.0.1 MESHCORES
 
 Choose the USB serial port in Companion Settings. Without hardware, the dashboard,
 preferences, saved history and known-repeater map remain available; hardware
-operations show an offline/error state. Do not run V3/V4 and V5 against the same
-USB device or data directory. No live radio success is inferred from mock tests.
+operations show an offline/error state. Run only one station process against a given USB device or data directory. No live radio success is inferred from mock tests.
 
 ```bash
 .venv/bin/python -m pytest -q
@@ -149,6 +148,7 @@ npx playwright install chromium
 PYTHONPATH=. .venv/bin/python tests/browser/serve.py
 # In a second terminal:
 node tests/browser/v5_milestone.cjs
+node tests/browser/v6_localization.cjs
 ```
 
 See [milestone validation and limitations](docs/v5-milestone.md). Publishing,
