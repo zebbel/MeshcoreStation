@@ -4,7 +4,7 @@ const source=name=>fs.readFileSync('meshcorestation/web/assets/'+name,'utf8');
 const pause=()=>new Promise(resolve=>setImmediate(resolve));
 async function until(check,label){for(let i=0;i<500;i++){if(check())return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Timed out: '+label);}
 function environment(count,{width=1024,failAsset='',api='',renderFailure='',stalledAsset='',timeoutAPI=false}={}){
- const dom=new JSDOM('<button id="open-repeaters">Open map</button><dialog id="repeaters-dialog"><button id="close-repeaters">Close</button><div id="repeater-map"></div><div id="repeater-notes"></div></dialog>',{runScripts:'outside-only',pretendToBeVisual:true,url:'http://localhost/'}),w=dom.window,d=w.document;
+ const dom=new JSDOM('<button id="open-repeaters">Open map</button><dialog id="repeaters-dialog"><button id="close-repeaters">Close</button><p id="repeater-registry-status"></p><div id="repeater-map"></div><div id="repeater-notes"></div></dialog>',{runScripts:'outside-only',pretendToBeVisual:true,url:'http://localhost/'}),w=dom.window,d=w.document;
  const canvas=d.getElementById('repeater-map'),dialog=d.getElementById('repeaters-dialog'),notes=d.getElementById('repeater-notes');
  Object.defineProperty(canvas,'clientWidth',{value:width});Object.defineProperty(canvas,'clientHeight',{value:width<700?420:600});
  dialog.showModal=()=>dialog.setAttribute('open','');dialog.close=()=>{dialog.removeAttribute('open');dialog.dispatchEvent(new w.Event('close'));};
@@ -19,7 +19,15 @@ function environment(count,{width=1024,failAsset='',api='',renderFailure='',stal
  let currentAPI=api,fail=failAsset,stall=stalledAsset,renderFail=renderFailure;
  const calls={assets:[],maps:[],groups:[],tiles:[],batches:[],loading:[],fetch:0,resize:[],observers:[]};
  let onFetch;
- w.fetch=async(url,{signal})=>{
+ w.fetch=async(url,{signal,headers,body})=>{
+  if(url==='/api/repeater-registry'){
+   assert.equal(headers['X-Meshcore-Control'],'1');
+   const action=JSON.parse(body);
+   calls.mutation=action;
+   if(currentAPI==='managed')return {ok:false,status:409,json:async()=>({ok:false,error:'Remove this repeater from Repeater Management before blocking or deleting it.'})};
+   payload.nodes=payload.nodes.filter(node=>node.public_key!==action.public_key);
+   return {ok:true,json:async()=>({ok:true})};
+  }
   calls.fetch++;
   if(onFetch)onFetch();
   if(timeoutAPI)return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new w.DOMException('Aborted','AbortError')),{once:true}));
@@ -93,7 +101,7 @@ function environment(count,{width=1024,failAsset='',api='',renderFailure='',stal
   e.calls.tiles[0].tileerror();assert(e.notes.textContent.includes('Background tiles unavailable'));assert(map.hasLayer(group));
   const resize=e.calls.resize.length;e.calls.observers[0].callback();assert.equal(e.calls.resize.length,resize+1);
   e.close();assert(e.calls.observers[0].disconnected);assert.equal(Object.keys(map._layers).length,0);
-  e.open();await until(()=>e.notes.querySelector('.map-ready'),'reopen');assert.equal(e.calls.fetch,1,'Keep recent route/map caching');
+  e.open();await until(()=>e.notes.querySelector('.map-ready'),'reopen');assert.equal(e.calls.fetch,2,'Read current registry on reopen');
   e.close();e.dom.window.close();
  }
  for(const asset of ['/assets/vendor/leaflet.js','/assets/vendor/leaflet.css','/assets/vendor/leaflet.markercluster.js','/assets/vendor/MarkerCluster.css']){
@@ -114,6 +122,33 @@ function environment(count,{width=1024,failAsset='',api='',renderFailure='',stal
  }
  const stalled=environment(700,{stalledAsset:'/assets/vendor/leaflet.css'});stalled.open();await until(()=>stalled.notes.querySelector('.map-error'),'stalled CSS');assert(stalled.notes.textContent.includes('Timed out'));stalled.close();stalled.dom.window.close();
  const timeout=environment(700,{timeoutAPI:true});timeout.open();await until(()=>timeout.notes.querySelector('.map-error'),'stalled API');assert(timeout.notes.textContent.includes('timed out'));timeout.close();timeout.dom.window.close();
+ const removal=environment(2);
+ removal.open();
+ await until(()=>removal.notes.querySelector('.map-ready'),'registry map ready');
+ const target=removal.payload.nodes[0];
+ const marker=removal.calls.groups[0].getLayers()[0];
+ removal.calls.maps[0].setView(marker.getLatLng(),19);
+ const popup=marker.getPopup().getContent()();
+ const remove=[...popup.querySelectorAll('button')].find(button=>button.textContent==='Delete Repeater');
+ removal.w.confirm=message=>{assert(message.includes(target.public_key));return false;};
+ remove.click();assert.equal(removal.calls.mutation,undefined);
+ removal.w.confirm=()=>true;
+ removal.setAPI('managed');
+ remove.click();
+ const status=removal.d.getElementById('repeater-registry-status');
+ await until(()=>status.textContent.includes('Repeater Management'),'managed rejection');
+ assert.equal(removal.calls.groups[0].getLayers().length,2);
+ removal.setAPI('');
+ remove.click();
+ await until(()=>removal.calls.groups.length===2 && removal.notes.querySelector('.map-ready'),'refreshed after deletion');
+ assert.equal(status.textContent,'Repeater deleted locally.');
+ assert.deepEqual(removal.calls.mutation,{action:'delete',public_key:target.public_key,confirm:true});
+ assert.equal(removal.calls.groups[1].getLayers().length,1);
+ assert.equal(removal.calls.maps[1].getZoom(),19);
+ removal.close();removal.open();
+ await until(()=>removal.calls.groups.length===3 && removal.notes.querySelector('.map-ready'),'reopened after deletion');
+ assert.equal(removal.calls.groups[2].getLayers().length,1,'deleted marker stays absent');
+ removal.close();removal.dom.window.close();
  // Closing during a chunk must stop work; reopening must not receive stale work.
  const cancelled=environment(2000);cancelled.open();await until(()=>cancelled.calls.batches.length>0,'first chunk');cancelled.close();const done=cancelled.calls.batches.length;
  await new Promise(resolve=>setTimeout(resolve,20));assert.equal(cancelled.calls.batches.length,done);

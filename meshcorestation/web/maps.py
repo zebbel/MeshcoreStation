@@ -39,8 +39,10 @@ def bot_point(db):
 
 def repeater_map():
     with closing(connection()) as db:
-        rows = [dict(r) for r in db.execute("SELECT * FROM repeaters ORDER BY name COLLATE NOCASE, public_key")]
-        nodes = [point(r, "repeater", r.get("name") or "Unnamed repeater") for r in rows]
+        rows = [dict(r) for r in db.execute("""SELECT r.public_key,r.name,r.latitude,r.longitude,r.last_seen,
+            EXISTS(SELECT 1 FROM voltage_config v WHERE v.public_key=r.public_key AND v.managed=1) AS managed
+            FROM repeaters r ORDER BY r.name COLLATE NOCASE,r.public_key""")]
+        nodes = [dict(point(r, "repeater", r.get("name") or "Unnamed repeater"), managed=bool(r["managed"])) for r in rows]
         bot = bot_point(db)
         valid = [n for n in nodes if n["position"]]
         notes = [f"{len(valid)} of {len(rows)} repeaters have usable coordinates.", "Repeater and bot markers use their latest saved database positions."]
@@ -48,7 +50,8 @@ def repeater_map():
             valid.append(bot)
         else:
             notes.append("Bot position is not available. Restart the updated bot to save it.")
-        return {"nodes": valid, "segments": [], "notes": notes, "hops": []}
+        return {"nodes": valid, "unlocated": [n for n in nodes if not n["position"]],
+                "repeater_count": len(nodes), "segments": [], "notes": notes, "hops": []}
 
 
 def route_map(log_id):

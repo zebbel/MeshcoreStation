@@ -28,6 +28,8 @@ async def run():
     from time import time_ns
     for key,name,latitude,longitude in [('cd'*32,'Fixture north',49.7,8.7),('ef'*32,'Fixture south',49.5,8.5)]:
         db.add_new_repeater(NS(payload=dict(type=2,public_key=key,adv_name=name,adv_lat=latitude,adv_lon=longitude)),observed=False)
+    for key, name in [('71'*32, 'Registry desktop'), ('72'*32, 'Registry mobile')]:
+        db.add_new_repeater(NS(payload=dict(type=2,public_key=key,adv_name=name)),observed=False)
     for index,path in enumerate(('abcd','cdab','abef')):
         packet=passive_stats.normalize(dict(payload_type=5,route_type=1,path_hash_size=1,path_len=2,path=path,pkt_payload=('fixture '+str(index)).encode()),now_ns=time_ns())
         passive_stats.store_batch(db.db.execute('PRAGMA database_list').fetchone()[2],[packet])
@@ -75,7 +77,7 @@ async def run():
     commands.send=binary_send
     runtime.neighbor_monitor.start()
     bridge.attach(runtime);bridge.status=('Running','Fixture Companion connected — simulated hardware','running')
-    updater.check=lambda branch=None:{'branch':'V6','available':False,'ready':False,'latest':'b'*40,'latest_version':'6.0.4','checked_at':2000000000}
+    updater.check=lambda branch=None:{'branch':'V6','available':False,'ready':False,'latest':'b'*40,'latest_version':'6.0.5','checked_at':2000000000}
     updater.ready=lambda:False
     bot_runtime.ports=lambda:[{'device':'/dev/fixture','description':'Simulated Companion'}]
     web=WebServer();web.start()

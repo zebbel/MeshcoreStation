@@ -108,3 +108,14 @@ button:disabled:hover { background: var(--panel); }
 #repeater-map, #route-map { min-height: 260px; flex-shrink: 0; }
 .map-loading, .map-ready { color: var(--text); }
 .map-error { color: var(--red); overflow-wrap: anywhere; }
+
+.repeater-registry-list { margin-block: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.repeater-registry-list summary { cursor: pointer; font-weight: 600; }
+.repeater-registry-list ul { list-style: none; padding: 0; }
+.repeater-registry-row { display: grid; gap: 6px; padding-block: 10px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.repeater-registry-row .map-key { max-width: none; }
+.repeater-registry-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 6px; }
+.repeater-registry-actions p { flex-basis: 100%; margin: 0; }
+.repeater-registry-row button { justify-self: start; }
+#repeater-registry-status { position: sticky; top: 0; z-index: 1001; padding: 10px; border-radius: 8px; background: var(--soft); }
+#repeater-registry-status:empty { display: none; }

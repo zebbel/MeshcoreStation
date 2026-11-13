@@ -7,6 +7,19 @@
     const keyOf=r=>typeof r==='string'?r:r?.public_key||r?.pubkey||r?.ID||r?.id||r?.key;
     const full=k=>typeof k==='string'&&/^[a-f0-9]{64}$/i.test(k);
     const normalize=k=>typeof k==='string'?k.trim().toLowerCase():'';
+    function notify(){
+        ++revision;
+        if(queued)return;
+        queued=true;
+        queueMicrotask(()=>{queued=false;refresh();document.dispatchEvent(new CustomEvent('repeater-names-updated',{detail:revision}));});
+    }
+    function forget(value){
+        const key=normalize(value), previous=records.get(key);
+        if(!previous)return;
+        byName.get(previous.name.toLocaleLowerCase())?.delete(key);
+        records.delete(key);
+        notify();
+    }
     function validName(name,key){return typeof name==='string'&&name.trim()&&!/^(unknown(?: repeater)?|\(unnamed\)|unnamed(?: repeater)?)$/i.test(name.trim())&&normalize(name)!==key&&!/^[0-9a-f]{8,64}$/i.test(name.trim());}
     function ingest(items,source='local'){
         let changed=false;const priority=source==='local'?30:source==='analyzer'?20:10;
@@ -19,7 +32,7 @@
             const index=clean.toLocaleLowerCase();if(!byName.has(index))byName.set(index,new Set());byName.get(index).add(key);
             records.set(key,{name:clean,priority});changed=true;
         }
-        if(changed){++revision;if(!queued){queued=true;queueMicrotask(()=>{queued=false;refresh();document.dispatchEvent(new CustomEvent('repeater-names-updated',{detail:revision}));});}}
+        if(changed)notify();
     }
     function suffix(key,others){let size=8;while(size<64&&others.some(k=>k!==key&&k.slice(0,size)===key.slice(0,size)))size+=4;return key.slice(0,size)+(size<64?'…':'');}
     function resolve(value){
@@ -34,5 +47,5 @@
         const node=document.createElement(tag);node.dataset.repeaterKey=normalize(keyOf(value));apply(node);return node;
     }
     function refresh(root=document){for(const n of root.querySelectorAll('[data-repeater-key]'))apply(n);}
-    window.MeshcoreStationRepeaterNames={ingest,resolve,entries:()=>[...records].map(([public_key,r])=>({public_key,name:r.name})),label:value=>resolve(value).label,element,refresh};
+    window.MeshcoreStationRepeaterNames={ingest,forget,resolve,entries:()=>[...records].map(([public_key,r])=>({public_key,name:r.name})),label:value=>resolve(value).label,element,refresh};
 })();

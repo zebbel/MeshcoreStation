@@ -17,7 +17,7 @@ assert(!w.document.getElementById('battery-chart-disclosure').open);
 w.document.getElementById('battery-chart-disclosure').open=true;
 assert(w.document.getElementById('battery-chart-disclosure').open);
 let picker;w.document.addEventListener('stats-picker-open',e=>picker=e.detail);
-w.document.getElementById('managed-repeater-add').click();assert.equal(picker.selectionEvent,'managed-repeater-added');assert.deepEqual(picker.managedRepeaters,[a]);
+w.document.getElementById('managed-repeater-add').click();await settle();assert.equal(picker.selectionEvent,'managed-repeater-added');assert.deepEqual(picker.managedRepeaters,[a]);
 w.document.dispatchEvent(new w.CustomEvent('managed-repeater-added',{detail:b}));await settle();
 assert.equal(w.document.getElementById('managed-repeater').options.length,2);
 assert.equal(charts.at(-1),3.7);assert(w.document.getElementById('battery-overview-latest').textContent.startsWith('City'));

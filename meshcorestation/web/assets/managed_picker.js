@@ -65,6 +65,11 @@
             ]);
             const data=await response.json();if(!response.ok)throw Error(data.error||ui("Could not load repeater positions."));
             if(request.signal.aborted || !dialog.open)return;
+            if (Array.isArray(data.unlocated)) {
+                const available = new Set([...data.nodes, ...data.unlocated].filter(node=>node.role==='repeater').map(node=>node.public_key));
+                repeaters = repeaters.filter(r=>available.has(r.public_key));
+                filter();
+            }
             if(!window.L)throw Error(ui("Map library unavailable. Use the searchable list."));
             map=L.map(dialog.querySelector('.stats-picker-map'));
             // Avoid downloading tiles for Germany before navigating to the selected repeater.
@@ -98,4 +103,12 @@
         }catch(error){if(request.signal.aborted)return;message.textContent=uiError(error.message);dialog.querySelector('.stats-map-fallback').open=true;}
     }
     document.addEventListener('stats-picker-open',event=>open(event.detail));
+    document.addEventListener('repeater-registry-removed',event=>{
+        if(!dialog?.open)return;
+        repeaters=repeaters.filter(r=>r.public_key!==event.detail);
+        const marker=markers.get(event.detail);
+        if(marker)clusters.removeLayer(marker);
+        markers.delete(event.detail);
+        filter();
+    });
 })();

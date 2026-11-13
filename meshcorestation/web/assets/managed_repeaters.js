@@ -6,7 +6,7 @@
     };
     const storageKey='meshcorestation.managed-repeaters';
     const $=id=>document.getElementById(id);
-    let known=[],managed=[],attached=false,pending=null;
+    let known=[],managed=[],attached=false,pending=null,registryRevision=0;
     function persist(){
         try{localStorage.setItem(storageKey,JSON.stringify({keys:managed,selected:window.meshcorestationSelectedRepeater}));}
         catch{$('managed-repeater-message').textContent=ui("Browser storage unavailable; the managed list is saved on the server, but the viewed repeater will not be remembered.");}
@@ -28,9 +28,11 @@
         persist();document.dispatchEvent(new CustomEvent('managed-repeater-selected',{detail:key}));
     }
     async function load(preferredKey){
+        const revision=registryRevision;
         try{
             const response=await fetch('/api/bot/voltage?days=1',{headers:{'X-Meshcore-Control':'1'},cache:'no-store'});
             const data=await response.json();if(!response.ok||!data.ok)throw Error(data.error||ui("Could not load repeaters."));
+            if(revision!==registryRevision)return load(preferredKey);
             known=data.repeaters;window.MeshcoreStationRepeaterNames?.ingest(known);let saved={};
             try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};}catch{}
             managed=(Array.isArray(data.managed_repeaters)?data.managed_repeaters:[]).filter((key,i,keys)=>known.some(r=>r.public_key===key)&&keys.indexOf(key)===i);
@@ -48,7 +50,19 @@
     function attach(){
         if(attached||!$('managed-repeater'))return;attached=true;
         $('managed-repeater').onchange=()=>select($('managed-repeater').value);
-        $('managed-repeater-add').onclick=()=>document.dispatchEvent(new CustomEvent('stats-picker-open',{detail:{repeaters:known,selected:window.meshcorestationSelectedRepeater||'',managedRepeaters:managed.slice(),selectionEvent:'managed-repeater-added',title:ui("Add repeater from map"),actionLabel:ui("Add repeater")}}));
+        $('managed-repeater-add').onclick=async()=>{
+            const button=$('managed-repeater-add');
+            if(button.disabled)return;
+            button.disabled=true;
+            try {
+                if(await load(window.meshcorestationSelectedRepeater))
+                    document.dispatchEvent(new CustomEvent('stats-picker-open',{detail:{repeaters:known,selected:window.meshcorestationSelectedRepeater||'',managedRepeaters:managed.slice(),selectionEvent:'managed-repeater-added',title:ui("Add repeater from map"),actionLabel:ui("Add repeater")}}));
+            } finally {button.disabled=false;}
+        };
+        document.addEventListener('repeater-registry-removed',event=>{
+            registryRevision++;
+            known=known.filter(r=>r.public_key!==event.detail);
+        });
         $('managed-repeater-open').onclick=()=>{const r=known.find(r=>r.public_key===window.meshcorestationSelectedRepeater);if(r)window.meshcorestationManageRepeater({...r,type:2});};
         $('managed-repeater-remove').onclick=async()=>{
             const key=window.meshcorestationSelectedRepeater;

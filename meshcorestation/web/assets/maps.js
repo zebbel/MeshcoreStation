@@ -1,11 +1,14 @@
 (() => {
-    const {t: ui} = window.MeshcoreStationI18n || {
+    const {t: ui, translatedError: uiError = value => value} = window.MeshcoreStationI18n || {
         t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
     };
     const maps = new Map(), requests = new Map(), cache = new Map(), observers = new Map();
-    const cacheTTL = 30000;
+    const cacheTTL = 30000, repeaterURL = '/api/maps/repeaters';
+    const $ = id => document.getElementById(id);
+    let cacheRevision = 0;
     async function mapData(url, signal) {
-        const saved=cache.get(url);
+        const revision = cacheRevision;
+        const saved=url===repeaterURL ? null : cache.get(url);
         if(saved && Date.now()-saved.at<cacheTTL){cache.delete(url);cache.set(url,saved);return saved.data;}
         const response=await fetch(url,{cache:"no-store",signal});
         let data;
@@ -14,8 +17,11 @@
         if(!response.ok)throw Error(data?.error||ui("Map data request failed (HTTP {0}). Try again.", response.status));
         if (!data || !['nodes','segments','notes','hops'].every(key => Array.isArray(data[key])))
             throw Error(ui("Map API returned incomplete map data. Reload the page and try again."));
-        cache.set(url,{at:Date.now(),data});
-        while(cache.size>32)cache.delete(cache.keys().next().value);
+        if (signal.aborted) throw signal.reason;
+        if (url !== repeaterURL && revision === cacheRevision) {
+            cache.set(url,{at:Date.now(),data});
+            while(cache.size>32)cache.delete(cache.keys().next().value);
+        }
         return data;
     }
     function text(tag, value, className) { const el = document.createElement(tag); el.textContent = value; if (className) el.className = className; return el; }
@@ -37,7 +43,101 @@
             catch (error) { signal.removeEventListener('abort', abort); reject(error); }
         });
     }
-    function describe(node) {
+    const actions = {
+        block: ['Block Repeater', 'Block {0} in MeshcoreStation until you unblock it? Saved history is kept.', 'Repeater blocked locally.'],
+        delete: ['Delete Repeater', 'Delete {0} from MeshcoreStation? It can be discovered again. Saved history is kept.', 'Repeater deleted locally.'],
+        unblock: ['Unblock', 'Unblock {0}? It can be discovered again.', 'Repeater unblocked. It can be discovered again.']
+    };
+    const managedWarning = 'Remove this repeater from Repeater Management before blocking or deleting it.';
+    const registryUnavailable = 'Repeater registry unavailable. Refresh and try again.';
+    let registryBusy = false, blockedRequest;
+    async function registryRequest(body, signal) {
+        const headers = {'X-Meshcore-Control': '1'};
+        const options = {headers, signal, cache: 'no-store'};
+        if (body) {
+            headers['Content-Type'] = 'application/json';
+            Object.assign(options, {method: 'POST', body: JSON.stringify(body)});
+        }
+        let response, result;
+        try {
+            response = await fetch('/api/repeater-registry', options);
+            result = await response.json();
+        } catch (error) {
+            if (signal.aborted) throw error;
+            throw Error(registryUnavailable);
+        }
+        if (!response.ok || !result?.ok) throw Error(result?.error || registryUnavailable);
+        return result;
+    }
+    function registryButton(action, repeater) {
+        const [label, prompt, success] = actions[action];
+        const button = text('button', ui(label));
+        button.type = 'button';
+        button.disabled = !!repeater.managed;
+        if (button.disabled) button.title = ui(managedWarning);
+        button.onclick = async () => {
+            const name = repeater.name || repeater.label || ui('Unnamed repeater');
+            if (registryBusy || !window.confirm(ui(prompt, name) + '\n\n' + repeater.public_key)) return;
+            const status = $('repeater-registry-status');
+            registryBusy = button.disabled = true;
+            status.textContent = ui('Saving repeater registry change…');
+            try {
+                await registryRequest({action, public_key: repeater.public_key, confirm: true}, AbortSignal.timeout(10000));
+                status.textContent = ui(success);
+                cacheRevision++;
+                cache.clear();
+                if (action !== 'unblock') {
+                    window.MeshcoreStationRepeaterNames?.forget?.(repeater.public_key);
+                    document.dispatchEvent(new CustomEvent('repeater-registry-removed', {detail: repeater.public_key}));
+                }
+                if ($('repeaters-dialog').open) {
+                    const map = maps.get('repeater-map');
+                    const view = map ? [map.getCenter(), map.getZoom()] : null;
+                    load('repeater-map', repeaterURL, 'repeater-notes', view);
+                    if ($('blocked-repeaters')?.open) loadBlocked();
+                }
+            } catch (error) {
+                status.textContent = uiError(error.name === 'TimeoutError'
+                    ? 'Repeater registry request timed out. Reopen the map to check whether it applied.'
+                    : error.message);
+            } finally {
+                registryBusy = button.disabled = false;
+            }
+        };
+        return button;
+    }
+    function removalButtons(repeater) {
+        const row = text('div', '', 'repeater-registry-actions');
+        row.append(registryButton('block', repeater), registryButton('delete', repeater));
+        if (repeater.managed) row.append(text('p', ui(managedWarning)));
+        return row;
+    }
+    function registryRow(repeater, controls) {
+        const row = text('li', '', 'repeater-registry-row');
+        row.append(text('strong', repeater.name || repeater.label || ui('Unnamed repeater')),
+            text('span', repeater.public_key, 'map-key'), controls);
+        return row;
+    }
+    async function loadBlocked() {
+        const list = $('blocked-repeaters-list');
+        blockedRequest?.abort();
+        const controller = new AbortController();
+        blockedRequest = controller;
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        list.replaceChildren(text('li', ui('Loading blocked repeaters…')));
+        try {
+            const {blocked} = await registryRequest(null, controller.signal);
+            if (controller.signal.aborted || blockedRequest !== controller) return;
+            list.replaceChildren(...(blocked.length ? blocked.map(r => registryRow(r, registryButton('unblock', r)))
+                : [text('li', ui('No repeaters are blocked.'))]));
+        } catch (error) {
+            if (blockedRequest !== controller) return;
+            list.replaceChildren(text('li', uiError(controller.signal.aborted ? registryUnavailable : error.message)));
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+    function describe(node, registryMap) {
         const box = document.createElement('div');
         box.append(node.role==='repeater'&&window.MeshcoreStationRepeaterNames?window.MeshcoreStationRepeaterNames.element(node.public_key||node.key||node.label,'strong'):text('strong', node.label), text('p', node.role === 'repeater' && node.order ? ui("Repeater hop {0}", node.order) : ui(node.role)));
         box.append(text('p', node.position.map(n => n.toFixed(6)).join(', ')));
@@ -48,13 +148,16 @@
                 document.getElementById('repeaters-dialog')?.close();
                 document.getElementById('details-dialog')?.close();
             });
+            if (registryMap && $('repeater-registry-status')) box.append(removalButtons(node));
         }
         return box;
     }
-    async function load(id, url, notesId) {
+    async function load(id, url, notesId, view = null) {
         requests.get(id)?.abort();
         const controller = new AbortController(); requests.set(id, controller);
         const canvas = document.getElementById(id), notes = document.getElementById(notesId);
+        const unlocated = id === 'repeater-map' && $('unlocated-repeaters-list');
+        if (unlocated) unlocated.replaceChildren();
         const summary = id === 'route-map' && document.getElementById('route-summary');
         if (summary) summary.replaceChildren(text('p', ui("Loading distances and packet route…")));
         if (summary) document.getElementById('route-paths')?.replaceChildren();
@@ -80,7 +183,16 @@
             // Attach a rejection handler immediately while route data is fetched.
             const ready=library.then(()=>null,error=>error);
             const payload = await mapData(url, controller.signal);
+            if (controller.signal.aborted) return;
             window.MeshcoreStationRepeaterNames?.ingest(payload.nodes.filter(n=>n.role==='repeater'));
+            if (unlocated) {
+                const nodes = payload.unlocated || [];
+                window.MeshcoreStationRepeaterNames?.ingest(nodes);
+                unlocated.replaceChildren(...(nodes.length ? nodes.map(r => registryRow(r, removalButtons(r)))
+                    : [text('li', ui('No repeaters without coordinates.'))]));
+                if (typeof payload.repeater_count === 'number')
+                    window.dash_clientside?.set_props('repeater-count', {children: String(payload.repeater_count)});
+            }
             const alternatives = payload.reception_paths || [payload];
             let data = alternatives[0], redraw = null;
             const selector = summary && document.getElementById('route-paths');
@@ -129,7 +241,8 @@
             const map = L.map(canvas, { scrollWheelZoom: true, maxZoom: 19 }); maps.set(id, map);
             // Set final bounds before attaching OSM tiles: no wasted requests at the default location.
             const bounds = alternatives.flatMap(route => route.nodes.map(node => node.position));
-            if (bounds.length) map.fitBounds(bounds, { padding: [35, 35], maxZoom: 14 });
+            if (view) map.setView(...view);
+            else if (bounds.length) map.fitBounds(bounds, { padding: [35, 35], maxZoom: 14 });
             else map.setView([51, 10], 5);
             const clusters = id === 'repeater-map' ? window.meshcorestationMarkerClusters(map) : null;
             let overlays = [], endpointsDrawn = false;
@@ -165,7 +278,7 @@
             function markerFor(node) {
                 const marker = text('span', node.role === 'sender' ? 'S' : node.role === 'bot' ? 'B' : node.order || 'R', 'map-marker ' + node.role);
                 const icon = L.divIcon({ html: marker, className: 'map-icon', iconSize: [28, 28], iconAnchor: [14, 14] });
-                return L.marker(node.position, { icon, title: `${node.role}: ${node.role==='repeater'&&window.MeshcoreStationRepeaterNames?window.MeshcoreStationRepeaterNames.label(node.public_key||node.key||node.label):node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).bindPopup(() => describe(node));
+                return L.marker(node.position, { icon, title: `${node.role}: ${node.role==='repeater'&&window.MeshcoreStationRepeaterNames?window.MeshcoreStationRepeaterNames.label(node.public_key||node.key||node.label):node.label}`, zIndexOffset: node.role === 'repeater' ? 0 : 100 }).bindPopup(() => describe(node, id === 'repeater-map'));
             }
             redraw = draw;
             draw();
@@ -190,7 +303,7 @@
             if (!data.nodes.length) notes.prepend(text('p', ui("No usable coordinates are available for this map.")));
             if (!await frame(controller.signal) || maps.get(id) !== map) return;
             map.invalidateSize();
-            if (bounds.length) map.fitBounds(bounds, {padding:[35,35],maxZoom:14});
+            if (!view && bounds.length) map.fitBounds(bounds, {padding:[35,35],maxZoom:14});
             // Draw overlays before tiles; await these steps so failures are visible.
             if (!await frame(controller.signal) || maps.get(id) !== map) return;
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).on('tileerror', () => {
@@ -223,12 +336,24 @@
             load('route-map', `/api/maps/route/${encodeURIComponent(record.id)}`, 'route-notes');
         }
         const dialog = document.getElementById('repeaters-dialog');
-        if (button?.id === 'open-repeaters') { dialog.showModal(); load('repeater-map', '/api/maps/repeaters', 'repeater-notes'); document.getElementById('close-repeaters').focus(); }
+        if (button?.id === 'open-repeaters') {
+            if ($('repeater-registry-status')) $('repeater-registry-status').textContent = '';
+            dialog.showModal(); load('repeater-map', repeaterURL, 'repeater-notes'); $('close-repeaters').focus();
+            if ($('blocked-repeaters')?.open) loadBlocked();
+        }
         if (button?.id === 'close-repeaters') dialog.close();
         if (event.target === dialog) { const r = dialog.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close(); }
     });
+    document.addEventListener('toggle', event => {
+        if (event.target.id === 'blocked-repeaters' && event.target.open && $('repeaters-dialog').open) loadBlocked();
+    }, true);
     document.addEventListener('close', event => {
-        if (event.target.id === 'repeaters-dialog') cleanup('repeater-map');
+        if (event.target.id === 'repeaters-dialog') {
+            cleanup('repeater-map');
+            const request = blockedRequest;
+            blockedRequest = null;
+            request?.abort();
+        }
         if (event.target.id === 'details-dialog') cleanup('route-map');
     }, true);
 })();

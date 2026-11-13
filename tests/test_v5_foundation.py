@@ -318,3 +318,138 @@ def test_history_uses_one_connection_and_skips_unchanged_render(station, monkeyp
         station.db.execute("UPDATE logger SET reply='verified reply' WHERE id=?", (count,))
     updated = refresh(4,None,200,True,result[6])
     assert 'verified reply' in updated[1][-1].children[-1].children.to_plotly_json()['props']['data-details']
+
+
+def test_local_registry_controls_preserve_history_and_rediscover_only_unblocked(station):
+    from flask import Flask
+    from meshcorestation.storage import passive_stats, repeater_comparison
+    from meshcorestation.storage.voltage_store import ensure_repeater
+    from meshcorestation.radio.repeater_sync import RepeaterSync
+    from meshcorestation.web.map_routes import register_map_routes
+
+    contact = dict(type=2, public_key=KEY, adv_name='Hill')
+    assert station.add_new_repeater(NS(payload=contact))
+    with station.db:
+        ensure_repeater(station.db, KEY)
+    packet = passive_stats.normalize(dict(route_type=1, payload_type=5, path=KEY[:2],
+        path_len=1, path_hash_size=1, pkt_payload=b'fixture observation'))
+    assert passive_stats.store_batch(database.DB_FILE, [packet])[0] == {KEY: 1}
+    path = passive_stats.statistics_path(database.DB_FILE, KEY)
+    station.add_logger(dict(message='ping', name='Fixture sender', recv_time=2000000000), None, 'unscoped', 'Fixture reply')
+    repeater_comparison.mutate(database.DB_FILE, KEY, 'create', 'Fixture antenna change')
+    original = {table: station.db.execute(f'SELECT * FROM {table}').fetchall()
+                for table in ('logger', 'voltage_config', 'repeater_changes')}
+    with closing(sqlite3.connect(path)) as history:
+        observations = history.execute('SELECT * FROM observations').fetchall()
+
+    app = Flask(__name__)
+    register_map_routes(app)
+    client = app.test_client()
+    url = '/api/repeater-registry'
+    control = {'X-Meshcore-Control': '1'}
+
+    def action(name, public_key=KEY, confirm=True, headers=control):
+        return client.post(url, json=dict(action=name, public_key=public_key, confirm=confirm), headers=headers)
+
+    assert action('block', headers={}).status_code == 403
+    assert action('delete', headers={**control, 'Origin': 'https://example.com'}).status_code == 403
+    assert action('block', public_key=KEY[:8]).status_code == 400
+    assert action('block', confirm=1).status_code == 400
+    assert action('block').status_code == action('delete').status_code == 409
+    assert original['voltage_config'] == station.db.execute('SELECT * FROM voltage_config').fetchall()
+    assert client.get('/api/maps/repeaters').json['unlocated'][0]['managed']
+    with station.db:
+        station.db.execute('UPDATE voltage_config SET managed=0 WHERE public_key=?', (KEY,))
+
+    assert action('delete', KEY.upper()).status_code == 200
+    assert not client.get('/api/maps/repeaters').json['unlocated']
+    assert client.get(url, headers=control).json['blocked'] == []
+    assert station.add_new_repeater(NS(payload=contact))
+    assert action('block').status_code == 200
+    assert not client.get('/api/maps/repeaters').json['unlocated']
+    assert client.get(url, headers=control).json['blocked'] == [dict(public_key=KEY, name='Hill')]
+    assert not station.add_new_repeater(NS(payload=contact))
+
+    restarted = database.Database(logging.getLogger('restart fixture'))
+    try:
+        assert not restarted.add_new_repeater(NS(payload=contact))
+        device = companion(restarted)
+        RepeaterSync(device).import_contacts(NS(payload={KEY: contact}))
+        asyncio.run(handle_contacts(device, {'operation': 'get_contacts'}))
+        assert restarted.get_repeater_count() == 0
+        with restarted.db, pytest.raises(ValueError, match='known repeater'):
+            ensure_repeater(restarted.db, KEY)
+        assert action('unblock', confirm=False).status_code == 400
+        assert action('unblock').status_code == 200
+        assert restarted.get_repeater_count() == 0
+        RepeaterSync(device).import_contacts(NS(payload={KEY: contact}))
+        assert restarted.get_repeater_count() == 1
+    finally:
+        restarted.close()
+    with closing(sqlite3.connect(path)) as history:
+        assert history.execute('SELECT * FROM observations').fetchall() == observations
+    for table in ('logger', 'repeater_changes'):
+        assert station.db.execute(f'SELECT * FROM {table}').fetchall() == original[table]
+
+
+@pytest.mark.parametrize('action', ['block', 'delete'])
+def test_registry_discovery_serializes_with_visibility_change(station, action):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    contact = dict(type=2, public_key=KEY, adv_name='Concurrent discovery')
+    assert registry.upsert(station.known_path, contact)
+    start = Barrier(2)
+
+    def discover():
+        start.wait(timeout=5)
+        return registry.upsert(station.known_path, contact)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        pending = pool.submit(discover)
+        start.wait(timeout=5)
+        registry.change_visibility(database.DB_FILE, KEY, action)
+        inserted = pending.result(timeout=5)
+    if action == 'block':
+        assert station.get_repeater_count() == 0
+        assert not registry.upsert(station.known_path, contact)
+    else:
+        assert inserted
+        assert registry.blocked_repeaters(station.known_path) == []
+        assert registry.upsert(station.known_path, contact)
+
+
+def test_registry_block_rolls_back_if_removal_fails(station):
+    assert registry.upsert(station.known_path, dict(type=2, public_key=KEY, adv_name='Hill'))
+    with closing(sqlite3.connect(station.known_path)) as db, db:
+        db.execute("""CREATE TRIGGER fail_removal BEFORE DELETE ON repeaters
+                      BEGIN SELECT RAISE(ABORT,'fixture failure'); END""")
+    with pytest.raises(sqlite3.IntegrityError):
+        registry.change_visibility(database.DB_FILE, KEY, 'block')
+    assert registry.blocked_repeaters(station.known_path) == []
+    assert station.get_repeater_count() == 1
+
+
+def test_registry_protection_serializes_with_management_add(station):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from meshcorestation.storage.connection import connect
+    from meshcorestation.storage.voltage_store import MEMBERSHIP_LOCK, ensure_repeater
+
+    assert registry.upsert(station.known_path, dict(type=2, public_key=KEY))
+    ready = Barrier(2)
+
+    def manage():
+        with MEMBERSHIP_LOCK, closing(connect(database.DB_FILE)) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            ensure_repeater(db, KEY)
+            ready.wait(timeout=5)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        pending = pool.submit(manage)
+        ready.wait(timeout=5)
+        with pytest.raises(registry.ManagedRepeaterError):
+            registry.change_visibility(database.DB_FILE, KEY, 'block')
+        pending.result(timeout=5)
+    assert registry.blocked_repeaters(station.known_path) == []
+    assert station.get_repeater_count() == 1

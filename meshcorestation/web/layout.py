@@ -101,7 +101,17 @@ def build_layout():
             for code in sorted(catalogs(), key=lambda code: (code != 'en', code))
         ], id='dashboard-language')])], className='dialog-body')],id='station-settings-dialog'),
         popup([html.Div([html.Div([html.P(t('COMMAND DETAILS'), className='eyebrow'), html.H2(t('Received command'), id='detail-title')]), html.Button('×', id='close-details', **{'aria-label': t('Close details')})], className='dialog-header'), html.P(t('Reply text is recorded by the bot; it is not proof of delivery.'), className='muted'), html.Section([html.H3(t('Packet route')), html.Div(id='route-summary', className='route-summary', **{'aria-live': 'polite'}), html.Div(id='route-paths', className='route-paths', role='group', **{'aria-label': t('Reception paths')}), html.Div(id='route-map', className='map-canvas', role='region', **{'aria-label': t('Packet route map')}), html.Div(id='route-notes', className='map-notes')], id='route-section', hidden=True), html.Dl(id='detail-fields')], id='details-dialog', **{'aria-labelledby': 'detail-title'}),
-        popup([html.Div([html.H2(t('Known repeaters'), id='repeaters-title'), html.Button('×', id='close-repeaters', **{'aria-label': t('Close repeater map')})], className='dialog-header'), html.Div(id='repeater-notes', className='map-notes', **{'aria-live': 'polite'}), html.Div(id='repeater-map', className='map-canvas', role='region', **{'aria-label': t('Known repeaters map')})], id='repeaters-dialog', **{'aria-labelledby': 'repeaters-title'}),
+        popup([
+            html.Div([html.H2(t('Known repeaters'), id='repeaters-title'),
+                      html.Button('×', id='close-repeaters', **{'aria-label': t('Close repeater map')})], className='dialog-header'),
+            html.P(id='repeater-registry-status', role='status'),
+            html.Div(id='repeater-notes', className='map-notes', **{'aria-live': 'polite'}),
+            html.Div(id='repeater-map', className='map-canvas', role='region', **{'aria-label': t('Known repeaters map')}),
+            html.Details([html.Summary(t('Repeaters without coordinates')), html.Ul(id='unlocated-repeaters-list')],
+                         id='unlocated-repeaters', className='repeater-registry-list'),
+            html.Details([html.Summary(t('Blocked Repeaters')), html.Ul(id='blocked-repeaters-list')],
+                         id='blocked-repeaters', className='repeater-registry-list')
+        ], id='repeaters-dialog', **{'aria-labelledby': 'repeaters-title'}),
         html.Footer([html.Span(id='footer-copyright'),html.Span(t('MeshcoreStation {0} · {1}', __version__, 'V6'),id='footer-version'),html.Span(t('Companion firmware unavailable'),id='footer-firmware'),html.Span(t('Checking for updates…'),id='footer-update',role='status',**{'aria-live':'polite'}),html.Button(t('Update available'),id='footer-update-button',hidden=True,type='button')],id='dashboard-footer'),
         dcc.Interval(id='refresh',interval=5000),dcc.Interval(id='history-refresh',interval=5000,disabled=True),dcc.Store(id='window-size',data=PAGE_SIZE),dcc.Store(id='last-render',data=None),dcc.Store(id='history-visible',data=False)
     ],className='shell')

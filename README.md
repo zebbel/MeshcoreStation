@@ -1,7 +1,7 @@
-# MeshcoreStation V6 — 6.0.4
+# MeshcoreStation V6 — 6.0.5
 
 A fresh Companion-connected channel bot and repeater-management application.
-Version **6.0.4** on branch **`V6`** gives Repeater Statistic Comparison more time to receive a server response and improves classification checkpoint saves for long comparisons. Select **Language / Sprache** in MeshcoreStation Settings. See [Dashboard languages](docs/v6-localization.md) and the [comparison release notes](docs/v6-release.md).
+Version **6.0.5** on branch **`V6`** adds local controls for blocking, deleting and unblocking known repeaters. Select **Language / Sprache** in MeshcoreStation Settings. See [Dashboard languages](docs/v6-localization.md) and the [comparison release notes](docs/v6-release.md).
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -28,6 +28,17 @@ known-repeater registry rather than modifying it.
 | --- | --- |
 | `meshcorestation.db` | Application display/serial preferences, bot channel and commands, reply scopes, persistent command/reception/reply history, managed membership and local telemetry configuration/history, management audit |
 | `knownRepeaters.db` | The single canonical repeater registry, full public-key identity, name/location, discovery metadata, actual advertisement counts and timestamps |
+
+Open **Known Repeaters → Open Map** to block or delete a repeater from its marker,
+or use **Repeaters without coordinates**. Deletion allows rediscovery. Blocking
+persists until you select **Unblock** under **Blocked Repeaters**. Unblocking
+allows future discovery. Remove a managed repeater from **Repeater Management**
+before blocking or deleting it.
+
+These actions preserve stored observations, statistics, comparisons, routes,
+SNR samples and messages. Historical views that look up names or locations in
+the current registry may show unresolved identities after removal. Companion
+contacts and MeshCore radio behavior are unaffected.
 
 The main database has **no persistent repeater registry**. Included protocol
 readers access a read-only temporary view of the attached canonical registry;

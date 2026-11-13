@@ -1,15 +1,13 @@
-# MeshcoreStation 6.0.4 — Repeater Comparison Timeout and Checkpoint Fix
+# MeshcoreStation 6.0.5 — Repeater Registry Controls
 
-The dashboard now waits up to 15 seconds per comparison request. It reports
-browser, worker, and calculation timeouts separately and keeps the last
-successful comparison visible. The calculation budget is still eight seconds,
-and the worker limit is still nine seconds.
+The Known Repeaters map now offers **Block Repeater** and **Delete Repeater**
+in marker popups and in the list of repeaters without coordinates.
 
-Classification leaves more time to save progress based on batch size and
-processing time. Resumed runs save newly classified rows and the continuation
-position in one SQLite transaction. The dashboard continues up to five times
-when the server confirms it saved progress. A failed checkpoint save leaves the
-previous checkpoint available.
+Blocking persists across restarts and prevents reimport from advertisements or
+Companion contacts. Deleting allows rediscovery. **Blocked Repeaters** lists
+blocked public keys and offers **Unblock**, which allows future discovery.
 
-The disposable classification cache is capped at 64 MiB. Source history and
-passive recording are unaffected.
+The dashboard requires confirmation for each action and protects actively
+managed repeaters. The controls affect only the local registry. Saved history
+and Companion contacts are preserved. Historical views may show unresolved
+identities when they rely on the current registry for a name or location.
