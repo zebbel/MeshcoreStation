@@ -100,10 +100,10 @@ class QueryTimeout(RuntimeError):
 class Diagnostics:
     def __init__(self,budget):
         self.started=time.monotonic();self.cpu_started=time.process_time();self.deadline=self.started+budget
-        self.current='setup';self.times={};self.rows=0;self.classified=0
+        self.current='setup';self.times={};self.rows=0;self.classified=0;self.progress_saved=False
 
     def report(self):
-        return dict(source_rows=self.rows,classified_rows=self.classified,elapsed_ms=round((time.monotonic()-self.started)*1000,3),cpu_ms=round((time.process_time()-self.cpu_started)*1000,3),stages_ms=self.times)
+        return dict(source_rows=self.rows,classified_rows=self.classified,classification_progress_saved=self.progress_saved,elapsed_ms=round((time.monotonic()-self.started)*1000,3),cpu_ms=round((time.process_time()-self.cpu_started)*1000,3),stages_ms=self.times)
 
     def check(self):
         if time.monotonic()>=self.deadline:raise QueryTimeout(self.current,self.report())
@@ -179,23 +179,43 @@ def _space_guard(main_path,extra=0):
 HEX_DIGEST = re.compile('[0-9a-f]{64}')
 
 
-def _source_rows(source, start, end, after_id=None):
-    # Index range for sparse windows, sequential pages for dense history. The
-    # latter avoids a table-page lookup in timestamp order for each reception.
+def _source_rows(source, start, end, min_id, max_id, mode, cursor):
+    # Sparse history uses the timestamp index. Dense history reads table pages
+    # sequentially. Appends always use a bounded row-ID scan.
     columns = """id,received_at,packet_digest,packet_type,route_type,ambiguous,
         first_hop,middle_hop,last_hop,hop_count,route,
         CASE WHEN route_type=0 OR (packet_type=4 AND evidence='advertisement-origin') THEN payload END,
         transport_code,evidence"""
-    where = 'received_at>=? AND received_at<?'
-    if after_id is not None:
-        return source.execute(f'SELECT {columns} FROM observations NOT INDEXED WHERE id>? AND {where} ORDER BY id',
-                              (after_id, start, end)), True
-    count = source.execute(f'SELECT COUNT(*) FROM observations WHERE {where}', (start, end)).fetchone()[0]
-    last_id = source.execute('SELECT MAX(id) FROM observations').fetchone()[0]
-    dense = bool(last_id and count * 3 >= last_id)
-    scan = ' NOT INDEXED' if dense else ''
-    order = ' ORDER BY id' if dense else ''
-    return source.execute(f'SELECT {columns} FROM observations{scan} WHERE {where}{order}', (start, end)), dense
+    where = 'received_at>=? AND received_at<? AND id>? AND id<=?'
+    if mode is None:
+        count = source.execute('SELECT COUNT(*) FROM observations WHERE received_at>=? AND received_at<?',
+                               (start, end)).fetchone()[0]
+        mode = 'id' if count * 3 >= max_id else 'time'
+    if mode == 'id':
+        after = max(min_id, cursor[0]) if cursor else min_id
+        return source.execute(f'SELECT {columns} FROM observations NOT INDEXED WHERE {where} ORDER BY id',
+                              (start, end, after, max_id)), mode
+    tail = ' AND (received_at,id)>(?,?)' if cursor else ''
+    if cursor:
+        start = max(start, cursor[0])
+    return source.execute(f"""SELECT {columns} FROM observations INDEXED BY observations_timestamp
+        WHERE {where}{tail} ORDER BY received_at,id""",
+        (start, end, min_id, max_id, *(cursor or ()))), mode
+
+
+def _classification_ranges(start, end, highwater, reused, pending):
+    # New appends get their own ID range even if their timestamps precede a cursor.
+    if reused is None:
+        return [(start, end, -(2**63), highwater, None, None)]
+    lo, hi, old_id = reused
+    ranges = [(max(lo, a), min(hi, b), lower, upper, mode, cursor)
+              for a, b, lower, upper, mode, cursor in pending or ()]
+    ranges += [(start, lo, -(2**63), highwater, None, None),
+               (hi, end, -(2**63), highwater, None, None)]
+    if highwater > old_id:
+        ranges.append((lo, hi, old_id, highwater, 'id', None))
+    return [item for item in ranges if item[0] < item[1]]
+
 
 
 def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,marker=None):
@@ -217,29 +237,25 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
         work.execute('PRAGMA journal_mode=MEMORY')
         try:
             reused = cache.load(*marker, start, end, source)
-        except (OSError, sqlite3.Error):
+        except (OSError, ValueError, sqlite3.Error):
             diagnostics.check()
             cache = None
         work.execute('PRAGMA journal_mode=OFF')
-    ranges = [(start, end, None)]
-    if reused:
-        lo, hi, last_id = reused
-        ranges = [(start, lo, None), (hi, end, None)]
-        if marker[1] > last_id:
-            ranges.append((lo, hi, last_id))
-    ranges = [(lo, hi, last_id) for lo, hi, last_id in ranges if lo < hi]
+    highwater = marker[1] if marker else source.execute('SELECT COALESCE(MAX(id),0) FROM observations').fetchone()[0]
+    ranges = _classification_ranges(start, end, highwater, reused, cache.pending if cache else None)
     checkpoint = None
-    for index, (lo, hi, last_id) in enumerate(ranges):
-        rows, ordered = _source_rows(source, lo, hi, last_id)
-        last_processed = None
-        while batch := rows.fetchmany(256):
+    for index, (lo, hi, lower, upper, mode, cursor) in enumerate(ranges):
+        if cache and diagnostics.classified and diagnostics.deadline - time.monotonic() < .85:
+            checkpoint = ranges[index:]
+            break
+        rows, mode = _source_rows(source, lo, hi, lower, upper, mode, cursor)
+        while True:
             diagnostics.check()
-            if (cache and ordered and (not reused or last_id is not None)
-                    and index == len(ranges) - 1 and last_processed is not None
-                    and diagnostics.deadline - time.monotonic() < .85):
-                # Save only the completed ID prefix. The next request resumes
-                # from it. Never aggregate or return a partially classified view.
-                checkpoint = last_processed
+            if cache and diagnostics.classified and diagnostics.deadline - time.monotonic() < .85:
+                checkpoint = [(lo, hi, lower, upper, mode, cursor), *ranges[index+1:]]
+                break
+            batch = rows.fetchmany(256)
+            if not batch:
                 break
             if diagnostics.classified // 2048 != (diagnostics.classified + len(batch)) // 2048:
                 _space_guard(main_path)
@@ -260,16 +276,18 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
             work.executemany('INSERT INTO facts VALUES(?,?,?,?,?,?,?,?,?)',facts)
             work.executemany('INSERT INTO edges VALUES(?,?,?,?,?,?)',edge_facts)
             diagnostics.classified += len(batch)
-            last_processed = batch[-1][0]
+            oid, at = batch[-1][:2]
+            cursor = (oid,) if mode == 'id' else (at, oid)
+        if checkpoint is not None:
+            break
     work.commit()
     diagnostics.rows = work.execute('SELECT COUNT(*) FROM facts').fetchone()[0]
     checkpoint_saved = False
-    if cache and (not reused or diagnostics.classified or start < cache.previous[2] or end > cache.previous[3]):
+    if cache and (not reused or cache.pending is not None or diagnostics.classified or start < cache.previous[2] or end > cache.previous[3]):
         # Treat persistence as optional. Save only after the requested facts
         # are committed so a full/locked cache cannot discard the current view.
         try:
             _space_guard(main_path, CACHE_BYTES)
-            highwater = marker[1] if checkpoint is None else checkpoint
             retain = checkpoint is None
             if retain and reused and highwater > reused[2]:
                 # A new backdated row outside this view could make the old
@@ -279,11 +297,12 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
                     AND (received_at<? OR received_at>=?) LIMIT 1""",
                     (reused[2], *cache.previous[2:4], start, end)).fetchone() is None
             checkpoint_saved = cache.save(
-                marker[0], highwater, start, end, reused, retain, source_anchor(source, highwater))
+                marker[0], highwater, start, end, reused, retain, source_anchor(source, highwater), pending=checkpoint)
         except (OSError, sqlite3.Error):
             diagnostics.check()
+    diagnostics.progress_saved = checkpoint_saved and bool(diagnostics.classified)
     if checkpoint is not None:
-        raise QueryTimeout(diagnostics.current, dict(diagnostics.report(), classification_progress_saved=checkpoint_saved))
+        raise QueryTimeout(diagnostics.current, diagnostics.report())
     return routes
 
 

@@ -3,7 +3,7 @@ const ids=['status','error','journal','results'];
 const dom=new JSDOM(`<details id="repeater-comparison-disclosure"><select id="comparison-repeater"></select><input id="comparison-description"><button id="comparison-save"></button><select id="comparison-change"></select><select id="comparison-period"><option value="1">24h</option><option value="7">7d</option><option value="30">30d</option></select><button id="comparison-run"></button><button id="comparison-refresh"></button><button id="comparison-more"></button>${ids.map(id=>`<div id="comparison-${id}"></div>`).join('')}</details>`,{runScripts:'outside-only',url:'http://localhost',pretendToBeVisual:true}),w=dom.window,d=w.document;
 w.AbortSignal.timeout=()=>undefined;w.confirm=()=>true;w.prompt=()=> 'Edited antenna';w.meshcorestationFormatDate=v=>'timestamp '+v;
 const A='aa'.repeat(32),B='bb'.repeat(32),calls=[];let description='Antenna',exists=false,measurements={before:{},after:{}};
-let slow=false, failed=false, expire;
+let slow=false, failures=0, canResume=false, expire;
 const setTimer=w.setTimeout.bind(w);
 w.setTimeout=(callback, delay)=>delay===10000 ? (expire=callback,0) : setTimer(callback,delay);
 w.fetch=async(url,options)=>{calls.push({url,options});assert(url.startsWith('/api/repeater-comparison/'));assert.equal(options.headers['X-Meshcore-Control'],'1');
@@ -14,7 +14,10 @@ w.fetch=async(url,options)=>{calls.push({url,options});assert(url.startsWith('/a
  }
  if(url.includes('/changes'))return {ok:true,json:async()=>({ok:true,selected:A,repeaters:[{public_key:A,name:'Managed'}],changes:exists?[{id:1,public_key:A,recorded_at:100,description}]:[],has_more:false})};
  if(slow)return new Promise(()=>{});
- if(failed)return {ok:false,json:async()=>({ok:false,error_code:'QUERY_TIMEOUT',stage:'classify',resume:true})};
+ if(failures>0){
+  failures--;
+  return {ok:false,status:504,json:async()=>({ok:false,error_code:'QUERY_TIMEOUT',stage:'classify',resume:canResume})};
+ }
  const p={start:0,end:100,future:false,complete:false,coverage_known:false,recorded_seconds:0,expected_seconds:100,snr_samples:2,uncertain_snr_groups:0,notes:[],receptions:null,unique_packets:null,repeated:null,unidentified:null,traffic_per_recorded_hour:null,neighbors:null,one_way:null,two_way:null};
  return {ok:true,json:async()=>({ok:true,selected:A,generated_at:120,change:{id:1,recorded_at:100,description},before:{...p,...measurements.before},after:{...p,start:100,end:200,future:true,...measurements.after},matched:[{public_key:B,name:'Neighbor',before:-12,after:-7,difference_db:5,before_samples:2,after_samples:2}],median_snr_change:5,source_changes:[{public_key:B,name:'Different source',before:1,after:2,before_samples:1,after_samples:10,before_source:'legacy_last_heard',after_source:'firmware_aggregates'}],newly_heard:[],not_heard_after:[],new_observed_neighbors:[],not_observed_after:[],overlapping_changes:[],warnings:['After-period incomplete. Correlation is not causation.'],interpretation:'Preliminary'})};
 };
@@ -48,10 +51,19 @@ const settle=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))
  const started=calls.length;$('run').click();assert.equal(calls.length,started);
  expire();assert.equal($('status').textContent,'');assert.match($('error').textContent,/timed out/);
  assert.equal($('results').firstChild,previous);assert(!$('run').disabled);
- slow=false;failed=true;$('run').click();await settle();
- assert.equal($('status').textContent,'');assert.match($('error').textContent,/resume from saved progress/);
+ slow=false;failures=1;$('run').click();await settle();
+ assert.equal($('status').textContent,'');assert.match($('error').textContent,/could not save progress/);
  assert.equal($('results').firstChild,previous);
- failed=false;slow=true;$('run').click();await settle();
+ canResume=true;failures=1;
+ const retryStart=calls.length;$('run').click();await settle();
+ assert.equal(calls.length-retryStart,2);assert.match($('status').textContent,/Saved comparison loaded/);
+ const completed=$('results').firstChild;
+ failures=10;
+ const limitStart=calls.length;$('run').click();await settle();
+ assert.equal(calls.length-limitStart,6);
+ assert.equal($('status').textContent,'');assert.match($('error').textContent,/after 5 continuations/);
+ assert.equal($('results').firstChild,completed);
+ failures=0;slow=true;$('run').click();await settle();
  $('period').value='30';slow=false;$('period').dispatchEvent(new w.Event('change'));await settle();
  assert(calls.at(-1).url.includes('days=30'));assert.notEqual($('results').firstChild,previous);
  slow=true;$('run').click();await settle();

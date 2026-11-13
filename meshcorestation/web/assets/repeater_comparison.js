@@ -30,9 +30,16 @@
     }
     async function request(url,body,signal){
         const response=await fetch(url,{method:body?'POST':'GET',headers:body?{...headers,'Content-Type':'application/json'}:headers,cache:'no-store',body:body?JSON.stringify(body):undefined,signal});
-        const value=await response.json();if(!response.ok||!value.ok)throw Error(value.error_code==='QUERY_TIMEOUT'
-            ? ui(value.resume ? 'Comparison reached its time limit during {0}. Run it again to resume from saved progress.' : 'Comparison reached its time limit during {0}. Try again or select a shorter period.', ui(value.stage))
-            : value.error||ui("Saved data unavailable."));return value;
+        const value = await response.json();
+        if (!response.ok || !value.ok) {
+            const message = value.error_code === 'QUERY_TIMEOUT'
+                ? ui('Comparison timed out during {0} and could not save progress. Try again or select a shorter period.', ui(value.stage))
+                : value.error || ui('Saved data unavailable.');
+            const error = new Error(message);
+            error.resume = response.status === 504 && value.error_code === 'QUERY_TIMEOUT' && value.resume === true;
+            throw error;
+        }
+        return value;
     }
     function identity(r){return window.MeshcoreStationRepeaterNames?.element(r.public_key)||text('span',r.name||r.public_key);}
     function percentageChange(before,after){
@@ -138,30 +145,43 @@
         $('comparison-status').textContent = ui('Calculating saved before/after observations…');
         $('comparison-error').textContent = '';
         $('comparison-results').classList.add('statistics-stale');
-        const timer = setTimeout(() => {
-            if (comparison !== controller) return;
-            controller.abort();
-            comparison = null;
-            fail(ui('Comparison request timed out. Any faded results are a previous snapshot.'));
-            controls();
-        }, 10000);
-        controller.signal.addEventListener('abort', () => clearTimeout(timer), {once:true});
+        const maxContinuations = 5;
         try {
-            const data = await request('/api/repeater-comparison/view?' + params, null, controller.signal);
-            if (comparison !== controller) return;
-            if (!$('repeater-comparison-disclosure').open) {
-                cancelComparison();
+            for (let attempt = 0; ; attempt++) {
+                const timer = setTimeout(() => {
+                    if (comparison !== controller) return;
+                    controller.abort();
+                    comparison = null;
+                    fail(ui('Comparison request timed out. Any faded results are a previous snapshot.'));
+                    controls();
+                }, 10000);
+                let data;
+                try {
+                    data = await request('/api/repeater-comparison/view?' + params, null, controller.signal);
+                } catch (error) {
+                    if (comparison !== controller) return;
+                    if (!error.resume) throw error;
+                    if (attempt >= maxContinuations) {
+                        throw new Error(ui('Comparison is still incomplete after {0} continuations. Run it again to resume from saved progress.', maxContinuations));
+                    }
+                    $('comparison-status').textContent = ui('Continuing saved comparison… ({0}/{1})', attempt + 1, maxContinuations);
+                    continue;
+                } finally {
+                    clearTimeout(timer);
+                }
+                if (comparison !== controller) return;
+                if (!$('repeater-comparison-disclosure').open) {
+                    cancelComparison();
+                    return;
+                }
+                render(data);
+                $('comparison-results').classList.remove('statistics-stale');
+                $('comparison-status').textContent = ui('Saved comparison loaded. Partial periods are preliminary; no radio requests were made.');
                 return;
             }
-            render(data);
-            $('comparison-results').classList.remove('statistics-stale');
-            $('comparison-status').textContent = ui('Saved comparison loaded. Partial periods are preliminary; no radio requests were made.');
         } catch (error) {
-            if (comparison === controller) {
-                fail(uiError(error.message));
-            }
+            if (comparison === controller) fail(uiError(error.message));
         } finally {
-            clearTimeout(timer);
             if (comparison === controller) {
                 comparison = null;
                 controls();

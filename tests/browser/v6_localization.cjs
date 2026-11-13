@@ -76,17 +76,25 @@ const layouts = {desktop: [1280, 960, 'light'], mobile: [390, 844, 'dark']};
             await page.locator('#comparison-description').fill('Fixture comparison');
             await page.locator('#comparison-save').click();
             await waitText('#comparison-status','Änderung gespeichert');
-            await page.route('**/api/repeater-comparison/view?**', route => route.fulfill({
-                status:504,json:{ok:false,error_code:'QUERY_TIMEOUT',stage:'classify',resume:true}
-            }));
+            let allowContinuation;
+            const continueRequest = new Promise(resolve => { allowContinuation = resolve; });
+            let comparisonCalls = 0;
+            await page.route('**/api/repeater-comparison/view?**', async route => {
+                if (++comparisonCalls === 1) {
+                    await route.fulfill({status:504,json:{ok:false,error_code:'QUERY_TIMEOUT',stage:'classify',resume:true}});
+                } else {
+                    await continueRequest;
+                    await route.continue();
+                }
+            });
             await page.locator('#comparison-period').selectOption('7');
-            await waitText('#comparison-error','Klassifizierung');
-            assert.equal(await page.locator('#comparison-status').textContent(),'');
-            assert(await page.locator('#comparison-run').isEnabled());
-            await page.unroute('**/api/repeater-comparison/view?**');
-            await page.locator('#comparison-run').click();
+            await waitText('#comparison-status','Gespeicherter Vergleich wird fortgesetzt');
+            assert(await page.locator('#comparison-run').isDisabled());
+            allowContinuation();
             await waitText('#comparison-status','Gespeicherter Vergleich geladen');
             await waitText('#comparison-results h3','Fixture comparison');
+            assert.equal(comparisonCalls,2);
+            await page.unroute('**/api/repeater-comparison/view?**');
             page.once('dialog', dialog => dialog.accept());
             await page.locator('#comparison-journal').getByRole('button', {name:'Löschen'}).click();
             await waitText('#comparison-journal','Keine Änderungen für diesen Repeater');

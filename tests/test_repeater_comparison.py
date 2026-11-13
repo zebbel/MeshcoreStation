@@ -171,3 +171,33 @@ def test_comparison_timeout_reports_saved_progress(station, monkeypatch):
                                   headers={'X-Meshcore-Control': '1'})
     assert reply.status_code == 504
     assert reply.json['stage'] == 'classify' and reply.json['resume']
+
+
+@pytest.mark.parametrize('days', [7, 30])
+def test_large_comparison_continues_from_indexed_checkpoint(tmp_path, monkeypatch, days):
+    from scripts.benchmark_statistics import create_fixture
+    from meshcorestation.storage import statistics_view
+
+    path = create_fixture(tmp_path, 10000)
+    source = passive_stats.statistics_path(path, A)
+    duration = days * 86400
+    with closing(sqlite3.connect(source)) as db, db:
+        db.execute('UPDATE observations SET received_at=? + (id%2)*2-1 WHERE id<=3000', (NOW,))
+        db.execute('UPDATE observations SET received_at=? WHERE id>3000', (NOW-2*duration,))
+    with closing(sqlite3.connect(path)) as db, db:
+        db.execute('INSERT INTO repeater_changes VALUES(1,?,?,?)',(A,NOW,'Resumable comparison'))
+    passive_stats.record_coverage(path, NOW-duration, NOW+duration)
+    with monkeypatch.context() as patch:
+        patch.setattr(statistics_view, 'QUERY_BUDGET_SECONDS', .7)
+        with pytest.raises(statistics_view.QueryTimeout) as exc:
+            journal.aggregate(path,A,1,days,now=NOW+duration)
+        assert exc.value.diagnostics['classification_progress_saved']
+        first = exc.value.diagnostics['classified_rows']
+
+    result = journal.aggregate(path,A,1,days,now=NOW+duration)
+    assert result['diagnostics']['classified_rows'] == 3000 - first
+    for label, (lo, hi) in zip(('before', 'after'), ((NOW-duration,NOW),(NOW,NOW+duration))):
+        reference = statistics_view.aggregate(path,A,days,now=NOW+duration,start=lo,end=hi,_covered=True,_reuse=False)
+        for field, value in journal._period(reference).items():
+            if field != 'notes':
+                assert result[label][field] == value

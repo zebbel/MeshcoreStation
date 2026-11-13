@@ -213,3 +213,55 @@ def test_interrupted_classification_resumes_without_returning_partial_counts(tmp
     assert resumed['diagnostics']['classified_rows'] < 2500
     assert {k: v for k, v in resumed.items() if k != 'diagnostics'} == {
         k: v for k, v in complete.items() if k != 'diagnostics'}
+
+
+@pytest.mark.parametrize('sparse', [False, True], ids=['sequential', 'indexed'])
+@pytest.mark.parametrize('invalidate', [None, 'history', 'scope'])
+def test_checkpoint_cursor_handles_timestamp_ties_and_backdated_appends(tmp_path, sparse, invalidate):
+    import json
+
+    path = create_fixture(tmp_path, 2500)
+    source = passive_stats.statistics_path(path, KEY)
+    with sqlite3.connect(source) as db:
+        db.execute('UPDATE observations SET received_at=? + (id%3) WHERE id<=800', (NOW-20,))
+        if sparse:
+            db.execute('UPDATE observations SET received_at=? WHERE id>800', (NOW-40*86400,))
+    with pytest.raises(view.QueryTimeout) as timed_out:
+        view.aggregate(path, KEY, 7, now=NOW, _budget=.7)
+    report = timed_out.value.diagnostics
+    assert report['classification_progress_saved'] and report['classified_rows'] == 256
+    with sqlite3.connect(tmp_path / 'statistics-classification.sqlite') as db:
+        plan = json.loads(db.execute('SELECT plan FROM cache_progress').fetchone()[0])
+        cursor = db.execute('SELECT at,id FROM facts ORDER BY ' +
+                            ('at DESC,id DESC' if sparse else 'id DESC') + ' LIMIT 1').fetchone()
+        assert plan[0][4:] == (['time', list(cursor)] if sparse else ['id', [cursor[1]]])
+    packet = passive_stats.normalize(dict(route_type=1, payload_type=5, path='aa11', path_len=1,
+        path_hash_size=2, pkt_payload=b'late packet'), now_ns=int((NOW-1000)*1e9))
+    passive_stats.store_batch(path, [packet])
+    if invalidate == 'history':
+        with sqlite3.connect(source) as db:
+            db.execute('UPDATE observations SET ambiguous=1 WHERE id=3')
+    if invalidate == 'scope':
+        with sqlite3.connect(path) as db:
+            db.execute("UPDATE statistics_regions SET name='changed' WHERE name='region-1'")
+    resumed = view.aggregate(path, KEY, 7, now=NOW)
+    fresh = view.aggregate(path, KEY, 7, now=NOW, _reuse=False)
+    assert resumed['diagnostics']['classified_rows'] == (801 if sparse else 2501) - (0 if invalidate else 256)
+    assert {k: v for k, v in resumed.items() if k != 'diagnostics'} == {
+        k: v for k, v in fresh.items() if k != 'diagnostics'}
+
+
+def test_interruption_in_overlap_extension_keeps_cached_rows(tmp_path):
+    path = create_fixture(tmp_path, 2500)
+    source = passive_stats.statistics_path(path, KEY)
+    with sqlite3.connect(source) as db:
+        db.execute('UPDATE observations SET received_at=? WHERE id<=800', (NOW-2*86400,))
+    assert view.aggregate(path, KEY, 1, now=NOW)['diagnostics']['classified_rows'] == 1700
+    with pytest.raises(view.QueryTimeout) as timed_out:
+        view.aggregate(path, KEY, 7, now=NOW, _budget=.7)
+    assert timed_out.value.diagnostics['classification_progress_saved']
+    resumed = view.aggregate(path, KEY, 7, now=NOW)
+    fresh = view.aggregate(path, KEY, 7, now=NOW, _reuse=False)
+    assert resumed['diagnostics']['classified_rows'] == 800 - timed_out.value.diagnostics['classified_rows']
+    assert {k: v for k, v in resumed.items() if k != 'diagnostics'} == {
+        k: v for k, v in fresh.items() if k != 'diagnostics'}

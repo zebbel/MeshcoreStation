@@ -10,8 +10,9 @@ from pathlib import Path
 import sqlite3
 
 CACHE_BYTES = 64 * 1024 * 1024
-CACHE_FORMAT = 1
+CACHE_FORMAT = 2
 MAX_WINDOW_SECONDS = 60 * 86400
+MAX_PENDING_RANGES = 64
 SOURCE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS classification_source(
  id INTEGER PRIMARY KEY CHECK(id=1), generation TEXT NOT NULL, highwater INTEGER NOT NULL);
@@ -70,6 +71,7 @@ class ClassificationCache:
         self.db = work
         self.path = Path(main_path).parent / 'statistics-classification.sqlite'
         self.previous = None
+        self.pending = None
 
     def load(self, marker, highwater, start, end, source):
         if not self.path.exists():
@@ -85,26 +87,34 @@ class ClassificationCache:
             db.execute('CREATE TABLE IF NOT EXISTS saved.cache_state(marker TEXT, highwater INTEGER, lo REAL, hi REAL, anchor TEXT)')
             db.execute(f'CREATE TABLE IF NOT EXISTS saved.facts({FACT_COLUMNS})')
             db.execute(f'CREATE TABLE IF NOT EXISTS saved.edges({EDGE_COLUMNS})')
-            self.previous = db.execute('SELECT marker,highwater,lo,hi,anchor FROM saved.cache_state').fetchone()
+            db.execute('CREATE TABLE IF NOT EXISTS saved.cache_progress(plan TEXT NOT NULL)')
+            self.previous = self._state()
             if self.previous is None:
                 return None
-            old_marker, old_id, lo, hi, anchor = self.previous
+            old_marker, old_id, lo, hi, anchor, plan = self.previous
             if old_marker != marker or old_id > highwater or lo >= end or hi <= start:
                 return None
             if anchor != source_anchor(source, old_id):
                 return None
+            self.pending = json.loads(plan) if plan is not None else None
             lo, hi = max(start, lo), min(end, hi)
             db.execute('INSERT INTO facts SELECT * FROM saved.facts WHERE at>=? AND at<?', (lo, hi))
             db.execute('INSERT INTO edges SELECT * FROM saved.edges WHERE at>=? AND at<?', (lo, hi))
         return lo, hi, old_id
 
-    def save(self, marker, highwater, start, end, reused, retain, anchor):
+    def _state(self):
+        return self.db.execute("""SELECT marker,highwater,lo,hi,anchor,
+            (SELECT plan FROM saved.cache_progress) FROM saved.cache_state""").fetchone()
+
+    def save(self, marker, highwater, start, end, reused, retain, anchor, pending=None):
+        if pending is not None and len(pending) > MAX_PENDING_RANGES:
+            return False
         db = self.db
         with transaction(db):
             # Do not overwrite a different reader's newer result.
-            if self.previous != db.execute('SELECT marker,highwater,lo,hi,anchor FROM saved.cache_state').fetchone():
+            if self.previous != self._state():
                 return False
-            if reused:
+            if reused and self.pending is None and pending is None:
                 lo, hi, old_id = reused
                 old_start, old_end = self.previous[2:4]
                 keep_start, keep_end = min(start, old_start), max(end, old_end)
@@ -117,11 +127,22 @@ class ClassificationCache:
                 for table, column in (('facts', 'id'), ('edges', 'observation_id')):
                     db.execute(f'''INSERT INTO saved.{table} SELECT * FROM main.{table}
                         WHERE {column}<=? AND (at<? OR at>=? OR {column}>?)''', (highwater, lo, hi, old_id))
+            elif reused:
+                keep_start, keep_end = start, end
+                for table in ('edges', 'facts'):
+                    db.execute(f'DELETE FROM saved.{table} WHERE at<? OR at>=?', (start, end))
+                # Saved facts identify the receptions already present in both tables.
+                db.execute("""INSERT INTO saved.edges SELECT e.* FROM main.edges e
+                    WHERE NOT EXISTS (SELECT 1 FROM saved.facts f WHERE f.id=e.observation_id)""")
+                db.execute('INSERT OR IGNORE INTO saved.facts SELECT * FROM main.facts')
             else:
                 keep_start, keep_end = start, end
                 for table, column in (('facts', 'id'), ('edges', 'observation_id')):
                     db.execute(f'DELETE FROM saved.{table}')
                     db.execute(f'INSERT INTO saved.{table} SELECT * FROM main.{table} WHERE {column}<=?', (highwater,))
+            db.execute('DELETE FROM saved.cache_progress')
+            if pending is not None:
+                db.execute('INSERT INTO saved.cache_progress VALUES(?)', (json.dumps(pending),))
             db.execute('DELETE FROM saved.cache_state')
             db.execute('INSERT INTO saved.cache_state VALUES(?,?,?,?,?)', (marker, highwater, keep_start, keep_end, anchor))
         return True
