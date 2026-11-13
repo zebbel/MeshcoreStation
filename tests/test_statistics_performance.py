@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 import sqlite3
 import threading
+import time
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 import pytest
@@ -265,3 +266,59 @@ def test_interruption_in_overlap_extension_keeps_cached_rows(tmp_path):
     assert resumed['diagnostics']['classified_rows'] == 800 - timed_out.value.diagnostics['classified_rows']
     assert {k: v for k, v in resumed.items() if k != 'diagnostics'} == {
         k: v for k, v in fresh.items() if k != 'diagnostics'}
+
+
+def test_checkpoint_reserves_time_for_slow_storage(tmp_path, monkeypatch):
+    path = create_fixture(tmp_path, 2500)
+    elapsed = 0.
+    classify = view.RouteCache.get
+    save = view.ClassificationCache.save
+
+    def slow_classify(self, route):
+        nonlocal elapsed
+        elapsed += .008
+        return classify(self, route)
+
+    def slow_save(self, *args, **kwargs):
+        nonlocal elapsed
+        elapsed += 1.4
+        assert elapsed < view.QUERY_BUDGET_SECONDS
+        return save(self, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(view, 'time', NS(monotonic=lambda: elapsed, process_time=time.process_time))
+        patch.setattr(view.RouteCache, 'get', slow_classify)
+        patch.setattr(view.ClassificationCache, 'save', slow_save)
+        with pytest.raises(view.QueryTimeout) as exc:
+            view.aggregate(path, KEY, 7, now=NOW)
+    progress = exc.value.diagnostics
+    assert progress['classification_progress_saved']
+    assert progress['stages_ms']['checkpoint'] == pytest.approx(1400)
+    result = view.aggregate(path, KEY, 7, now=NOW)
+    assert result['diagnostics']['classified_rows'] == 2500 - progress['classified_rows']
+
+
+def test_failed_checkpoint_rolls_back_facts_edges_and_cursor(tmp_path):
+    path = create_fixture(tmp_path, 2500)
+    cache = tmp_path / 'statistics-classification.sqlite'
+    with pytest.raises(view.QueryTimeout) as first:
+        view.aggregate(path, KEY, 7, now=NOW, _budget=.7)
+    assert first.value.diagnostics['classification_progress_saved']
+
+    def snapshot(db):
+        return [db.execute(f'SELECT * FROM {table} ORDER BY rowid').fetchall()
+                for table in ('cache_state', 'cache_progress', 'facts', 'edges')]
+
+    with sqlite3.connect(cache) as db:
+        original = snapshot(db)
+        db.execute("""CREATE TRIGGER fail_checkpoint BEFORE INSERT ON cache_progress
+                      BEGIN SELECT RAISE(ABORT,'simulated persistence failure'); END""")
+    with pytest.raises(view.QueryTimeout) as failed:
+        view.aggregate(path, KEY, 7, now=NOW, _budget=.7)
+    assert failed.value.diagnostics['classified_rows'] > 0
+    assert not failed.value.diagnostics['classification_progress_saved']
+    with sqlite3.connect(cache) as db:
+        assert snapshot(db) == original
+        db.execute('DROP TRIGGER fail_checkpoint')
+    result = view.aggregate(path, KEY, 7, now=NOW)
+    assert result['diagnostics']['classified_rows'] == 2500 - first.value.diagnostics['classified_rows']

@@ -7,6 +7,7 @@
     const stamp=value=>window.meshcorestationFormatDate?.(value)||new Date(value*1000).toLocaleString();
     let attached=false,key='',rows=[],offset=0,epoch=0,pending=null,comparison=null;
     const headers={'X-Meshcore-Control':'1'};
+    const COMPARISON_REQUEST_TIMEOUT_MS = 15000;
     function controls() {
         $('comparison-run').disabled = !!pending || !!comparison || !key || !$('comparison-change').value;
     }
@@ -28,13 +29,25 @@
         $('comparison-status').textContent = '';
         $('comparison-error').textContent = message;
     }
-    async function request(url,body,signal){
-        const response=await fetch(url,{method:body?'POST':'GET',headers:body?{...headers,'Content-Type':'application/json'}:headers,cache:'no-store',body:body?JSON.stringify(body):undefined,signal});
-        const value = await response.json();
+    async function request(url,body,signal,isComparison=false){
+        let response, value;
+        try {
+            response=await fetch(url,{method:body?'POST':'GET',headers:body?{...headers,'Content-Type':'application/json'}:headers,cache:'no-store',body:body?JSON.stringify(body):undefined,signal});
+            value = await response.json();
+            if (!value || typeof value.ok !== 'boolean') throw new Error(ui('Saved data unavailable.'));
+        } catch (error) {
+            if (!isComparison || signal.aborted) throw error;
+            throw new Error(response
+                ? ui('The comparison server returned an unreadable response. Try again.')
+                : ui('Could not reach the comparison server. Check your connection and try again.'));
+        }
         if (!response.ok || !value.ok) {
-            const message = value.error_code === 'QUERY_TIMEOUT'
-                ? ui('Comparison timed out during {0} and could not save progress. Try again or select a shorter period.', ui(value.stage))
-                : value.error || ui('Saved data unavailable.');
+            let message = value.error || ui('Saved data unavailable.');
+            if (value.error_code === 'QUERY_TIMEOUT') {
+                message = value.stage === 'worker execution'
+                    ? ui('The comparison worker exceeded its time limit. Try again or select a shorter period.')
+                    : ui('Comparison timed out during {0} and could not save progress. Try again or select a shorter period.', ui(value.stage));
+            }
             const error = new Error(message);
             error.resume = response.status === 504 && value.error_code === 'QUERY_TIMEOUT' && value.resume === true;
             throw error;
@@ -152,14 +165,20 @@
                     if (comparison !== controller) return;
                     controller.abort();
                     comparison = null;
-                    fail(ui('Comparison request timed out. Any faded results are a previous snapshot.'));
+                    fail(ui('The browser timed out waiting for the comparison response. Any faded results are a previous snapshot.'));
                     controls();
-                }, 10000);
+                }, COMPARISON_REQUEST_TIMEOUT_MS);
+                const clearDeadline = () => clearTimeout(timer);
+                controller.signal.addEventListener('abort', clearDeadline, {once: true});
                 let data;
                 try {
-                    data = await request('/api/repeater-comparison/view?' + params, null, controller.signal);
+                    data = await request('/api/repeater-comparison/view?' + params, null, controller.signal, true);
                 } catch (error) {
                     if (comparison !== controller) return;
+                    if (!$('repeater-comparison-disclosure').open) {
+                        cancelComparison();
+                        return;
+                    }
                     if (!error.resume) throw error;
                     if (attempt >= maxContinuations) {
                         throw new Error(ui('Comparison is still incomplete after {0} continuations. Run it again to resume from saved progress.', maxContinuations));
@@ -167,7 +186,8 @@
                     $('comparison-status').textContent = ui('Continuing saved comparison… ({0}/{1})', attempt + 1, maxContinuations);
                     continue;
                 } finally {
-                    clearTimeout(timer);
+                    clearDeadline();
+                    controller.signal.removeEventListener('abort', clearDeadline);
                 }
                 if (comparison !== controller) return;
                 if (!$('repeater-comparison-disclosure').open) {

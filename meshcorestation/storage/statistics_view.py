@@ -20,7 +20,8 @@ import time
 from meshcorestation.storage.connection import connect as open_database
 from meshcorestation.storage import passive_stats
 from meshcorestation.storage.statistics_classification import (
-    CACHE_BYTES, ClassificationCache, EDGE_COLUMNS, FACT_COLUMNS, source_anchor, source_marker,
+    CACHE_BUSY_TIMEOUT_MS, CACHE_BYTES, ClassificationCache, EDGE_COLUMNS, FACT_COLUMNS,
+    source_anchor, source_marker,
 )
 
 REGIONS_SCHEMA = '''CREATE TABLE IF NOT EXISTS statistics_regions(
@@ -232,6 +233,7 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
     cache = ClassificationCache(work, main_path) if marker else None
     reused = None
     if cache:
+        work.execute(f'PRAGMA busy_timeout={CACHE_BUSY_TIMEOUT_MS}')
         # Rollback must undo a partially loaded cache, so the work database
         # needs a journal when copying cached rows.
         work.execute('PRAGMA journal_mode=MEMORY')
@@ -241,19 +243,36 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
             diagnostics.check()
             cache = None
         work.execute('PRAGMA journal_mode=OFF')
+    edge_cursor = 0
+    if reused:
+        edge_cursor = work.execute('SELECT COALESCE(MAX(rowid),0) FROM edges').fetchone()[0]
+        work.execute('CREATE TEMP TABLE classified_ids(id INTEGER PRIMARY KEY)')
+        work.execute('PRAGMA temp.cache_size=-2048')
     highwater = marker[1] if marker else source.execute('SELECT COALESCE(MAX(id),0) FROM observations').fetchone()[0]
     ranges = _classification_ranges(start, end, highwater, reused, cache.pending if cache else None)
     checkpoint = None
+    pending_edges = 0
+    longest_batch = 0.
+
+    def checkpoint_due():
+        if not cache or not diagnostics.classified:
+            return False
+        # Leave time for storage and the next batch's read/classification.
+        # Grow the reserve with the amount of compact data awaiting persistence.
+        reserve = min(3.5, 1.5 + (diagnostics.classified + pending_edges) / 20000 + longest_batch)
+        return diagnostics.deadline - time.monotonic() <= reserve
+
     for index, (lo, hi, lower, upper, mode, cursor) in enumerate(ranges):
-        if cache and diagnostics.classified and diagnostics.deadline - time.monotonic() < .85:
+        if checkpoint_due():
             checkpoint = ranges[index:]
             break
         rows, mode = _source_rows(source, lo, hi, lower, upper, mode, cursor)
         while True:
             diagnostics.check()
-            if cache and diagnostics.classified and diagnostics.deadline - time.monotonic() < .85:
+            if checkpoint_due():
                 checkpoint = [(lo, hi, lower, upper, mode, cursor), *ranges[index+1:]]
                 break
+            batch_started = time.monotonic()
             batch = rows.fetchmany(256)
             if not batch:
                 break
@@ -275,9 +294,15 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
                 edge_facts.extend((identity,direction,valid,digest,at,oid) for identity,direction,valid in edges)
             work.executemany('INSERT INTO facts VALUES(?,?,?,?,?,?,?,?,?)',facts)
             work.executemany('INSERT INTO edges VALUES(?,?,?,?,?,?)',edge_facts)
+            if reused:
+                work.executemany('INSERT INTO temp.classified_ids VALUES(?)', ((fact[0],) for fact in facts))
+            pending_edges += len(edge_facts)
             diagnostics.classified += len(batch)
+            longest_batch = max(longest_batch, time.monotonic() - batch_started)
             oid, at = batch[-1][:2]
             cursor = (oid,) if mode == 'id' else (at, oid)
+            if len(batch) < 256:
+                break
         if checkpoint is not None:
             break
     work.commit()
@@ -286,6 +311,7 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
     if cache and (not reused or cache.pending is not None or diagnostics.classified or start < cache.previous[2] or end > cache.previous[3]):
         # Treat persistence as optional. Save only after the requested facts
         # are committed so a full/locked cache cannot discard the current view.
+        save_started = time.monotonic()
         try:
             _space_guard(main_path, CACHE_BYTES)
             retain = checkpoint is None
@@ -297,9 +323,12 @@ def _spool(source,work,key,resolve_hash,regions,start,end,diagnostics,main_path,
                     AND (received_at<? OR received_at>=?) LIMIT 1""",
                     (reused[2], *cache.previous[2:4], start, end)).fetchone() is None
             checkpoint_saved = cache.save(
-                marker[0], highwater, start, end, reused, retain, source_anchor(source, highwater), pending=checkpoint)
+                marker[0], highwater, start, end, reused, retain, source_anchor(source, highwater),
+                edge_cursor, pending=checkpoint)
         except (OSError, sqlite3.Error):
             diagnostics.check()
+        finally:
+            diagnostics.times['checkpoint'] = round((time.monotonic() - save_started) * 1000, 3)
     diagnostics.progress_saved = checkpoint_saved and bool(diagnostics.classified)
     if checkpoint is not None:
         raise QueryTimeout(diagnostics.current, diagnostics.report())

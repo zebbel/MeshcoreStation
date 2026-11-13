@@ -3,9 +3,19 @@ const ids=['status','error','journal','results'];
 const dom=new JSDOM(`<details id="repeater-comparison-disclosure"><select id="comparison-repeater"></select><input id="comparison-description"><button id="comparison-save"></button><select id="comparison-change"></select><select id="comparison-period"><option value="1">24h</option><option value="7">7d</option><option value="30">30d</option></select><button id="comparison-run"></button><button id="comparison-refresh"></button><button id="comparison-more"></button>${ids.map(id=>`<div id="comparison-${id}"></div>`).join('')}</details>`,{runScripts:'outside-only',url:'http://localhost',pretendToBeVisual:true}),w=dom.window,d=w.document;
 w.AbortSignal.timeout=()=>undefined;w.confirm=()=>true;w.prompt=()=> 'Edited antenna';w.meshcorestationFormatDate=v=>'timestamp '+v;
 const A='aa'.repeat(32),B='bb'.repeat(32),calls=[];let description='Antenna',exists=false,measurements={before:{},after:{}};
-let slow=false, failures=0, canResume=false, expire;
-const setTimer=w.setTimeout.bind(w);
-w.setTimeout=(callback, delay)=>delay===10000 ? (expire=callback,0) : setTimer(callback,delay);
+let slow=false, failures=0, canResume=false, stage='classify', networkError=false, expire, respond;
+let simulatedTime=0;
+const setTimer=w.setTimeout.bind(w), clearTimer=w.clearTimeout.bind(w);
+const deadlines=new Map();
+let deadlineId=-1;
+w.setTimeout=(callback, delay)=>{
+ if(delay===5000)return setTimer(callback,delay);
+ const id=deadlineId--;
+ deadlines.set(id,simulatedTime+delay);
+ expire=callback;
+ return id;
+};
+w.clearTimeout=id=>{if(id<0)deadlines.delete(id);else clearTimer(id);};
 w.fetch=async(url,options)=>{calls.push({url,options});assert(url.startsWith('/api/repeater-comparison/'));assert.equal(options.headers['X-Meshcore-Control'],'1');
  if(options.method==='POST'){
   const body=JSON.parse(options.body);assert.equal(body.public_key,A);assert(!('timestamp' in body));
@@ -13,10 +23,11 @@ w.fetch=async(url,options)=>{calls.push({url,options});assert(url.startsWith('/a
   description=body.description;exists=true;return {ok:true,json:async()=>({ok:true,change:{id:1,public_key:A,recorded_at:100,description}})};
  }
  if(url.includes('/changes'))return {ok:true,json:async()=>({ok:true,selected:A,repeaters:[{public_key:A,name:'Managed'}],changes:exists?[{id:1,public_key:A,recorded_at:100,description}]:[],has_more:false})};
- if(slow)return new Promise(()=>{});
+ if(networkError)throw new TypeError('Failed to fetch');
+ if(slow)return new Promise(resolve=>{respond=resolve;});
  if(failures>0){
   failures--;
-  return {ok:false,status:504,json:async()=>({ok:false,error_code:'QUERY_TIMEOUT',stage:'classify',resume:canResume})};
+  return {ok:false,status:504,json:async()=>({ok:false,error_code:'QUERY_TIMEOUT',stage,resume:canResume})};
  }
  const p={start:0,end:100,future:false,complete:false,coverage_known:false,recorded_seconds:0,expected_seconds:100,snr_samples:2,uncertain_snr_groups:0,notes:[],receptions:null,unique_packets:null,repeated:null,unidentified:null,traffic_per_recorded_hour:null,neighbors:null,one_way:null,two_way:null};
  return {ok:true,json:async()=>({ok:true,selected:A,generated_at:120,change:{id:1,recorded_at:100,description},before:{...p,...measurements.before},after:{...p,start:100,end:200,future:true,...measurements.after},matched:[{public_key:B,name:'Neighbor',before:-12,after:-7,difference_db:5,before_samples:2,after_samples:2}],median_snr_change:5,source_changes:[{public_key:B,name:'Different source',before:1,after:2,before_samples:1,after_samples:10,before_source:'legacy_last_heard',after_source:'firmware_aggregates'}],newly_heard:[],not_heard_after:[],new_observed_neighbors:[],not_observed_after:[],overlapping_changes:[],warnings:['After-period incomplete. Correlation is not causation.'],interpretation:'Preliminary'})};
@@ -49,8 +60,19 @@ const settle=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))
  const previous=$('results').firstChild;
  slow=true;$('run').click();await settle();assert($('run').disabled);
  const started=calls.length;$('run').click();assert.equal(calls.length,started);
- expire();assert.equal($('status').textContent,'');assert.match($('error').textContent,/timed out/);
+ assert.deepEqual([...deadlines.values()],[15000]);
+ simulatedTime=12000;
+ assert([...deadlines.values()].every(at=>at>simulatedTime),'response can still arrive after the former 10s deadline');
+ respond({ok:false,status:504,json:async()=>({ok:false,error_code:'QUERY_TIMEOUT',stage:'worker execution',resume:false})});
+ await settle();assert.match($('error').textContent,/worker exceeded/);assert.equal(deadlines.size,0);
+ $('run').click();await settle();
+ assert.deepEqual([...deadlines.values()],[27000]);
+ expire();assert.equal($('status').textContent,'');assert.match($('error').textContent,/browser timed out/);
+ assert(calls.at(-1).options.signal.aborted);assert.equal(deadlines.size,0);
  assert.equal($('results').firstChild,previous);assert(!$('run').disabled);
+ slow=false;networkError=true;$('run').click();await settle();
+ assert.match($('error').textContent,/Could not reach/);assert.equal($('results').firstChild,previous);
+ networkError=false;
  slow=false;failures=1;$('run').click();await settle();
  assert.equal($('status').textContent,'');assert.match($('error').textContent,/could not save progress/);
  assert.equal($('results').firstChild,previous);
@@ -64,8 +86,12 @@ const settle=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))
  assert.equal($('status').textContent,'');assert.match($('error').textContent,/after 5 continuations/);
  assert.equal($('results').firstChild,completed);
  failures=0;slow=true;$('run').click();await settle();
+ const obsolete=respond;
  $('period').value='30';slow=false;$('period').dispatchEvent(new w.Event('change'));await settle();
  assert(calls.at(-1).url.includes('days=30'));assert.notEqual($('results').firstChild,previous);
+ const newest=$('results').firstChild;
+ obsolete({ok:false,status:504,json:async()=>({ok:false,error_code:'QUERY_TIMEOUT',stage:'classify',resume:true})});
+ await settle();assert.equal($('results').firstChild,newest);assert.equal(deadlines.size,0);
  slow=true;$('run').click();await settle();
  d.getElementById('repeater-comparison-disclosure').open=false;await settle();
  assert.equal($('status').textContent,'');slow=false;

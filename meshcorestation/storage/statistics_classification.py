@@ -13,6 +13,8 @@ CACHE_BYTES = 64 * 1024 * 1024
 CACHE_FORMAT = 2
 MAX_WINDOW_SECONDS = 60 * 86400
 MAX_PENDING_RANGES = 64
+# The cache is disposable. Do not spend the worker budget waiting for its lock.
+CACHE_BUSY_TIMEOUT_MS = 100
 SOURCE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS classification_source(
  id INTEGER PRIMARY KEY CHECK(id=1), generation TEXT NOT NULL, highwater INTEGER NOT NULL);
@@ -106,7 +108,7 @@ class ClassificationCache:
         return self.db.execute("""SELECT marker,highwater,lo,hi,anchor,
             (SELECT plan FROM saved.cache_progress) FROM saved.cache_state""").fetchone()
 
-    def save(self, marker, highwater, start, end, reused, retain, anchor, pending=None):
+    def save(self, marker, highwater, start, end, reused, retain, anchor, edge_cursor, pending=None):
         if pending is not None and len(pending) > MAX_PENDING_RANGES:
             return False
         db = self.db
@@ -114,29 +116,22 @@ class ClassificationCache:
             # Do not overwrite a different reader's newer result.
             if self.previous != self._state():
                 return False
-            if reused and self.pending is None and pending is None:
-                lo, hi, old_id = reused
+            keep_start, keep_end = start, end
+            if reused and self.pending is None and pending is None and retain:
                 old_start, old_end = self.previous[2:4]
                 keep_start, keep_end = min(start, old_start), max(end, old_end)
                 keep_start = min(start, max(keep_start, keep_end - MAX_WINDOW_SECONDS))
                 keep_end = min(keep_end, keep_start + MAX_WINDOW_SECONDS)
-                if not retain:
-                    keep_start, keep_end = start, end
-                for table in ('facts', 'edges'):
-                    db.execute(f'DELETE FROM saved.{table} WHERE at<? OR at>=?', (keep_start, keep_end))
-                for table, column in (('facts', 'id'), ('edges', 'observation_id')):
-                    db.execute(f'''INSERT INTO saved.{table} SELECT * FROM main.{table}
-                        WHERE {column}<=? AND (at<? OR at>=? OR {column}>?)''', (highwater, lo, hi, old_id))
-            elif reused:
-                keep_start, keep_end = start, end
-                for table in ('edges', 'facts'):
-                    db.execute(f'DELETE FROM saved.{table} WHERE at<? OR at>=?', (start, end))
-                # Saved facts identify the receptions already present in both tables.
-                db.execute("""INSERT INTO saved.edges SELECT e.* FROM main.edges e
-                    WHERE NOT EXISTS (SELECT 1 FROM saved.facts f WHERE f.id=e.observation_id)""")
-                db.execute('INSERT OR IGNORE INTO saved.facts SELECT * FROM main.facts')
+            if reused:
+                if keep_start > self.previous[2] or keep_end < self.previous[3]:
+                    for table in ('facts', 'edges'):
+                        db.execute(f'DELETE FROM saved.{table} WHERE at<? OR at>=?', (keep_start, keep_end))
+                # Resume writes scale with the new batches. Facts have source IDs
+                # that can arrive out of order. Scratch edge rowids are append-only.
+                db.execute("""INSERT INTO saved.facts SELECT f.*
+                    FROM temp.classified_ids AS ids CROSS JOIN main.facts AS f ON f.id=ids.id""")
+                db.execute('INSERT INTO saved.edges SELECT * FROM main.edges WHERE rowid>?', (edge_cursor,))
             else:
-                keep_start, keep_end = start, end
                 for table, column in (('facts', 'id'), ('edges', 'observation_id')):
                     db.execute(f'DELETE FROM saved.{table}')
                     db.execute(f'INSERT INTO saved.{table} SELECT * FROM main.{table} WHERE {column}<=?', (highwater,))

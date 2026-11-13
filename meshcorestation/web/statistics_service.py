@@ -47,7 +47,7 @@ def aggregate(main_path,key,days,change_id=None):
     """Fresh exec avoids sharing the radio interpreter's GIL or SQLite handles.
 
     Keep the existing 8s calculation budget. The parent has a 9s bound including
-    worker startup/IPC, below the independent 10s browser saved-view deadline.
+    worker startup/IPC, below the 10s browser saved-view and 15s comparison deadlines.
     """
     global WORKER
     started=time.monotonic()

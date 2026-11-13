@@ -1,7 +1,7 @@
-# MeshcoreStation V6 — 6.0.3
+# MeshcoreStation V6 — 6.0.4
 
 A fresh Companion-connected channel bot and repeater-management application.
-Version **6.0.3** on branch **`V6`** automatically resumes Repeater Statistic Comparison when a worker saves progress before timing out. Select **Language / Sprache** in MeshcoreStation Settings. See [Dashboard languages](docs/v6-localization.md) and the [comparison release notes](docs/v6-release.md).
+Version **6.0.4** on branch **`V6`** gives Repeater Statistic Comparison more time to receive a server response and improves classification checkpoint saves for long comparisons. Select **Language / Sprache** in MeshcoreStation Settings. See [Dashboard languages](docs/v6-localization.md) and the [comparison release notes](docs/v6-release.md).
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 

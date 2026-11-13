@@ -95,6 +95,14 @@ const layouts = {desktop: [1280, 960, 'light'], mobile: [390, 844, 'dark']};
             await waitText('#comparison-results h3','Fixture comparison');
             assert.equal(comparisonCalls,2);
             await page.unroute('**/api/repeater-comparison/view?**');
+            await page.route('**/api/repeater-comparison/view?**', route => route.fulfill({
+                status:504,json:{ok:false,error_code:'QUERY_TIMEOUT',stage:'worker execution',resume:false}
+            }));
+            await page.locator('#comparison-run').click();
+            await waitText('#comparison-error','Der Vergleichsdienst hat sein Zeitlimit überschritten');
+            await waitText('#comparison-results.statistics-stale h3','Fixture comparison');
+            assert(await page.locator('#comparison-run').isEnabled());
+            await page.unroute('**/api/repeater-comparison/view?**');
             page.once('dialog', dialog => dialog.accept());
             await page.locator('#comparison-journal').getByRole('button', {name:'Löschen'}).click();
             await waitText('#comparison-journal','Keine Änderungen für diesen Repeater');

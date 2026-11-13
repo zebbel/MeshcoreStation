@@ -156,13 +156,14 @@ def test_combined_comparison_matches_independent_views_and_reuses_cache(station,
     assert appended['after']['receptions'] == 3 and appended['before']['receptions'] == 2
 
 
-def test_comparison_timeout_reports_saved_progress(station, monkeypatch):
+@pytest.mark.parametrize('stage, saved', [('classify', True), ('classify', False), ('worker execution', False)])
+def test_comparison_timeout_reports_saved_progress(station, monkeypatch, stage, saved):
     from flask import Flask
     from meshcorestation.web import comparison_api
     from meshcorestation.storage.statistics_view import QueryTimeout
 
     def timeout(*args):
-        raise QueryTimeout('classify', {'classification_progress_saved': True})
+        raise QueryTimeout(stage, {'classification_progress_saved': saved})
 
     monkeypatch.setattr(comparison_api, 'comparison_view', timeout)
     app = Flask(__name__)
@@ -170,7 +171,7 @@ def test_comparison_timeout_reports_saved_progress(station, monkeypatch):
     reply = app.test_client().get('/api/repeater-comparison/view?change_id=1&days=7',
                                   headers={'X-Meshcore-Control': '1'})
     assert reply.status_code == 504
-    assert reply.json['stage'] == 'classify' and reply.json['resume']
+    assert reply.json['stage'] == stage and reply.json['resume'] is saved
 
 
 @pytest.mark.parametrize('days', [7, 30])
