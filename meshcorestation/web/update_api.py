@@ -4,6 +4,9 @@ from meshcorestation import __version__, updater
 from meshcorestation.web.http import control_request_error, json_response as reply
 
 
+SUPPORTED_BRANCHES = {'V5': 'V5', 'V6': 'V6'}
+
+
 def register_update_routes(server):
     try:
         revision = updater.local_revision()
@@ -28,13 +31,16 @@ def register_update_routes(server):
                 if not isinstance(body, dict):
                     raise ValueError('Invalid update request.')
                 if body.get('action') == 'branches':
-                    return reply({'ok': True, 'branches': {'V6':'V6'}})
-                if body.get('action') in {'check','install'} and body.get('branch',branch)!='V6':
-                    raise ValueError('V6 updates stay on the V6 branch.')
+                    return reply({'ok': True, 'branches': SUPPORTED_BRANCHES})
+                selected = body.get('branch', branch)
+                if body.get('action') in {'check', 'install'}:
+                    if not isinstance(selected, str) or selected not in SUPPORTED_BRANCHES:
+                        raise ValueError('Choose V5 or V6.')
+
                 if body.get('action') == 'check':
-                    return reply({'ok': True, 'check': updater.check(body.get('branch'))})
+                    return reply({'ok': True, 'check': updater.check(selected)})
                 if body.get('action') == 'install':
-                    updater.queue(body.get('target'), body.get('branch'))
+                    updater.queue(body.get('target'), selected)
                 else:
                     return reply({'ok': False, 'error': 'Unknown update action.'}, 400)
             return reply({'ok': True, 'version': __version__, 'revision': revision,
