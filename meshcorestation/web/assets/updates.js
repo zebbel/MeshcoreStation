@@ -18,7 +18,7 @@
             const result = await api({action: 'branches'});
             labels = Object.assign(Object.create(null), result.branches || {});
             branchOptions();
-            panel.querySelector('.update-branch-note').textContent = 'Branches loaded from GitHub. Check the selected branch before installing.';
+            panel.querySelector('.update-branch-note').textContent = 'Check the selected branch before installing.';
         } catch (error) {
             panel.querySelector('.update-branch-note').textContent = 'Branch list unavailable: ' + error.message + ' You can retry; the current selection is retained.';
         }
@@ -99,7 +99,7 @@
         const dialog = document.getElementById('station-settings-dialog');
         if (!dialog || panel) return;
         panel = document.createElement('section'); panel.id = 'update-panel'; panel.className = 'companion-section';
-        panel.innerHTML = '<h3>Updates / version</h3><label>Branch <select class="update-branch"></select></label><p class="update-branch-note muted">Loading branches from GitHub…</p><p class="muted">All repository branches are listed. Check compatibility and changes before installing a different branch.</p><p class="update-version muted"></p><p class="update-latest muted"></p><p>Updates come from zebbel/MeshcoreStation on GitHub. Backups are kept on this Pi.</p><div class="companion-toolbar"><button type="button" class="update-check">Check for updates</button><button type="button" class="update-install" disabled>Install update</button><a class="update-changes" target="_blank" rel="noopener noreferrer" hidden>View changes on GitHub ↗</a><button type="button" class="update-reload" hidden>Reload dashboard</button></div><p class="update-message" role="status" aria-live="polite"></p><details><summary>Update progress</summary><pre class="update-progress" style="white-space:pre-wrap;max-height:180px;overflow:auto"></pre></details>';
+        panel.innerHTML = '<h3>Updates / version</h3><label>Branch <select class="update-branch"></select></label><p class="update-branch-note muted">Loading available branches…</p><p class="muted">V5 and V6 can switch through this dashboard. Review changes before installing.</p><p class="update-version muted"></p><p class="update-latest muted"></p><p>Updates come from zebbel/MeshcoreStation on GitHub. Backups are kept on this Pi.</p><div class="companion-toolbar"><button type="button" class="update-check">Check for updates</button><button type="button" class="update-install" disabled>Install update</button><a class="update-changes" target="_blank" rel="noopener noreferrer" hidden>View changes on GitHub ↗</a><button type="button" class="update-reload" hidden>Reload dashboard</button></div><p class="update-message" role="status" aria-live="polite"></p><details><summary>Update progress</summary><pre class="update-progress" style="white-space:pre-wrap;max-height:180px;overflow:auto"></pre></details>';
         (dialog.querySelector(':scope > .dialog-body') || dialog).append(panel);
         panel.querySelector('.update-branch').addEventListener('change', event => {
             selectedBranch = event.target.value; checking = null;

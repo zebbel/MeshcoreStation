@@ -40,13 +40,13 @@ jobs:
             browser-server.log
   publish:
     needs: verify
-    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.9.1:')
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release 5.9.2:')
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Publish authorized V5 statistics update prerelease
+      - name: Publish authorized V5 dashboard prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create v5.9.1 --target "$GITHUB_SHA" --title "MeshcoreStation 5.9.1 — Statistics and Command History Performance" --notes-file docs/v5-release.md --prerelease --latest=false
+        run: gh release create v5.9.2 --target "$GITHUB_SHA" --title "MeshcoreStation 5.9.2 — Dashboard Branch Switching" --notes-file docs/v5-release.md --prerelease --latest=false

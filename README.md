@@ -1,7 +1,7 @@
-# MeshcoreStation V5 — 5.9.1
+# MeshcoreStation V5 — 5.9.2
 
 A fresh Companion-connected channel bot and repeater-management application.
-Development branch: **`V5`**. Version **5.9.1** speeds up saved Repeater Statistics and Bot Command History. Large statistics views reuse packet classifications, and unchanged history refreshes skip loading and rendering the table.
+Development branch: **`V5`**. Version **5.9.2** restores dashboard switching to V6.
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
@@ -9,8 +9,10 @@ The first row has exactly **MeshcoreStation**, **Connected Companion**, and
 **Known Repeaters**. The cards stack in that order on mobile. The V4 logo,
 theme variables, typography and fixed footer are retained. The footer shows
 version/branch, connected firmware/build or unavailable, and an asynchronous
-installed-branch update check. V5 updates cannot switch to an incompatible branch
-and never install automatically.
+installed-branch update check. In **Settings → Updates / version**, select
+`V6`, check for updates, and confirm the switch when ready. V6 uses the same
+database format. The updater backs up your installation and never installs
+automatically. Older V5 builds must first update on `V5` to see the V6 option.
 
 Below the cards, **Bot** contains only **Bot Settings** and **Command History**,
 independently collapsible. **Room Server** follows Bot, then **Repeater Management**.
