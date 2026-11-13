@@ -29,6 +29,10 @@ def register_comparison_routes(server):
             if change_id<=0 or days not in (1,7,30):raise ValueError('Select a saved change and comparison period.')
             return json_response(comparison_view(config.DB_PATH,key,change_id,days))
         except (ValueError,TypeError) as exc:return json_response(dict(ok=False,error=str(exc)),400)
-        except QueryTimeout as exc:return json_response(dict(ok=False,error_code='QUERY_TIMEOUT',error='Comparison exceeded the shared query budget during '+exc.stage+'. Try a shorter comparison period. Saved history and collection are unchanged.'),504)
+        except QueryTimeout as exc:
+            resume = bool(exc.diagnostics.get('classification_progress_saved'))
+            hint = 'Run the comparison again to resume saved progress.' if resume else 'Try again or select a shorter comparison period.'
+            return json_response(dict(ok=False,error_code='QUERY_TIMEOUT',stage=exc.stage,resume=resume,
+                error=f'Comparison exceeded the shared query budget during {exc.stage}. {hint}'),504)
         except StatisticsBusy as exc:return json_response(dict(ok=False,error_code='STATISTICS_BUSY',error=str(exc)),429)
         except (StatisticsWorkerError,OSError,sqlite3.Error):return json_response(dict(ok=False,error='Saved comparison unavailable. Collection and stored history are preserved.'),503)

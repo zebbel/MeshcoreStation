@@ -11,6 +11,7 @@ import sqlite3
 
 CACHE_BYTES = 64 * 1024 * 1024
 CACHE_FORMAT = 1
+MAX_WINDOW_SECONDS = 60 * 86400
 SOURCE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS classification_source(
  id INTEGER PRIMARY KEY CHECK(id=1), generation TEXT NOT NULL, highwater INTEGER NOT NULL);
@@ -107,8 +108,8 @@ class ClassificationCache:
                 lo, hi, old_id = reused
                 old_start, old_end = self.previous[2:4]
                 keep_start, keep_end = min(start, old_start), max(end, old_end)
-                keep_start = min(start, max(keep_start, keep_end - 30 * 86400))
-                keep_end = min(keep_end, keep_start + 30 * 86400)
+                keep_start = min(start, max(keep_start, keep_end - MAX_WINDOW_SECONDS))
+                keep_end = min(keep_end, keep_start + MAX_WINDOW_SECONDS)
                 if not retain:
                     keep_start, keep_end = start, end
                 for table in ('facts', 'edges'):

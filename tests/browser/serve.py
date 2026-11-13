@@ -75,7 +75,7 @@ async def run():
     commands.send=binary_send
     runtime.neighbor_monitor.start()
     bridge.attach(runtime);bridge.status=('Running','Fixture Companion connected — simulated hardware','running')
-    updater.check=lambda branch=None:{'branch':'V6','available':False,'ready':False,'latest':'b'*40,'latest_version':'6.0.1','checked_at':2000000000}
+    updater.check=lambda branch=None:{'branch':'V6','available':False,'ready':False,'latest':'b'*40,'latest_version':'6.0.2','checked_at':2000000000}
     updater.ready=lambda:False
     bot_runtime.ports=lambda:[{'device':'/dev/fixture','description':'Simulated Companion'}]
     web=WebServer();web.start()

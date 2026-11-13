@@ -1,16 +1,38 @@
 /* Local journal and saved-only comparisons; no polling or radio commands. */
 (() => {
-    const {t: ui} = window.MeshcoreStationI18n || {
+    const {t: ui, translatedError: uiError = value => value} = window.MeshcoreStationI18n || {
         t: (id, ...values) => id.replace(/\{(\d+)\}/g, (_, i) => String(values[i] ?? `{${i}}`))
     };
     const $=id=>document.getElementById(id),text=(tag,value,cls)=>{const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;};
     const stamp=value=>window.meshcorestationFormatDate?.(value)||new Date(value*1000).toLocaleString();
-    let attached=false,key='',rows=[],offset=0,epoch=0,requestNumber=0,pending=null;
+    let attached=false,key='',rows=[],offset=0,epoch=0,pending=null,comparison=null;
     const headers={'X-Meshcore-Control':'1'};
-    function cancel(){epoch++;requestNumber++;pending?.abort();pending=null;}
+    function controls() {
+        $('comparison-run').disabled = !!pending || !!comparison || !key || !$('comparison-change').value;
+    }
+    function cancelComparison() {
+        if (!comparison) return;
+        comparison.abort();
+        comparison = null;
+        $('comparison-status').textContent = ui('Comparison cancelled.');
+        controls();
+    }
+    function cancel() {
+        epoch++;
+        pending?.abort();
+        pending = null;
+        cancelComparison();
+        controls();
+    }
+    function fail(message) {
+        $('comparison-status').textContent = '';
+        $('comparison-error').textContent = message;
+    }
     async function request(url,body,signal){
         const response=await fetch(url,{method:body?'POST':'GET',headers:body?{...headers,'Content-Type':'application/json'}:headers,cache:'no-store',body:body?JSON.stringify(body):undefined,signal});
-        const value=await response.json();if(!response.ok||!value.ok)throw Error(value.error||ui("Saved data unavailable."));return value;
+        const value=await response.json();if(!response.ok||!value.ok)throw Error(value.error_code==='QUERY_TIMEOUT'
+            ? ui(value.resume ? 'Comparison reached its time limit during {0}. Run it again to resume from saved progress.' : 'Comparison reached its time limit during {0}. Try again or select a shorter period.', ui(value.stage))
+            : value.error||ui("Saved data unavailable."));return value;
     }
     function identity(r){return window.MeshcoreStationRepeaterNames?.element(r.public_key)||text('span',r.name||r.public_key);}
     function percentageChange(before,after){
@@ -33,26 +55,38 @@
         const select=$('comparison-change');select.replaceChildren(new Option(ui("Select a saved change"),''));
         for(const row of rows)select.add(new Option(stamp(row.recorded_at)+' · '+row.description,String(row.id)));
         select.value=rows.some(r=>String(r.id)===String(selected))?String(selected):'';
-        $('comparison-run').disabled=!select.value;
+        controls();
     }
     async function load(more=false,extra=null){
         if(!$('repeater-comparison-disclosure')?.open)return;
         cancel();const ticket=epoch;const chosen=$('comparison-change').value;
         $('comparison-status').textContent=ui("Loading change history…");$('comparison-error').textContent='';
-        const controller=new AbortController();pending=controller;const timer=setTimeout(()=>controller.abort(),5000);
+        const controller=new AbortController();
+        pending=controller;
+        controls();
+        const timer=setTimeout(()=>{
+            if(pending!==controller)return;
+            controller.abort();
+            pending=null;
+            epoch++;
+            fail(ui('Change history request timed out. Saved changes are preserved.'));
+            controls();
+        },5000);
+        controller.signal.addEventListener('abort',()=>clearTimeout(timer),{once:true});
         try{
             const params=new URLSearchParams({offset:String(more?offset:0)});if(key)params.set('public_key',key);
             const data=await request('/api/repeater-comparison/changes?'+params,null,controller.signal);
             if(ticket!==epoch)return;
-            if(key!==data.selected)$('comparison-results').replaceChildren();
+            if(key!==data.selected)$('comparison-results').classList.add('statistics-stale');
             key=data.selected;window.MeshcoreStationRepeaterNames?.ingest(data.repeaters);
             const picker=$('comparison-repeater');picker.replaceChildren();for(const r of data.repeaters)picker.add(new Option(window.MeshcoreStationRepeaterNames?.label(r.public_key)||r.name||r.public_key,r.public_key));picker.value=key;picker.disabled=!key;
             $('comparison-save').disabled=!key;
             const all=[...(more?rows:[]),...data.changes,...(extra?[extra]:[])];rows=[...new Map(all.map(r=>[r.id,r])).values()];offset=(more?offset:0)+data.changes.length;
             $('comparison-more').hidden=!data.has_more;journal(extra?.id||chosen);
             $('comparison-status').textContent=key?ui("Changes loaded. Select a change to compare saved observations."):ui("Add a managed repeater to record changes.");
-        }catch(error){if(ticket===epoch)$('comparison-error').textContent=error.name==='AbortError'?ui("Change history request timed out. Saved changes are preserved."):uiError(error.message);}
-        finally{clearTimeout(timer);if(pending===controller)pending=null;}
+            return true;
+        }catch(error){if(ticket===epoch)fail(uiError(error.message));}
+        finally{clearTimeout(timer);if(pending===controller){pending=null;controls();}}
     }
     async function mutate(action,row,description){
         const target=key,ticket=epoch;const body={action,public_key:target};if(row)body.id=row.id;if(description!==undefined)body.description=description;if(action==='delete')body.confirm=true;
@@ -60,11 +94,11 @@
         try{
             const data=await request('/api/repeater-comparison/changes',body,AbortSignal.timeout(5000));
             if(target!==key||ticket!==epoch)return;
-            $('comparison-results').replaceChildren();$('comparison-results').classList.remove('statistics-stale');
+            $('comparison-results').classList.add('statistics-stale');
             if(action==='create')$('comparison-description').value='';
-            if(action==='delete'&&$('comparison-change').value===String(row.id)){$('comparison-results').replaceChildren();$('comparison-change').value='';}
-            await load(false,data.change);$('comparison-status').textContent=action==='delete'?ui("Change deleted; statistics are preserved."):ui("Change saved; the original recorded time is retained when editing.");
-        }catch(error){if(target===key)$('comparison-error').textContent=error.name==='TimeoutError'?ui("Save response timed out. Refresh changes before saving again; the request may have completed."):uiError(error.message);}
+            if(action==='delete'&&$('comparison-change').value===String(row.id)){$('comparison-change').value='';}
+            if(await load(false,data.change))$('comparison-status').textContent=action==='delete'?ui("Change deleted; statistics are preserved."):ui("Change saved; the original recorded time is retained when editing.");
+        }catch(error){if(target===key&&ticket===epoch)$('comparison-error').textContent=error.name==='TimeoutError'?ui("Save response timed out. Refresh changes before saving again; the request may have completed."):uiError(error.message);}
         finally{$('comparison-save').disabled=!key;}
     }
     function edit(row){const value=window.prompt(ui("Edit change description (recorded time stays unchanged)"),row.description);if(value!==null)mutate('edit',row,value);}
@@ -72,7 +106,7 @@
     function metric(v,suffix=''){return v==null?ui("Unavailable"):Number.isFinite(v)?v.toLocaleString(undefined,{maximumFractionDigits:2})+suffix:String(v);}
     function delta(v,suffix=''){return v==null?ui("Insufficient Data"):(v>0?'+':'')+v.toFixed(2)+suffix;}
     function render(data){
-        const host=$('comparison-results');host.replaceChildren();window.MeshcoreStationRepeaterNames?.ingest([...data.matched,...(data.source_changes||[]),...data.newly_heard,...data.not_heard_after,...data.new_observed_neighbors,...data.not_observed_after]);
+        const host=document.createDocumentFragment();window.MeshcoreStationRepeaterNames?.ingest([...data.matched,...(data.source_changes||[]),...data.newly_heard,...data.not_heard_after,...data.new_observed_neighbors,...data.not_observed_after]);
         host.append(text('h3',data.change.description),text('p',ui("Recorded: ")+stamp(data.change.recorded_at)),text('p',ui("Saved comparison snapshot: ")+stamp(data.generated_at),'muted'));
         const warnings=document.createElement('ul');warnings.className='comparison-warnings';for(const w of data.warnings)warnings.append(text('li',ui(w)));host.append(warnings);
         table(host,['',ui("Before"),ui("After")],[[ui("Window"),stamp(data.before.start)+' — '+stamp(data.before.end),stamp(data.after.start)+' — '+stamp(data.after.end)],[ui("Recording coverage"),...['before','after'].map(k=>{const p=data[k];return metric(p.recorded_seconds/3600,' h')+' / '+metric(p.expected_seconds/3600,' h')+' · '+(p.future?ui("Incomplete (future)"):p.complete?ui("Complete"):ui("Incomplete / unknown"));})],[ui("Distinct valid SNR samples"),data.before.snr_samples,data.after.snr_samples]]);
@@ -89,30 +123,65 @@
         table(host,[ui("Measurement"),ui("Before"),ui("After"),ui("Difference"),ui("Change (%)")],metrics.map(([label,k,suffix])=>[label,metric(data.before[k],suffix),metric(data.after[k],suffix),data.before[k]==null||data.after[k]==null?ui("Unavailable"):metric(data.after[k]-data.before[k],suffix),percentageChange(data.before[k],data.after[k])]));
         for(const [label,list]of [[ui("Newly observed route neighbors"),data.new_observed_neighbors],[ui("Route neighbors not observed after"),data.not_observed_after]]){host.append(text('h4',label+' · '+list.length));const names=document.createElement('ul');for(const r of list){const li=document.createElement('li');li.append(identity(r));names.append(li);}host.append(names);}
         host.append(text('p',ui("Covered traffic rates use receptions inside recorded healthy collection intervals only. Missing coverage is not zero traffic. Relationships come from observed flood routes, not verified direct RF links. SNR Last Heard times are estimates."),'muted'));
-        for(const period of ['before','after']){const notes=document.createElement('details');notes.append(text('summary',period==='before'?ui("Before — data limitations"):ui("After — data limitations")));for(const n of data[period].notes)notes.append(text('p',n,'muted'));notes.append(text('p',data[period].uncertain_snr_groups+ui(" unknown/ambiguous SNR groups excluded from identity matching.")));host.append(notes);}
+        for(const period of ['before','after']){const notes=document.createElement('details');notes.append(text('summary',period==='before'?ui("Before — data limitations"):ui("After — data limitations")));for(const n of data[period].notes)notes.append(text('p',ui(n),'muted'));notes.append(text('p',data[period].uncertain_snr_groups+ui(" unknown/ambiguous SNR groups excluded from identity matching.")));host.append(notes);}
         if(data.overlapping_changes.length){host.append(text('h4',ui("Other changes in these windows")));const list=document.createElement('ul');for(const r of data.overlapping_changes)list.append(text('li',stamp(r.recorded_at)+' · '+r.description));host.append(list);if(data.overlap_limit)host.append(text('p',ui("Showing the first 200 overlapping changes.")));}
+        $('comparison-results').replaceChildren(host);
     }
     async function compare(){
-        if(!$('repeater-comparison-disclosure').open||!key||!$('comparison-change').value)return;
-        pending?.abort();const controller=new AbortController();pending=controller;const ticket=++requestNumber,target=key;
-        const timer=setTimeout(()=>controller.abort(),10000);$('comparison-status').textContent=ui("Calculating saved before/after observations…");$('comparison-error').textContent='';
+        if (!$('repeater-comparison-disclosure').open || pending || comparison || !key || !$('comparison-change').value) return;
+        const controller = new AbortController();
+        comparison = controller;
+        controls();
+        const params = new URLSearchParams({
+            public_key: key, change_id: $('comparison-change').value, days: $('comparison-period').value
+        });
+        $('comparison-status').textContent = ui('Calculating saved before/after observations…');
+        $('comparison-error').textContent = '';
         $('comparison-results').classList.add('statistics-stale');
-        try{
-            const params=new URLSearchParams({public_key:key,change_id:$('comparison-change').value,days:$('comparison-period').value});
-            const data=await request('/api/repeater-comparison/view?'+params,null,controller.signal);
-            if(ticket!==requestNumber||target!==key||!$('repeater-comparison-disclosure').open)return;
-            render(data);$('comparison-results').classList.remove('statistics-stale');$('comparison-status').textContent=ui("Saved comparison loaded. Partial periods are preliminary; no radio requests were made.");
-        }catch(error){if(ticket===requestNumber)$('comparison-error').textContent=error.name==='AbortError'?ui("Comparison request timed out. Any faded results are a previous snapshot."):uiError(error.message);}
-        finally{clearTimeout(timer);if(pending===controller)pending=null;}
+        const timer = setTimeout(() => {
+            if (comparison !== controller) return;
+            controller.abort();
+            comparison = null;
+            fail(ui('Comparison request timed out. Any faded results are a previous snapshot.'));
+            controls();
+        }, 10000);
+        controller.signal.addEventListener('abort', () => clearTimeout(timer), {once:true});
+        try {
+            const data = await request('/api/repeater-comparison/view?' + params, null, controller.signal);
+            if (comparison !== controller) return;
+            if (!$('repeater-comparison-disclosure').open) {
+                cancelComparison();
+                return;
+            }
+            render(data);
+            $('comparison-results').classList.remove('statistics-stale');
+            $('comparison-status').textContent = ui('Saved comparison loaded. Partial periods are preliminary; no radio requests were made.');
+        } catch (error) {
+            if (comparison === controller) {
+                fail(uiError(error.message));
+            }
+        } finally {
+            clearTimeout(timer);
+            if (comparison === controller) {
+                comparison = null;
+                controls();
+            }
+        }
+    }
+    function selectionChanged() {
+        cancelComparison();
+        $('comparison-results').classList.add('statistics-stale');
+        controls();
+        compare();
     }
     function attach(){if(attached||!$('repeater-comparison-disclosure'))return;attached=true;
-        $('repeater-comparison-disclosure').addEventListener('toggle',()=>{$('repeater-comparison-disclosure').open?load():cancel();});
-        $('comparison-repeater').addEventListener('change',()=>{key=$('comparison-repeater').value;rows=[];offset=0;$('comparison-change').replaceChildren();$('comparison-results').replaceChildren();load();});
+        $('repeater-comparison-disclosure').addEventListener('toggle',()=>{$('repeater-comparison-disclosure').open?load():(cancel(), $('comparison-status').textContent='');});
+        $('comparison-repeater').addEventListener('change',()=>{key=$('comparison-repeater').value;rows=[];offset=0;$('comparison-change').replaceChildren();$('comparison-results').classList.add('statistics-stale');load();});
         $('comparison-save').addEventListener('click',()=>mutate('create',null,$('comparison-description').value));
         $('comparison-more').addEventListener('click',()=>load(true));$('comparison-refresh').addEventListener('click',()=>load());
-        $('comparison-change').addEventListener('change',()=>{cancel();$('comparison-run').disabled=!$('comparison-change').value;$('comparison-results').replaceChildren();compare();});
-        $('comparison-period').addEventListener('change',compare);$('comparison-run').addEventListener('click',compare);
-        document.addEventListener('managed-repeater-removed',()=>{if($('repeater-comparison-disclosure').open){key='';$('comparison-results').replaceChildren();load();}});
+        $('comparison-change').addEventListener('change',selectionChanged);
+        $('comparison-period').addEventListener('change',selectionChanged);$('comparison-run').addEventListener('click',compare);
+        document.addEventListener('managed-repeater-removed',()=>{if($('repeater-comparison-disclosure').open){key='';$('comparison-results').classList.add('statistics-stale');load();}});
     }
     new MutationObserver(attach).observe(document.documentElement,{childList:true,subtree:true});attach();
 })();

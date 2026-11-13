@@ -64,9 +64,9 @@ def _period(view):
 
 
 def aggregate(path,key,change_id,days,now=None):
-    from meshcorestation.storage.statistics_view import aggregate as view,QUERY_BUDGET_SECONDS,QueryTimeout
+    from meshcorestation.storage.statistics_view import comparison_periods, Diagnostics, QUERY_BUDGET_SECONDS
     if days not in (1,7,30) or type(change_id) is not int:raise ValueError('Select a change and a 24-hour, 7-day or 30-day period.')
-    deadline=time.monotonic()+QUERY_BUDGET_SECONDS;clock=time.time() if now is None else now
+    diagnostics=Diagnostics(QUERY_BUDGET_SECONDS);clock=time.time() if now is None else now
     with closing(connect(Path(path).as_uri()+'?mode=ro',timeout=.25)) as main:
         main.execute('BEGIN');managed(main,key)
         row=main.execute('SELECT * FROM repeater_changes WHERE id=? AND public_key=?',(change_id,key)).fetchone()
@@ -80,11 +80,16 @@ def aggregate(path,key,change_id,days,now=None):
         if source:
             source.execute('PRAGMA query_only=ON');source.execute('BEGIN')
             source.execute('SELECT 1 FROM observations LIMIT 1').fetchone() # one immutable history snapshot for both windows
-        values=[]
-        for start,end in ((t-duration,t),(t,t+duration)):
-            remaining=deadline-time.monotonic()
-            if remaining<=0:raise QueryTimeout('comparison')
-            values.append(view(path,key,days,now=clock,start=start,end=end,_source=source,_metadata=(registry,regions),_budget=remaining,_covered=True))
+        windows = ((t-duration,t),(t,t+duration))
+        if source is None:
+            values = [dict(start=lo,end=hi,future=hi>clock,coverage_expected=hi-lo,
+                           coverage_seconds=0,coverage_known=False,totals={},neighbors=[],
+                           neighbor_snr=[],notes=[]) for lo,hi in windows]
+            stats = diagnostics.report()
+        else:
+            values, stats = comparison_periods(path,key,source,registry,regions,windows,clock,diagnostics)
+    for value in values:
+        value['notes'].append('Adjacent flood-path observations are inferred relationships, not verified direct RF links or delivery confirmation.')
     before,after=values
     b={r['public_key']:r for r in before['neighbor_snr'] if r['resolution']=='matched'}
     a={r['public_key']:r for r in after['neighbor_snr'] if r['resolution']=='matched'}
@@ -109,7 +114,7 @@ def aggregate(path,key,change_id,days,now=None):
     if overlapping:warnings.append('Other logged changes overlap these windows and may affect interpretation.')
     warnings.append('SNR sampling coverage is not equivalent to passive collection uptime; sample counts are shown separately.')
     warnings.append('Changes can coincide with different network traffic or radio conditions. Correlation does not establish causation or packet-delivery success.')
-    return dict(ok=True,generated_at=clock,selected=key,days=days,change=change,source_changes=source_changes,before=periods[0],after=periods[1],matched=matched,
+    return dict(ok=True,diagnostics=stats,generated_at=clock,selected=key,days=days,change=change,source_changes=source_changes,before=periods[0],after=periods[1],matched=matched,
         median_snr_change=median(r['difference_db'] for r in matched) if matched else None,
         newly_heard=[a[k] for k in sorted(a.keys()-b.keys())],not_heard_after=[b[k] for k in sorted(b.keys()-a.keys())],
         new_observed_neighbors=[r for r in after['neighbors'] if r['public_key'] not in {n['public_key'] for n in before['neighbors']}],

@@ -114,14 +114,60 @@ def test_comparison_worker_is_saved_only_and_preserves_rolling_views(station):
 def test_collection_continues_without_changing_the_shared_comparison_snapshot(station,monkeypatch):
     from meshcorestation.storage import statistics_view
     cid=change();add(at=NOW-100,payload=b'before');add(at=NOW+100,payload=b'after')
-    original=statistics_view.aggregate;sources=[]
-    def calculate(*args,**kwargs):
-        sources.append(kwargs['_source']);value=original(*args,**kwargs)
+    original=statistics_view._summaries
+    sources=[]
+    def summarize(source, *args, **kwargs):
+        sources.append(source)
+        value=original(source, *args, **kwargs)
         if len(sources)==1:add(at=NOW+50,payload=b'arrived during calculation')
         return value
-    monkeypatch.setattr(statistics_view,'aggregate',calculate)
+    monkeypatch.setattr(statistics_view,'_summaries',summarize)
     result=journal.aggregate(database.DB_FILE,A,cid,1,now=NOW+1000)
     assert sources[0] is sources[1] and sources[0] is not None
     assert result['before']['receptions']==result['after']['receptions']==1
     with sqlite3.connect(passive_stats.statistics_path(database.DB_FILE,A)) as db:
         assert db.execute('SELECT COUNT(*) FROM observations').fetchone()[0]==3
+
+
+@pytest.mark.parametrize('days', (1, 7, 30))
+def test_combined_comparison_matches_independent_views_and_reuses_cache(station, days):
+    from meshcorestation.storage.statistics_view import aggregate
+
+    cid = change()
+    duration = days * 86400
+    for at in (NOW-duration, NOW-1, NOW, NOW+duration-1, NOW+duration):
+        add(at=at, payload=b'same digest')
+    passive_stats.record_coverage(database.DB_FILE, NOW-duration/2, NOW+duration/2)
+    clock = NOW + duration
+    result = journal.aggregate(database.DB_FILE,A,cid,days,now=clock)
+    for label, (lo, hi) in zip(('before', 'after'), ((NOW-duration,NOW),(NOW,clock))):
+        reference = aggregate(database.DB_FILE,A,days,now=clock,start=lo,end=hi,_covered=True,_reuse=False)
+        for field, value in journal._period(reference).items():
+            if field != 'notes':
+                assert result[label][field] == value
+        assert result[label]['receptions'] == 2 and result[label]['unique_packets'] == 1
+    assert result['diagnostics']['classified_rows'] == 4
+    warm = journal.aggregate(database.DB_FILE,A,cid,days,now=clock)
+    assert warm['diagnostics']['classified_rows'] == 0
+    assert warm['before'] == result['before'] and warm['after'] == result['after']
+    add(at=NOW+5,payload=b'backdated observation')
+    appended = journal.aggregate(database.DB_FILE,A,cid,days,now=clock)
+    assert appended['diagnostics']['classified_rows'] == 1
+    assert appended['after']['receptions'] == 3 and appended['before']['receptions'] == 2
+
+
+def test_comparison_timeout_reports_saved_progress(station, monkeypatch):
+    from flask import Flask
+    from meshcorestation.web import comparison_api
+    from meshcorestation.storage.statistics_view import QueryTimeout
+
+    def timeout(*args):
+        raise QueryTimeout('classify', {'classification_progress_saved': True})
+
+    monkeypatch.setattr(comparison_api, 'comparison_view', timeout)
+    app = Flask(__name__)
+    comparison_api.register_comparison_routes(app)
+    reply = app.test_client().get('/api/repeater-comparison/view?change_id=1&days=7',
+                                  headers={'X-Meshcore-Control': '1'})
+    assert reply.status_code == 504
+    assert reply.json['stage'] == 'classify' and reply.json['resume']

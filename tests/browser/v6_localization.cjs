@@ -73,6 +73,23 @@ const layouts = {desktop: [1280, 960, 'light'], mobile: [390, 844, 'dark']};
             await page.unroute('**/api/repeater-statistics/view?**');
             await page.locator('#repeater-comparison-disclosure > summary').click();
             await waitText('#comparison-status','Änderungen geladen');
+            await page.locator('#comparison-description').fill('Fixture comparison');
+            await page.locator('#comparison-save').click();
+            await waitText('#comparison-status','Änderung gespeichert');
+            await page.route('**/api/repeater-comparison/view?**', route => route.fulfill({
+                status:504,json:{ok:false,error_code:'QUERY_TIMEOUT',stage:'classify',resume:true}
+            }));
+            await page.locator('#comparison-period').selectOption('7');
+            await waitText('#comparison-error','Klassifizierung');
+            assert.equal(await page.locator('#comparison-status').textContent(),'');
+            assert(await page.locator('#comparison-run').isEnabled());
+            await page.unroute('**/api/repeater-comparison/view?**');
+            await page.locator('#comparison-run').click();
+            await waitText('#comparison-status','Gespeicherter Vergleich geladen');
+            await waitText('#comparison-results h3','Fixture comparison');
+            page.once('dialog', dialog => dialog.accept());
+            await page.locator('#comparison-journal').getByRole('button', {name:'Löschen'}).click();
+            await waitText('#comparison-journal','Keine Änderungen für diesen Repeater');
             await page.locator('#room-server-disclosure > summary').click();
             const room = page.frameLocator('#room-server-frame');
             await room.getByRole('heading',{name:'Ihre Räume'}).waitFor();

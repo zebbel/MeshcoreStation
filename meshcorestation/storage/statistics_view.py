@@ -118,7 +118,7 @@ class Diagnostics:
                 raise QueryTimeout(name,self.report()) from None
             raise
         finally:
-            elapsed=round((time.monotonic()-start)*1000,3);self.times[name]=elapsed
+            elapsed=round((time.monotonic()-start)*1000,3);self.times[name]=round(self.times.get(name,0)+elapsed,3)
             LOGGER.debug('Statistics stage=%s elapsed_ms=%.3f rows=%d',name,elapsed,self.rows)
 
 
@@ -305,7 +305,6 @@ def _calendar_boundaries(start,end,zone):
 def _coverage(source,start,end,diagnostics,local_bounds):
     buckets={};local_buckets={};known=bool(source.execute("SELECT 1 FROM sqlite_master WHERE name='collection_windows'").fetchone())
     if not known:return buckets,False,local_buckets
-    pending=None
     def add(lo,hi):
         lo,hi=max(start,lo),min(end,hi)
         for bucket in range(int(lo//3600)*3600,int(hi//3600)*3600+1,3600):
@@ -317,15 +316,125 @@ def _coverage(source,start,end,diagnostics,local_bounds):
             overlap=max(0,min(hi,until)-max(lo,bucket))
             if overlap:local_buckets[bucket]=local_buckets.get(bucket,0)+overlap
             i+=1
-    for i,(lo,hi) in enumerate(source.execute('''SELECT started_at,ended_at FROM collection_windows
-        WHERE ended_at>? AND started_at<? ORDER BY started_at''',(start,end))):
-        if i%128==0:diagnostics.check()
-        if pending and lo<=pending[1]:pending=(pending[0],max(pending[1],hi))
-        else:
-            if pending:add(*pending)
-            pending=(lo,hi)
-    if pending:add(*pending)
+    for lo,hi in _coverage_intervals(source,start,end,diagnostics):
+        add(lo,hi)
     return buckets,True,local_buckets
+
+
+def _coverage_intervals(source, start, end, diagnostics):
+    if start >= end:
+        return
+    pending = None
+    for i, (lo, hi) in enumerate(source.execute("""SELECT started_at,ended_at FROM collection_windows
+        WHERE ended_at>? AND started_at<? ORDER BY started_at""", (start, end))):
+        if i % 128 == 0:
+            diagnostics.check()
+        lo, hi = max(start, lo), min(end, hi)
+        if pending and lo <= pending[1]:
+            pending = (pending[0], max(pending[1], hi))
+        else:
+            if pending:
+                yield pending
+            pending = (lo, hi)
+    if pending:
+        yield pending
+
+
+def registry_prefixes(registry):
+    prefixes = {}
+    for full in registry:
+        for width in (2, 4, 6, 8):
+            prefixes.setdefault(full[:width], []).append(full)
+    return prefixes
+
+
+def resolve_unique(prefixes, prefix):
+    matches = prefixes.get(prefix, ())
+    return matches[0] if len(matches) == 1 else None
+
+
+def _summaries(source, work, key, registry, prefixes, start, end, diagnostics, result, bounds=None):
+    where = 'WHERE at>=? AND at<?' if bounds is not None else ''
+    with diagnostics.stage('neighbors'):
+        edge_rows=list(work.execute(f'''SELECT verified,identity,direction,COUNT(*) AS receptions,
+          COUNT(DISTINCT digest) AS unique_packets,MAX(at) AS last_observed
+          FROM edges {where} GROUP BY verified,identity,direction
+          ORDER BY receptions DESC,verified,identity,direction LIMIT 1000''', bounds or ()))
+        grouped={}
+        for r in edge_rows:
+            r=dict(r)
+            if not r['verified']:
+                candidates=prefixes.get(r['identity'].split(' → ')[-1],[])
+                r.update(candidates=candidates[:64],candidate_count=len(candidates));result['ambiguous'].append(r);continue
+            if r['identity']==key:continue
+            item=grouped.setdefault(r['identity'],dict(registry[r['identity']],incoming=0,outgoing=0,last_observed=0))
+            item[r['direction']]=r['receptions'];item[r['direction']+'_unique']=r['unique_packets']
+            item['last_observed']=max(item['last_observed'],r['last_observed'])
+        result['neighbors']=list(grouped.values())
+        if len(edge_rows)>=1000:result['notes'].append('Neighbor output is limited to 1,000 grouped direction entries.')
+    with diagnostics.stage('neighbor_snr'):
+        from meshcorestation.storage.neighbor_snr import summary
+        quality={}
+        result['neighbor_snr']=summary(source,registry,start,end,quality=quality)
+        result['neighbor_snr_quality']=quality
+        if quality['invalid_utc_records']:result['notes'].append('Saved firmware SNR records without valid UTC cannot be assigned to this observation period.')
+        if quality['boundary_windows']:result['notes'].append('Firmware SNR windows crossing an observation boundary are excluded; samples cannot be split reliably.')
+        if quality['partial_collections'] or quality['sequence_gaps'] or quality['reported_loss']:result['notes'].append('Firmware SNR collection includes partial cycles or cumulative retention diagnostics; review monitoring status.')
+
+
+
+def _comparison_coverage(source, work, start, end, diagnostics, result):
+    known = bool(source.execute("SELECT 1 FROM sqlite_master WHERE name='collection_windows'").fetchone())
+    intervals = []
+    seconds = 0
+    for lo, hi in _coverage_intervals(source, start, end, diagnostics) if known else ():
+        seconds += hi - lo
+        if len(intervals) <= 10000:
+            intervals.append((lo, hi))
+    result.update(coverage_known=known, coverage_seconds=seconds)
+    if len(intervals) > 10000:
+        return
+    if not intervals:
+        result['covered_receptions'] = 0
+        return
+    starts = [lo for lo, _ in intervals]
+
+    def recorded(at):
+        i = bisect_right(starts, at) - 1
+        return int(i >= 0 and at < intervals[i][1])
+
+    work.create_function('recorded', 1, recorded, deterministic=True)
+    result['covered_receptions'] = work.execute("""SELECT COUNT(*) FROM facts
+        WHERE confirmed=1 AND at>=? AND at<? AND recorded(at)""", (start, end)).fetchone()[0]
+
+
+def comparison_periods(main_path, key, source, registry, regions, windows, clock, diagnostics):
+    """Classify the combined span once and summarize each half independently."""
+    start, end = windows[0][0], min(clock, windows[-1][1])
+    path = passive_stats.statistics_path(main_path, key)
+    with closing(sqlite3.connect('')) as work:
+        for connection in (source, work):
+            connection.set_progress_handler(lambda: int(time.monotonic() >= diagnostics.deadline), 10000)
+        with diagnostics.stage('classify'):
+            prefixes = registry_prefixes(registry)
+            marker = source_marker(source, path, key, registry, regions)
+            routes = _spool(source, work, key, lambda prefix: resolve_unique(prefixes, prefix),
+                            regions, start, end, diagnostics, main_path, marker)
+        work.row_factory = sqlite3.Row
+        result = []
+        for lo, hi in windows:
+            observed_end = min(clock, hi)
+            bounds = lo, observed_end
+            period = dict(start=lo, end=hi, future=hi>clock, coverage_expected=hi-lo,
+                          totals={}, neighbors=[], neighbor_snr=[], ambiguous=[], notes=[])
+            with diagnostics.stage('totals'):
+                period['totals'] = dict(work.execute('SELECT '+COUNTS.replace('packet_digest','digest')+
+                    ' FROM facts WHERE confirmed=1 AND at>=? AND at<?', bounds).fetchone())
+            _summaries(source,work,key,registry,prefixes,*bounds,diagnostics,period,bounds=bounds)
+            with diagnostics.stage('coverage'):
+                _comparison_coverage(source, work, *bounds, diagnostics, period)
+            result.append(period)
+        return result, dict(diagnostics.report(), parsed_routes=routes.parsed, route_cache_bytes=routes.used)
 
 
 def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_metadata=None,_budget=None,_covered=False,_reuse=True):
@@ -344,12 +453,7 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                     registry={r['public_key']:dict(r) for r in main.execute('SELECT public_key,name,latitude,longitude FROM repeaters')}
                     regions=[dict(r) for r in main.execute('SELECT name,scope_key FROM statistics_regions UNION SELECT name,scope_key FROM scopes')]
             else:registry,regions=_metadata
-            prefixes={}
-            for full in registry:
-                for width in (2,4,6,8):prefixes.setdefault(full[:width],[]).append(full)
-            def resolve_hash(prefix):
-                matches=prefixes.get(prefix,[])
-                return matches[0] if len(matches)==1 else None
+            prefixes=registry_prefixes(registry)
             result=dict(ok=True,selected=key,days=days,start=start,end=now,generated_at=now,
                 neighbor_snr=[],hourly=[],activity_hourly=[],packet_types=[],hops=[],regions=[],neighbors=[],ambiguous=[],totals={},excluded=0,
                 future=now>clock,coverage_seconds=0,coverage_expected=now-start,coverage_known=False,
@@ -367,7 +471,7 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                 work.set_progress_handler(lambda:int(time.monotonic()>=diagnostics.deadline),10000)
                 with diagnostics.stage('classify'):
                     marker=source_marker(source,path,key,registry,regions) if _reuse else None
-                    routes=_spool(source,work,key,resolve_hash,regions,start,observed_end,diagnostics,main_path,marker)
+                    routes=_spool(source,work,key,lambda prefix: resolve_unique(prefixes,prefix),regions,start,observed_end,diagnostics,main_path,marker)
                 work.row_factory=sqlite3.Row
                 # Compact covering indexes, built only in this disposable spool.
                 with diagnostics.stage('indexes'):
@@ -414,31 +518,7 @@ def aggregate(main_path,key,days=1,now=None,start=None,end=None,_source=None,_me
                 with diagnostics.stage('regions'):
                     result['regions']=[dict(r) for r in work.execute('SELECT region AS name,'+count_sql+' FROM facts WHERE confirmed=1 GROUP BY region ORDER BY receptions DESC,region')]
                     for row in result['regions']:row['percentage']=100*row['receptions']/result['totals']['receptions'] if result['totals']['receptions'] else 0
-                with diagnostics.stage('neighbors'):
-                    edge_rows=list(work.execute('''SELECT verified,identity,direction,COUNT(*) AS receptions,
-                      COUNT(DISTINCT digest) AS unique_packets,MAX(at) AS last_observed
-                      FROM edges GROUP BY verified,identity,direction
-                      ORDER BY receptions DESC,verified,identity,direction LIMIT 1000'''))
-                    grouped={}
-                    for r in edge_rows:
-                        r=dict(r)
-                        if not r['verified']:
-                            candidates=prefixes.get(r['identity'].split(' → ')[-1],[])
-                            r.update(candidates=candidates[:64],candidate_count=len(candidates));result['ambiguous'].append(r);continue
-                        if r['identity']==key:continue
-                        item=grouped.setdefault(r['identity'],dict(registry[r['identity']],incoming=0,outgoing=0,last_observed=0))
-                        item[r['direction']]=r['receptions'];item[r['direction']+'_unique']=r['unique_packets']
-                        item['last_observed']=max(item['last_observed'],r['last_observed'])
-                    result['neighbors']=list(grouped.values())
-                    if len(edge_rows)>=1000:result['notes'].append('Neighbor output is limited to 1,000 grouped direction entries.')
-                with diagnostics.stage('neighbor_snr'):
-                    from meshcorestation.storage.neighbor_snr import summary
-                    quality={}
-                    result['neighbor_snr']=summary(source,registry,start,observed_end,quality=quality)
-                    result['neighbor_snr_quality']=quality
-                    if quality['invalid_utc_records']:result['notes'].append('Saved firmware SNR records without valid UTC cannot be assigned to this observation period.')
-                    if quality['boundary_windows']:result['notes'].append('Firmware SNR windows crossing an observation boundary are excluded; samples cannot be split reliably.')
-                    if quality['partial_collections'] or quality['sequence_gaps'] or quality['reported_loss']:result['notes'].append('Firmware SNR collection includes partial cycles or cumulative retention diagnostics; review monitoring status.')
+                _summaries(source,work,key,registry,prefixes,start,observed_end,diagnostics,result)
                 with diagnostics.stage('coverage'):
                     coverage,result['coverage_known'],activity_coverage=_coverage(source,start,observed_end,diagnostics,local_bounds)
                 if _covered:

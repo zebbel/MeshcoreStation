@@ -1,7 +1,7 @@
-# MeshcoreStation V6 — 6.0.1
+# MeshcoreStation V6 — 6.0.2
 
 A fresh Companion-connected channel bot and repeater-management application.
-Version **6.0.1** on branch **`V6`** adds English and German dashboard localization. Select **Language / Sprache** in MeshcoreStation Settings. See [Dashboard languages](docs/v6-localization.md).
+Version **6.0.2** on branch **`V6`** fixes loading and improves performance for Repeater Statistic Comparison. Select **Language / Sprache** in MeshcoreStation Settings. See [Dashboard languages](docs/v6-localization.md) and the [comparison release notes](docs/v6-release.md).
 V3 `V3` and V4 `V4` are maintained separately. V4.4.1 supplies the protocol and dialog
 reference; the supplied V5 design package supplies the dashboard arrangement.
 
